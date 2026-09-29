@@ -1,6 +1,6 @@
 # Chit — चित् — Pranav's Atmini Brain
 
-Chit is from-scratch neural-model layer for Atmini.
+Chit is a from-scratch neural-model layer for Atmini.
 
 Milestones covered by this scaffold:
 1. neural fundamentals
@@ -21,7 +21,7 @@ Python 3.11+ recommended.
 ```bash
 python -m venv .venv
 # Windows
-.venv\\Scripts\\activate
+.venv\Scripts\activate
 # Linux/macOS
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -29,4 +29,4 @@ python -m pranav.chit.tools.train --config configs/chit_cpu_learning.json
 python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
 ```
 
-The package name is `pranav.chit` and the project is `Chit`.
+The package is pranav.chit(under thepranavnamespace) and the project isChit.
