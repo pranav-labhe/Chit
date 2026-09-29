@@ -1,0 +1,39 @@
+MATI PERSONAL LICENSE
+
+Copyright (c) 2026 Pranav
+
+All rights reserved.
+
+This software, source code, model architecture, model weights, tokenizer,
+training code, training data, documentation, configurations, and related
+materials (collectively, the "Software") are the personal intellectual
+property of Pranav.
+
+Permission is granted to the copyright owner only to use, study, modify,
+develop, test, and maintain the Software for personal and private purposes.
+
+Without prior written permission from Pranav, no other person or organization
+may:
+
+1. Copy, reproduce, or redistribute the Software or substantial portions of it.
+2. Publish, upload, mirror, or otherwise make the Software available to the
+   public.
+3. Sell, license, sublicense, rent, lease, or commercially exploit the
+   Software or substantial portions of it.
+4. Use the Software or derivative works for commercial purposes.
+5. Create and distribute modified or derivative versions of the Software.
+6. Redistribute, publish, or commercially use trained model weights or
+   substantial portions of training data derived from the Software.
+7. Represent the Software, Mati, or derivative works as an official product
+   or project of Pranav without explicit written permission.
+
+Any permission not expressly granted by this license is reserved by Pranav.
+
+This license does not transfer ownership, copyright, intellectual property
+rights, or any other proprietary rights in the Software.
+
+The Software is provided "AS IS", without warranty of any kind, express or
+implied. Pranav shall not be liable for any claim, damages, or other
+liability arising from the use of the Software.
+
+For permissions not granted by this license, contact the copyright holder.
