@@ -22,6 +22,33 @@ def render_text(text: str) -> str:
     return text + "\n"
 
 
-def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat") -> str:
-    mem = "\n".join(f"- {m}" for m in memories if m) or "- (none)"
-    return f"Task: {task}\nKnown memory:\n{mem}\n{USER} {user_input.strip()}\n{ASSISTANT}"
+def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
+                       history: list[dict] | None = None, max_bytes: int | None = None) -> str:
+    """Build the chat prompt: task header, recalled memory, earlier turns, then the new message.
+
+    ``history`` is a list of ``{"role": "user"|"assistant", "content": ...}``, oldest first.
+    With ``max_bytes`` (the model's context size) the prompt is shortened until it fits:
+    first the oldest turns are dropped, then the lowest-ranked memories. The new
+    message is never dropped. Without history the result is identical to the
+    original single-turn prompt.
+    """
+    mems = [m for m in memories if m]
+    turns = [(t["role"], t["content"]) for t in (history or [])]
+
+    def build() -> str:
+        mem = "\n".join(f"- {m}" for m in mems) or "- (none)"
+        past = "".join(f"{USER if r == 'user' else ASSISTANT} {c.strip()}\n" for r, c in turns)
+        return f"Task: {task}\nKnown memory:\n{mem}\n{past}{USER} {user_input.strip()}\n{ASSISTANT}"
+
+    prompt = build()
+    if max_bytes is None:
+        return prompt
+    while len(prompt.encode("utf-8")) > max_bytes and turns:
+        turns.pop(0)
+        while turns and turns[0][0] != "user":  # never start on a reply with no question before it
+            turns.pop(0)
+        prompt = build()
+    while len(prompt.encode("utf-8")) > max_bytes and mems:
+        mems.pop()  # search returns the best match first, so drop from the end
+        prompt = build()
+    return prompt

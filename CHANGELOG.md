@@ -3,6 +3,11 @@
 ## 0.2.0
 
 ### Added
+- **Chat sessions** (`/sessions`, `session_id` on `/chat`): each conversation keeps its
+  turn-by-turn history in SQLite under a session id, and recent turns are sent to the
+  model as context, trimmed to fit its context window. See `docs/SESSIONS.md`.
+- `task: "continue"` on `/chat` for plain-text models (the message is the start of a
+  sentence; no chat wrapper), and an optional `temperature` on `/chat`.
 - **Knowledge API** (`/knowledge`, `/knowledge/train`): teach Chit text, Q&A and
   reasoning examples; they are stored in SQLite and used for training only when
   requested. Entries are deduplicated, tagged, auditable, and marked `trained`

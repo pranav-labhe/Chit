@@ -1,0 +1,13 @@
+# Works for both Podman/Buildah and Docker (Podman also reads .containerignore).
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+docs
+checkpoints
+.env
+data/memory.json
+data/knowledge.db*
+data/sessions.db*

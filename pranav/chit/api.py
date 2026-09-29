@@ -15,6 +15,11 @@ Environment variables:
     CHIT_MAX_TRAIN_STEPS  upper bound for training.max_steps (default: 100000)
     CHIT_KNOWLEDGE_DB     knowledge database                (default: data/knowledge.db)
     CHIT_MAX_DATASET_MB   upper bound for a generated training set (default: 200)
+    Chat sessions (see docs/SESSIONS.md):
+    CHIT_SESSIONS_DB      session database                  (default: data/sessions.db)
+    CHIT_SESSION_TTL_DAYS delete sessions idle this long at start-up (default: 30; 0 = keep forever)
+    CHIT_MAX_SESSION_TURNS  messages kept per session       (default: 200)
+    CHIT_HISTORY_TURNS    most recent messages sent to the model as context (default: 8)
     CHIT_ALLOW_UNAUTHENTICATED_TRAINING
                           "1" enables training/knowledge without CHIT_API_KEY (local dev only)
 
@@ -27,6 +32,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -46,6 +52,7 @@ from .jobs import JobConflict, JobFinished, JobNotFound, TrainingJobManager
 from .knowledge import KnowledgeError, KnowledgeStore, build_dataset
 from .memory import MemoryStore
 from .runtime import ChitRuntime
+from .sessions import SessionNotFound, SessionStore
 from .tokenizer import ByteTokenizer
 from .training import ARCHITECTURE_KEYS
 
@@ -61,8 +68,13 @@ KNOWLEDGE_DB = os.environ.get("CHIT_KNOWLEDGE_DB", "data/knowledge.db")
 MAX_DATASET_BYTES = int(float(os.environ.get("CHIT_MAX_DATASET_MB", "200")) * 1024 * 1024)
 ALLOW_UNAUTHENTICATED_TRAINING = os.environ.get("CHIT_ALLOW_UNAUTHENTICATED_TRAINING") == "1"
 MAX_KNOWLEDGE_BATCH = 500
+SESSIONS_DB = os.environ.get("CHIT_SESSIONS_DB", "data/sessions.db")
+SESSION_TTL_DAYS = float(os.environ.get("CHIT_SESSION_TTL_DAYS", "30"))
+MAX_SESSION_TURNS = int(os.environ.get("CHIT_MAX_SESSION_TURNS", "200"))
+HISTORY_TURNS = int(os.environ.get("CHIT_HISTORY_TURNS", "8"))
+SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
 
-_state: dict = {"runtime": None, "bridge": None, "error": None, "jobs": None, "memory": None, "knowledge": None}
+_state: dict = {"runtime": None, "bridge": None, "error": None, "jobs": None, "memory": None, "knowledge": None, "sessions": None}
 _lock = threading.Lock()  # one generation at a time; the model is not built for parallel calls
 
 
@@ -81,7 +93,12 @@ def _load_served_model() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _state.update(runtime=None, bridge=None, error=None, jobs=None,
-                  memory=MemoryStore(MEMORY_PATH), knowledge=KnowledgeStore(KNOWLEDGE_DB))
+                  memory=MemoryStore(MEMORY_PATH), knowledge=KnowledgeStore(KNOWLEDGE_DB),
+                  sessions=SessionStore(SESSIONS_DB, max_turns=MAX_SESSION_TURNS))
+    if SESSION_TTL_DAYS > 0:
+        removed = _state["sessions"].prune(SESSION_TTL_DAYS)
+        if removed:
+            log.info("pruned %d session(s) idle for more than %g days", removed, SESSION_TTL_DAYS)
     _load_served_model()
     _state["jobs"] = TrainingJobManager(JOBS_DIR, on_success=promote_checkpoint)
     try:
@@ -128,6 +145,12 @@ def get_knowledge() -> KnowledgeStore:
     return _state["knowledge"]
 
 
+def get_sessions() -> SessionStore:
+    if _state["sessions"] is None:
+        raise HTTPException(status_code=503, detail="session store not initialised")
+    return _state["sessions"]
+
+
 def get_jobs() -> TrainingJobManager:
     if _state["jobs"] is None:
         raise HTTPException(status_code=503, detail="training service not started")
@@ -149,7 +172,10 @@ class GenerateRequest(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=2000)
-    task: str = Field(default="chat", max_length=50)
+    task: str = Field(default="chat", max_length=50, description='"chat" (Q&A-trained model) or "continue" (plain-text model)')
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="default: the Bridge's own (0.7)")
+    session_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$", description=(
+        "continue this conversation; omit to start a new one (its id is returned)"))
 
 
 Tag = Annotated[str, Field(min_length=1, max_length=50, pattern=r"^[\w.:/-]+$")]
@@ -191,9 +217,63 @@ def generate(r: GenerateRequest):
 @app.post("/chat", dependencies=[Depends(require_key)])
 def chat(r: ChatRequest):
     get_runtime()
+    sessions = get_sessions()
+    use_session = r.task != "continue"  # a plain-text continuation has no conversation to remember
+    if not use_session and r.session_id:
+        raise HTTPException(status_code=422, detail=["sessions are not used with task 'continue'"])
+    history: list[dict] = []
+    if use_session and r.session_id:
+        try:
+            history = sessions.history(r.session_id, HISTORY_TURNS)
+        except SessionNotFound:
+            raise HTTPException(status_code=404, detail="session not found")
     with _lock:
-        d = _state["bridge"].process(Context(user_input=r.message, task=r.task))
-    return {"text": d.text, "metadata": d.metadata}
+        d = _state["bridge"].process(Context(user_input=r.message, task=r.task, history=history), r.temperature)
+    session_id = None
+    if use_session:
+        try:
+            session_id = r.session_id or sessions.create()["id"]
+            sessions.append(session_id, [("user", r.message), ("assistant", d.text)])
+        except SessionNotFound:  # deleted while the reply was being generated
+            raise HTTPException(status_code=404, detail="session not found")
+    return {"text": d.text, "session_id": session_id, "metadata": d.metadata}
+
+
+# --------------------------------------------------------------------------- sessions
+
+
+def _session_or_404(session_id: str) -> dict:
+    if not SESSION_ID.match(session_id):
+        raise HTTPException(status_code=404, detail="session not found")
+    try:
+        return get_sessions().get(session_id)
+    except SessionNotFound:
+        raise HTTPException(status_code=404, detail="session not found")
+
+
+@app.post("/sessions", status_code=201, dependencies=[Depends(require_key)])
+def create_session():
+    """Start an empty conversation. (POST /chat without a session_id also starts one.)"""
+    return get_sessions().create()
+
+
+@app.get("/sessions", dependencies=[Depends(require_key)])
+def list_sessions(limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
+    items, total = get_sessions().list(limit, offset)
+    return {"total": total, "limit": limit, "offset": offset, "sessions": items}
+
+
+@app.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
+def get_session(session_id: str, limit: int | None = Query(default=None, ge=1, le=1000)):
+    session = _session_or_404(session_id)
+    return {**session, "messages": get_sessions().history(session_id, limit)}
+
+
+@app.delete("/sessions/{session_id}", status_code=204, dependencies=[Depends(require_key)])
+def delete_session(session_id: str):
+    _session_or_404(session_id)
+    get_sessions().delete(session_id)
+    return Response(status_code=204)
 
 
 @app.post("/memory", status_code=201, dependencies=[Depends(require_key)])

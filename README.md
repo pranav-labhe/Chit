@@ -1,501 +1,317 @@
 # Chit — चित् — Pranav's Atmini Brain
 
-Chit is a from-scratch neural-model layer for Atmini.
+Chit is a small language model built from scratch (byte-level tokenizer, tiny Transformer, your own
+weights) that acts as the learning layer of **Atmini**. It comes with a web API for generating text,
+storing memory, teaching new material and training in the background.
 
-Milestones covered by this scaffold:
-1. neural fundamentals
-2. tiny language model
-3. tiny Transformer
-4. own tokenizer + weights
-5. Chit training data
-6. external memory
-7. reasoning examples
-8. Atmini integration boundary
-9. CPU/GPU-ready training
-10. checkpoint/export foundation for Chit v1
+> **Read this first — what Chit is and is not.** Chit is a *text-continuation* model with a few
+> hundred thousand parameters, trained on whatever you put in `data/train.txt`. It can finish
+> sentences it has seen and answer questions it was trained on. It cannot reason about, or answer,
+> things that are not in its training text — those come out as gibberish. It is a learning
+> project and a component of Atmini, not a ChatGPT replacement.
 
 ---
 
-## 📖 Complete Beginner's Guide: How to Run Everything
+## Contents
+1. [Quick start](#1-quick-start)
+2. [What should I use for what?](#2-what-should-i-use-for-what)
+3. [Recommended workflow: train on your own text](#3-recommended-workflow-train-on-your-own-text)
+4. [Run the API server](#4-run-the-api-server)
+5. [API reference and examples](#5-api-reference-and-examples)
+6. [Settings (environment variables)](#6-settings-environment-variables)
+7. [Files and folders](#7-files-and-folders)
+8. [Troubleshooting](#8-troubleshooting)
+9. [Tests](#9-tests)
 
-If you are new to programming or this project, don't worry! Follow these simple step-by-step instructions to set up, run, train, and interact with Chit.
+---
 
-### Step 1: Open Your Terminal
-Open your command line or terminal (such as Command Prompt, PowerShell, or bash). Make sure you are inside the `Chit` folder.
+## 1. Quick start
 
-### Step 2: Install Python & Dependencies
-Make sure you have **Python 3.11 or higher** installed. Then install the required packages:
+You need **Python 3.10 or newer**. Run everything from the repository root (the `Chit` folder).
+
 ```bash
+# 1. Create an isolated environment (recommended)
+python -m venv .venv
+source .venv/bin/activate            # Linux / macOS / Git Bash
+# .venv\Scripts\Activate.ps1         # Windows PowerShell
+# .venv\Scripts\activate.bat         # Windows cmd
+
+# 2. Install (PyTorch is a large download; this can take a few minutes)
 pip install -r requirements.txt
-```
-*(Optional: if you want to run tests and developer tools, also install `pip install -r requirements-dev.txt`)*
 
-### Step 3: Train the AI Model
-Before talking to Chit, it needs to learn from its training data. Run this command:
-```bash
-python -m pranav.chit.tools.train --config configs/chit_cpu_learning.json
-```
-This creates a trained model file saved at `checkpoints/latest.pt`.
+# 3. Train. This config is tuned for the small sample text in data/train.txt
+python -m pranav.chit.tools.train --config configs/chit_train_txt.json
 
-### Step 4: Talk to Chit (Interactive Chat)
-You can chat directly with your newly trained model using:
-```bash
+# 4. Try it: type the START of a sentence from data/train.txt, e.g.  I am
 python try_chit.py
 ```
-Type any prompt (e.g., `Atmini`) and press **Enter**! Type Ctrl-C or Ctrl-D to exit.
 
----
+Training prints `step=... train=... eval=...` lines and writes `checkpoints/latest.pt`.
+The training loss should fall steadily (from about 5.5 towards 0.1 or lower).
 
-## 🚀 Running the Web API Server
+> **Why `chit_train_txt.json` and not `chit_cpu_learning.json`?**
+> `chit_cpu_learning.json` runs only 300 steps at a low learning rate, which is too little to learn
+> even a small text: in testing it produced nonsense. `chit_train_txt.json` (2500 steps, learning
+> rate 0.003) reproduced the sample sentences correctly.
 
-Chit includes a web server so other apps (like Atmini) or web browsers can talk to it.
+`try_chit.py` samples with some randomness (temperature 0.7), so small mistakes are normal. For the
+cleanest output use the CLI with greedy decoding:
 
-### 1. Start the Server
-First, set your secret API key (used to secure training and teaching) and start the server using **Uvicorn**:
-
-* **Windows PowerShell:**
-  ```powershell
-  $env:CHIT_API_KEY="change-me"
-  uvicorn pranav.chit.api:app --port 8000
-  ```
-* **Linux / macOS:**
-  ```bash
-  export CHIT_API_KEY="change-me"
-  uvicorn pranav.chit.api:app --port 8000
-  ```
-
-## ⚙️ Environment Variables & Configuration
-
-Chit's server and training tools can be customized using environment variables. Here is what each one does and how to set it across different operating systems:
-
-### Available Environment Variables
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `CHIT_API_KEY` | *(None)* | Secret API key required for training and teaching endpoints (sent via `X-API-Key` header). |
-| `CHIT_CHECKPOINT` | `checkpoints/latest.pt` | Path to the served AI model checkpoint file. |
-| `CHIT_CONFIG_DIR` | `configs` | Directory containing training configuration JSON files. |
-| `CHIT_JOBS_DIR` | `checkpoints/jobs` | Directory where background training job outputs and logs are saved. |
-| `CHIT_MAX_TRAIN_STEPS` | `100000` | Safety upper bound for maximum training steps. |
-| `CHIT_ALLOW_UNAUTHENTICATED_TRAINING` | *(Unset)* | Set to `1` to allow training and teaching without an API key (**local development only**). |
-| `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | SQLite database file storing taught knowledge items. |
-| `CHIT_MAX_DATASET_MB` | `200` | Upper size limit in megabytes for generated training datasets. |
-| `CHIT_MEMORY_PATH` | `data/memory.json` | JSON file storing external memory items. |
-
----
-
-### How to Set Environment Variables
-
-* **Windows PowerShell:**
-  ```powershell
-  $env:CHIT_API_KEY="my-secret-key"
-  $env:CHIT_CHECKPOINT="checkpoints/latest.pt"
-  ```
-* **Windows Command Prompt (`cmd.exe`):**
-  ```cmd
-  set CHIT_API_KEY=my-secret-key
-  set CHIT_CHECKPOINT=checkpoints/latest.pt
-  ```
-* **Linux / macOS / Git Bash:**
-  ```bash
-  export CHIT_API_KEY="my-secret-key"
-  export CHIT_CHECKPOINT="checkpoints/latest.pt"
-  ```
-
----
-
-## 🔌 Complete API Usage Guide for Beginners
-
-Below is how to interact with each API endpoint using simple commands (`curl` or Python/Browser). Make sure your server is running (`uvicorn pranav.chit.api:app --port 8000`) in another terminal window before running these.
-
----
-
-### 1. Check Server Health (`GET /health`)
-* **Purpose:** Checks if the server is running and healthy.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl http://localhost:8000/health
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/health"
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl http://localhost:8000/health
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.get("http://localhost:8000/health")
-  print(res.json())
-  ```
-
----
-
-### 2. View Loaded Model Details (`GET /model`)
-* **Purpose:** Shows information about the currently active AI model checkpoint.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl http://localhost:8000/model
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/model"
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl http://localhost:8000/model
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.get("http://localhost:8000/model")
-  print(res.json())
-  ```
-
----
-
-### 3. Generate Text (`POST /generate`)
-* **Purpose:** Ask the model to continue or complete a piece of text.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST http://localhost:8000/generate \\
-    -H "X-API-Key: change-me" \\
-    -H "Content-Type: application/json" \\
-    -d '{"prompt": "Atmini is", "tokens": 50}'
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/generate" -Method Post -Headers @{"X-API-Key"="change-me"} -ContentType "application/json" -Body '{"prompt": "Atmini is", "tokens": 50}'
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST http://localhost:8000/generate -H "X-API-Key: change-me" -H "Content-Type: application/json" -d "{\"prompt\": \"Atmini is\", \"tokens\": 50}"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.post(
-      "http://localhost:8000/generate",
-      headers={"X-API-Key": "change-me"},
-      json={"prompt": "Atmini is", "tokens": 50}
-  )
-  print(res.json())
-  ```
-
----
-
-### 4. Chat with Chit (`POST /chat`)
-* **Purpose:** Have a conversation using Chit's Q&A and memory format.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST http://localhost:8000/chat \
-    -H "X-API-Key: change-me" \
-    -H "Content-Type: application/json" \
-    -d '{"message": "Hello Chit!"}'
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/chat" -Method Post -Headers @{"X-API-Key"="change-me"} -ContentType "application/json" -Body '{"message": "Hello Chit!"}'
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST http://localhost:8000/chat -H "X-API-Key: change-me" -H "Content-Type: application/json" -d "{\"message\": \"Hello Chit!\"}"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.post(
-      "http://localhost:8000/chat",
-      headers={"X-API-Key": "change-me"},
-      json={"message": "Hello Chit!"}
-  )
-  print(res.json())
-  ```
-
----
-
-### 5. Add Memory (`POST /memory`)
-* **Purpose:** Store a quick fact in external memory so Chit can recall it instantly during chats.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST http://localhost:8000/memory \
-    -H "X-API-Key: change-me" \
-    -H "Content-Type: application/json" \
-    -d '{"content": "Pranav lives in India."}'
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/memory" -Method Post -Headers @{"X-API-Key"="change-me"} -ContentType "application/json" -Body '{"content": "Pranav lives in India."}'
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST http://localhost:8000/memory -H "X-API-Key: change-me" -H "Content-Type: application/json" -d "{\"content\": \"Pranav lives in India.\"}"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.post(
-      "http://localhost:8000/memory",
-      headers={"X-API-Key": "change-me"},
-      json={"content": "Pranav lives in India."}
-  )
-  print(res.json())
-  ```
-
----
-
-### 6. Search Memory (`GET /memory/search`)
-* **Purpose:** Search through stored memories.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl "http://localhost:8000/memory/search?q=Pranav"
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/memory/search?q=Pranav"
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl "http://localhost:8000/memory/search?q=Pranav"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.get(
-      "http://localhost:8000/memory/search",
-      params={"q": "Pranav"}
-  )
-  print(res.json())
-  ```
-
----
-
-### 7. Delete Memory (`DELETE /memory/{id}`)
-* **Purpose:** Remove a specific memory item by its ID.
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X DELETE localhost:8000/memory/1
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/memory/1" -Method Delete
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X DELETE localhost:8000/memory/1
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.delete("http://localhost:8000/memory/1")
-  print(res.status_code)
-  ```
-
----
-
-### 8. Teach Chit New Knowledge (`POST /knowledge`)
-* **Purpose:** Store new facts or Q&A pairs to be learned in future training sessions. *(Requires API Key)*
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST localhost:8000/knowledge \
-    -H "X-API-Key: change-me" \
-    -H "Content-Type: application/json" \
-    -d '{"items": [{"kind": "qa", "question": "Who created Chit?", "answer": "Pranav created Chit."}]}'
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/knowledge" -Method Post -Headers @{"X-API-Key"="change-me"} -ContentType "application/json" -Body '{"items": [{"kind": "qa", "question": "Who created Chit?", "answer": "Pranav created Chit."}]}'
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST localhost:8000/knowledge -H "X-API-Key: change-me" -H "Content-Type: application/json" -d "{\"items\": [{\"kind\": \"qa\", \"question\": \"Who created Chit?\", \"answer\": \"Pranav created Chit.\"}]}"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  headers = {"X-API-Key": "change-me"}
-  payload = {
-      "items": [
-          {"kind": "qa", "question": "Who created Chit?", "answer": "Pranav created Chit."}
-      ]
-  }
-  res = requests.post("http://localhost:8000/knowledge", json=payload, headers=headers)
-  print(res.json())
-  ```
-
----
-
-### 9. Train on Taught Knowledge (`POST /knowledge/train`)
-* **Purpose:** Start a background training job using all the knowledge you taught Chit. *(Requires API Key)*
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST localhost:8000/knowledge/train \
-    -H "X-API-Key: change-me" \
-    -H "Content-Type: application/json" \
-    -d '{"training": {"max_steps": 300}}'
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/knowledge/train" -Method Post -Headers @{"X-API-Key"="change-me"} -ContentType "application/json" -Body '{"training": {"max_steps": 300}}'
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST localhost:8000/knowledge/train -H "X-API-Key: change-me" -H "Content-Type: application/json" -d "{\"training\": {\"max_steps\": 300}}"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  headers = {"X-API-Key": "change-me"}
-  payload = {"training": {"max_steps": 300}}
-  res = requests.post("http://localhost:8000/knowledge/train", json=payload, headers=headers)
-  print(res.json())
-  ```
-
----
-
-### 10. Start General Training (`POST /train`)
-* **Purpose:** Train a new model using built-in configuration files. *(Requires API Key)*
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST localhost:8000/train \
-    -H "X-API-Key: change-me" \
-    -H "Content-Type: application/json" \
-    -d '{"config": "chit_cpu_learning", "training": {"max_steps": 300}}'
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/train" -Method Post -Headers @{"X-API-Key"="change-me"} -ContentType "application/json" -Body '{"config": "chit_cpu_learning", "training": {"max_steps": 300}}'
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST localhost:8000/train -H "X-API-Key: change-me" -H "Content-Type: application/json" -d "{\"config\": \"chit_cpu_learning\", \"training\": {\"max_steps\": 300}}"
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  headers = {"X-API-Key": "change-me"}
-  payload = {
-      "config": "chit_cpu_learning",
-      "training": {"max_steps": 300}
-  }
-  res = requests.post("http://localhost:8000/train", json=payload, headers=headers)
-  print(res.json())
-  ```
-
----
-
-### 11. Check Training Job Status (`GET /train/{id}`)
-* **Purpose:** Check progress, loss, and success/failure of a training job.
-* **How to run:**
-  ```bash
-  curl localhost:8000/train/JOB_ID_HERE
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  job_id = "YOUR_JOB_ID_HERE"
-  res = requests.get(f"http://localhost:8000/train/{job_id}")
-  print(res.json())
-  ```
-
----
-
-### 12. List Available Training Configs (`GET /train/configs`)
-* **Purpose:** See which `.json` configuration files are available on the server for training. *(Requires API Key)*
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -H "X-API-Key: change-me" http://localhost:8000/train/configs
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/train/configs" -Headers @{"X-API-Key"="change-me"}
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -H "X-API-Key: change-me" http://localhost:8000/train/configs
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.get("http://localhost:8000/train/configs", headers={"X-API-Key": "change-me"})
-  print(res.json())
-  ```
-
----
-
-### 13. List All Training Jobs (`GET /train`)
-* **Purpose:** See a list of all previous and current training jobs. *(Requires API Key)*
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -H "X-API-Key: change-me" http://localhost:8000/train
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/train" -Headers @{"X-API-Key"="change-me"}
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -H "X-API-Key: change-me" http://localhost:8000/train
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.get("http://localhost:8000/train", headers={"X-API-Key": "change-me"})
-  print(res.json())
-  ```
-
----
-
-### 14. Cancel a Training Job (`POST /train/{id}/cancel`)
-* **Purpose:** Stop a running training job immediately. *(Requires API Key)*
-* **cURL (Linux / macOS / Git Bash):**
-  ```bash
-  curl -X POST -H "X-API-Key: change-me" http://localhost:8000/train/JOB_ID_HERE/cancel
-  ```
-* **PowerShell (Windows):**
-  ```powershell
-  Invoke-RestMethod -Uri "http://localhost:8000/train/JOB_ID_HERE/cancel" -Method Post -Headers @{"X-API-Key"="change-me"}
-  ```
-* **Command Prompt (cmd.exe):**
-  ```cmd
-  curl -X POST -H "X-API-Key: change-me" http://localhost:8000/train/JOB_ID_HERE/cancel
-  ```
-* **Python equivalent:**
-  ```python
-  import requests
-  res = requests.post("http://localhost:8000/train/JOB_ID_HERE/cancel", headers={"X-API-Key": "change-me"})
-  print(res.json())
-  ```
-
----
-
-### 15. Manage Knowledge Base (`/knowledge` endpoints)
-* **List Knowledge (`GET /knowledge`):** List all taught facts. *(Requires API Key)*
-  * **cURL:** `curl -H "X-API-Key: change-me" "http://localhost:8000/knowledge?limit=10"`
-  * **PowerShell:** `Invoke-RestMethod -Uri "http://localhost:8000/knowledge?limit=10" -Headers @{"X-API-Key"="change-me"}`
-  * **Python:** `requests.get("http://localhost:8000/knowledge", headers={"X-API-Key": "change-me"}, params={"limit": 10}).json()`
-
-* **Knowledge Stats (`GET /knowledge/stats`):** Get total count of items. *(Requires API Key)*
-  * **cURL:** `curl -H "X-API-Key: change-me" http://localhost:8000/knowledge/stats`
-  * **PowerShell:** `Invoke-RestMethod -Uri "http://localhost:8000/knowledge/stats" -Headers @{"X-API-Key"="change-me"}`
-  * **Python:** `requests.get("http://localhost:8000/knowledge/stats", headers={"X-API-Key": "change-me"}).json()`
-
-* **Get Single Entry (`GET /knowledge/{id}`):** View a specific fact. *(Requires API Key)*
-  * **cURL:** `curl -H "X-API-Key: change-me" http://localhost:8000/knowledge/ENTRY_ID`
-  * **PowerShell:** `Invoke-RestMethod -Uri "http://localhost:8000/knowledge/ENTRY_ID" -Headers @{"X-API-Key"="change-me"}`
-  * **Python:** `requests.get("http://localhost:8000/knowledge/ENTRY_ID", headers={"X-API-Key": "change-me"}).json()`
-
-* **Delete Entry (`DELETE /knowledge/{id}`):** Remove a fact. *(Requires API Key)*
-  * **cURL:** `curl -X DELETE -H "X-API-Key: change-me" http://localhost:8000/knowledge/ENTRY_ID`
-  * **PowerShell:** `Invoke-RestMethod -Uri "http://localhost:8000/knowledge/ENTRY_ID" -Method Delete -Headers @{"X-API-Key"="change-me"}`
-  * **Python:** `requests.delete("http://localhost:8000/knowledge/ENTRY_ID", headers={"X-API-Key": "change-me"}).status_code`
-
----
-
-## 🧪 Running Tests
-To verify all unit tests pass correctly:
 ```bash
+python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
+```
+
+---
+
+## 2. What should I use for what?
+
+| I want to… | Use | Notes |
+| --- | --- | --- |
+| Finish a sentence or continue some text | `POST /generate` | Best fit for a model trained on plain text. Use `temperature: 0` and `stop: ["\n"]`. |
+| Have Chit answer questions | Train on `User:` / `Chit:` pairs, then `POST /generate` with `User: <question>\nChit:` (or `POST /chat`) | It only answers questions it was trained on. |
+| Give Chit a fact **right now**, without retraining | `POST /memory` | Stored outside the model; recalled by `/chat`. Never changes the weights. |
+| Teach Chit new material and train on it | `POST /knowledge`, then `POST /knowledge/train` | Knowledge is queued, then baked into the weights when you train. |
+| Retrain from my own text file | Edit `data/train.txt`, then `POST /train` or the CLI | See [section 3](#3-recommended-workflow-train-on-your-own-text). |
+| Explore the API in a browser | `http://localhost:8000/docs` | Interactive; works the same on every operating system. |
+| Connect Atmini | `POST /generate` or `POST /chat` with the `X-API-Key` header | Keep the server on `127.0.0.1`. |
+
+**Memory vs knowledge vs weights**
+
+| | Stored in | Changes the model? | Available |
+| --- | --- | --- | --- |
+| **Memory** (`/memory`) | `data/memory.json` | No | immediately (used by `/chat`) |
+| **Knowledge** (`/knowledge`) | `data/knowledge.db` | Only after `/knowledge/train` | after training |
+| **Weights** | `checkpoints/latest.pt` | — | what the model was trained on |
+
+**`/generate` or `/chat`?**
+`/generate` continues exactly the text you send. `/chat` wraps your message in a fixed template
+(`Task: chat / Known memory: … / User: … / Chit:`), so it only works well for a model trained on
+`User:` / `Chit:` pairs. For a model trained on plain sentences, use `/generate`.
+
+---
+
+## 3. Recommended workflow: train on your own text
+
+1. **Write your text in `data/train.txt`** — one fact or sentence per line. Vary the wording, and
+   repeat the important lines. Put a few *different* lines in `data/eval.txt`.
+   The eval file must be **larger than `model.block_size` bytes** (64 by default), or the API
+   rejects the job with `422`.
+2. **Train** — either way:
+   ```bash
+   python -m pranav.chit.tools.train --config configs/chit_train_txt.json
+   ```
+   or, with the server running, `POST /train` (see [section 5](#5-api-reference-and-examples)).
+   The API promotes the finished model automatically, with no restart.
+3. **Generate** with the start of a line from your text:
+   ```json
+   {"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}
+   ```
+4. **Check the loss.** A training loss far below the eval loss (for example 0.07 vs 0.9) means the
+   model is memorising your text. That is expected at this size. More varied text is the biggest
+   improvement.
+
+**Getting answers to questions:** add `User:` / `Chit:` pairs to `data/train.txt` (or teach them via
+`POST /knowledge` with `"kind": "qa"`), repeat them several times, and prompt with the same shape:
+
+```
+User: What is Chit?
+Chit: Chit is the model inside Atmini.
+```
+
+The prompt is then `User: What is Chit?\nChit:` with `"stop": ["\nUser:"]`.
+
+**Settings worth changing** (in a file in `configs/`, or per request under `"training"` / `"model"`):
+
+| Setting | Effect |
+| --- | --- |
+| `training.max_steps` | Longer training. 300 is too few; 2500–3000 worked on the sample text. |
+| `training.learning_rate` | `0.003` worked for this small model; `0.0005` was too slow. |
+| `model.block_size` | Context length in bytes. Larger needs a larger `data/eval.txt`. |
+| `model.n_layer`, `model.n_embd` | Bigger model, slower training. `configs/chit_tiny.json` is a larger preset. |
+| `device` | `cpu`, `cuda` or `auto`. |
+
+---
+
+## 4. Run the API server
+
+```bash
+# Linux / macOS / Git Bash
+export CHIT_API_KEY="$(python -c 'import secrets; print(secrets.token_hex(24))')"
+uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
+```
+
+```powershell
+# Windows PowerShell
+$env:CHIT_API_KEY = python -c "import secrets; print(secrets.token_hex(24))"
+uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
+```
+
+- Open **http://localhost:8000/docs** for an interactive page where you can try every endpoint.
+- Use **one worker** (the default). The loaded model and the training-job list live in the process.
+- Keep `--host 127.0.0.1` unless you have set `CHIT_API_KEY` and put HTTPS in front of the server.
+- If no model is trained yet, the server still starts: `GET /health` reports `no_model` and
+  `/generate` returns `503` until a model is trained.
+- Local development without a key: set `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` to allow the
+  training and knowledge endpoints without `CHIT_API_KEY`. Never do this on a shared machine.
+
+**Authentication.** When `CHIT_API_KEY` is set, every endpoint except `/health` needs the header
+`X-API-Key: <your key>`.
+
+---
+
+## 5. API reference and examples
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Server status, whether a model is loaded, active training job (no key needed) |
+| GET | `/model` | Loaded model details |
+| POST | `/generate` | Continue text: `prompt`, `tokens` (1–500), `temperature` (0 = greedy), `top_k`, `stop` |
+| POST | `/chat` | Chat template + recalled memory: `message`, `task` |
+| POST | `/memory` | Store a fact (`content`, optional `tags`, `importance`) |
+| GET | `/memory/search?q=…` | Search memory |
+| DELETE | `/memory/{id}` | Delete a memory (the `id` is the UUID returned when you added it) |
+| POST | `/knowledge` | Teach items: `text`, `qa` or `reasoning` |
+| GET | `/knowledge`, `/knowledge/stats`, `/knowledge/{id}` | List, count, view |
+| DELETE | `/knowledge/{id}` | Remove from future training |
+| POST | `/knowledge/train` | Train on the stored knowledge (`repeat`, `init`, `training`, …) |
+| GET | `/train/configs` | Config names available for training |
+| POST | `/train` | Start a background training job (`202`; `409` if one is already running) |
+| GET | `/train`, `/train/{id}` | List jobs; status, progress, loss history |
+| POST | `/train/{id}/cancel` | Stop a running job |
+
+The `/train*` and `/knowledge*` endpoints also need the key, and return `403` if `CHIT_API_KEY` is
+not set (unless the dev flag above is on). Full details: `docs/TRAINING_API.md`, `docs/KNOWLEDGE_API.md`.
+
+### Examples
+
+The examples read your key from `CHIT_API_KEY`.
+
+**Generate** — start of a sentence in, rest of the sentence out:
+
+```bash
+# Linux / macOS / Git Bash
+curl -X POST http://localhost:8000/generate \
+  -H "X-API-Key: $CHIT_API_KEY" -H "Content-Type: application/json" \
+  -d '{"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}'
+```
+```powershell
+# Windows PowerShell
+$h = @{ "X-API-Key" = $env:CHIT_API_KEY }
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/generate -Headers $h `
+  -ContentType "application/json" `
+  -Body '{"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}'
+```
+
+**Train, wait, then generate** (Python; `pip install requests` first):
+
+```python
+import os, time, requests
+
+BASE = "http://localhost:8000"
+H = {"X-API-Key": os.environ["CHIT_API_KEY"]}
+
+job = requests.post(f"{BASE}/train", headers=H,
+                    json={"config": "chit_train_txt", "init": "scratch"}).json()
+while True:
+    j = requests.get(f"{BASE}/train/{job['id']}", headers=H).json()
+    print(j["state"], j["step"], "/", j["max_steps"])
+    if j["state"] in ("succeeded", "failed", "cancelled"):
+        break
+    time.sleep(2)
+
+print(requests.post(f"{BASE}/generate", headers=H, json={
+    "prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}).json()["text"])
+```
+
+**Store and search a memory:**
+
+```bash
+curl -X POST http://localhost:8000/memory -H "X-API-Key: $CHIT_API_KEY" \
+  -H "Content-Type: application/json" -d '{"content": "Pranav lives in India."}'
+curl -H "X-API-Key: $CHIT_API_KEY" "http://localhost:8000/memory/search?q=Pranav"
+```
+
+**Teach Q&A, then train on it:**
+
+```bash
+curl -X POST http://localhost:8000/knowledge -H "X-API-Key: $CHIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"items": [{"kind": "qa", "question": "Who created Chit?", "answer": "Pranav created Chit."}]}'
+
+curl -X POST http://localhost:8000/knowledge/train -H "X-API-Key: $CHIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"config": "chit_train_txt", "repeat": 30}'
+```
+
+Then ask with `POST /generate`, prompt `"User: Who created Chit?\nChit:"`, `temperature` 0.
+
+> On Windows, PowerShell's `curl` is not real curl. Use `Invoke-RestMethod` as above, `curl.exe`
+> with the JSON saved in a file (`-d "@body.json"`), or the `/docs` page.
+
+---
+
+## 6. Settings (environment variables)
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CHIT_API_KEY` | *(unset)* | Key for the `X-API-Key` header. When set, every endpoint except `/health` requires it. Training and knowledge endpoints are disabled without it. |
+| `CHIT_ALLOW_UNAUTHENTICATED_TRAINING` | *(unset)* | `1` allows training and knowledge without a key. **Local development only.** |
+| `CHIT_CHECKPOINT` | `checkpoints/latest.pt` | Model file that is served |
+| `CHIT_CONFIG_DIR` | `configs` | Where training configs are read from |
+| `CHIT_JOBS_DIR` | `checkpoints/jobs` | Output folder for background training jobs |
+| `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper limit on `training.max_steps` |
+| `CHIT_MAX_DATASET_MB` | `200` | Upper limit on a generated training set |
+| `CHIT_MEMORY_PATH` | `data/memory.json` | Memory file |
+| `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database |
+
+Setting a variable: `export NAME=value` (Linux/macOS/Git Bash), `$env:NAME = "value"` (PowerShell),
+`set NAME=value` (cmd). It lasts for that terminal window.
+
+---
+
+## 7. Files and folders
+
+| Path | What it is |
+| --- | --- |
+| `data/train.txt`, `data/eval.txt` | Training and evaluation text |
+| `data/memory.json`, `data/memory_seed.json` | External memory and the facts it starts with |
+| `data/knowledge.db` | Taught knowledge (SQLite) |
+| `configs/*.json` | Training presets |
+| `checkpoints/latest.pt` | The trained model that is served |
+| `checkpoints/jobs/<id>/` | One folder per API training job (weights, dataset, `job.json`) |
+| `pranav/chit/` | Source: `model.py`, `training.py`, `api.py`, `jobs.py`, `knowledge.py`, `memory.py`, … |
+| `docs/` | Architecture, roadmap, training and knowledge API guides |
+
+Trained weights and your own data are local files. Add them to `.gitignore` so they are not
+committed by accident:
+
+```
+checkpoints/
+data/memory.json
+data/knowledge.db*
+```
+
+---
+
+## 8. Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| Output is gibberish | Normal for a prompt that does not start like your training text, and for too little training. Use `temperature: 0`, start prompts like a line from `train.txt`, and train with `chit_train_txt.json`. |
+| `ModuleNotFoundError: pranav` | Run commands from the repository root. |
+| `401` | Missing or wrong `X-API-Key` header. |
+| `403` on `/train` or `/knowledge` | `CHIT_API_KEY` is not set on the server (or set the dev flag). |
+| `503` on `/generate` | No model yet: train first. `GET /health` shows the reason. |
+| `409` on `/train` | A job is already running; wait for it or `POST /train/{id}/cancel`. |
+| `422 … must be larger than model.block_size` | Add text to `data/eval.txt` (and `train.txt`), or lower `model.block_size`. |
+| `CUDA requested but unavailable` | Set `"device": "cpu"` (or `"auto"`). |
+| Training is slow while the server runs | Training and serving share the same CPU. |
+
+---
+
+## 9. Tests
+
+```bash
+pip install -r requirements-dev.txt
 python -m pytest
 ```
