@@ -30,3 +30,14 @@ python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt
 ```
 
 The package is `pranav.chit` (under the `pranav` namespace) and the project is Chit.
+
+## Training over HTTP
+
+The API can also train and hot-swap the model. See [docs/TRAINING_API.md](docs/TRAINING_API.md).
+
+```bash
+export CHIT_API_KEY=change-me
+uvicorn pranav.chit.api:app --port 8000
+curl -X POST localhost:8000/train -H "X-API-Key: $CHIT_API_KEY" \
+  -H "Content-Type: application/json" -d '{"training": {"max_steps": 300}}'
+```
