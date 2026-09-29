@@ -24,9 +24,10 @@ python -m venv .venv
 .venv\Scripts\activate
 # Linux/macOS
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt     # requirements.txt for runtime only
 python -m pranav.chit.tools.train --config configs/chit_cpu_learning.json
 python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
+python -m pytest
 ```
 
 The package is `pranav.chit` (under the `pranav` namespace) and the project is Chit.
@@ -41,3 +42,20 @@ uvicorn pranav.chit.api:app --port 8000
 curl -X POST localhost:8000/train -H "X-API-Key: $CHIT_API_KEY" \
   -H "Content-Type: application/json" -d '{"training": {"max_steps": 300}}'
 ```
+
+## Teaching Chit
+
+Store knowledge now; train on it when you decide. See [docs/KNOWLEDGE_API.md](docs/KNOWLEDGE_API.md).
+
+```bash
+curl -X POST localhost:8000/knowledge -H "X-API-Key: $CHIT_API_KEY" -H "Content-Type: application/json" \
+  -d '{"items": [{"kind": "qa", "question": "Who is building Chit?", "answer": "Pranav is building Chit."}]}'
+curl -X POST localhost:8000/knowledge/train -H "X-API-Key: $CHIT_API_KEY" \
+  -H "Content-Type: application/json" -d '{"training": {"max_steps": 500}}'
+```
+
+## Other endpoints
+
+`GET /health`, `GET /model` (loaded checkpoint details), `POST /generate`,
+`POST /chat`, `POST /memory`, `GET /memory/search`, `DELETE /memory/{id}`.
+Interactive docs are served at `/docs` while the API runs.
