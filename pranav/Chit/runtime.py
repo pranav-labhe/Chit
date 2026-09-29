@@ -1,5 +1,5 @@
 import torch
-from .model import MatiModel
+from .model import ChitModel
 from .tokenizer import ByteTokenizer
 from .memory import MemoryStore
 class MatiRuntime:
