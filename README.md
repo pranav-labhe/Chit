@@ -25,8 +25,8 @@ python -m venv .venv
 # Linux/macOS
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m pranav.chit.tools.train --config configs/chit_cpu_learning.json
+python -m pranav.chit.tools.train --config configs/mati_cpu_learning.json
 python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
 ```
 
-The package is pranav.chit(under thepranavnamespace) and the project isChit.
+The package is `pranav.chit` (under the `pranav` namespace) and the project is Chit.
