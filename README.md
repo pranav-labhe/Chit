@@ -29,4 +29,4 @@ python -m pranav.chit.tools.train --config configs/mati_cpu_learning.json
 python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
 ```
 
-The package name is `pranav_mati` and the project is `Chit`.
+The package name is `pranav_chit` and the project is `Chit`.
