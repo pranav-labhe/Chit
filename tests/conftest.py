@@ -19,6 +19,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "API_KEY", KEY)
     monkeypatch.setattr(api, "ALLOW_UNAUTHENTICATED_TRAINING", False)
     monkeypatch.setattr(api, "MEMORY_PATH", str(tmp_path / "data" / "memory.json"))
+    monkeypatch.setattr(api, "SESSION_DB", str(tmp_path / "data" / "sessions.db"))
     monkeypatch.setattr(api, "KNOWLEDGE_DB", str(tmp_path / "data" / "knowledge.db"))
     monkeypatch.chdir(tmp_path)
     cfg_dir = tmp_path / "configs"
@@ -50,4 +51,3 @@ def train_body(**training):
     return {"config": "test", "model": TINY,
             "training": {"max_steps": 6, "batch_size": 2, "eval_interval": 3,
                          "eval_steps": 1, "checkpoint_interval": 3, **training}}
-

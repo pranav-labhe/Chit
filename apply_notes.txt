@@ -1,0 +1,16 @@
+After copying/applying the changes:
+
+pytest -q
+
+Start Chit normally. For a session-aware chat:
+POST /sessions
+POST /chat with {"session_id":"...","message":"..."}
+
+For external material:
+python -m pranav.chit.tools.ingest book.pdf --api-key "$CHIT_API_KEY"
+
+For a governed candidate flow:
+POST /knowledge
+POST /knowledge/train with "promote": false
+GET /train/{id}
+POST /train/{id}/promote   # Master decision

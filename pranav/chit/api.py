@@ -8,6 +8,7 @@ Environment variables:
     CHIT_API_KEY     if set, every request except /health must send
                      the header  X-API-Key: <value>
     CHIT_MEMORY_PATH memory file          (default: data/memory.json)
+    CHIT_SESSION_DB  session database     (default: data/sessions.db)
 
     Training and knowledge API (see docs/TRAINING_API.md, docs/KNOWLEDGE_API.md):
     CHIT_CONFIG_DIR       directory of training configs     (default: configs)
@@ -42,10 +43,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from . import __version__
 from .bridge import Bridge, Context
 from .config import ChitConfig, ConfigError, ModelConfig, load_config
-from .jobs import JobConflict, JobFinished, JobNotFound, TrainingJobManager
+from .jobs import JobConflict, JobFinished, JobNotFound, JobNotReady, TrainingJobManager
 from .knowledge import KnowledgeError, KnowledgeStore, build_dataset
 from .memory import MemoryStore
 from .runtime import ChitRuntime
+from .session import SessionStore
 from .tokenizer import ByteTokenizer
 from .training import ARCHITECTURE_KEYS
 
@@ -57,12 +59,21 @@ CONFIG_DIR = os.environ.get("CHIT_CONFIG_DIR", "configs")
 JOBS_DIR = os.environ.get("CHIT_JOBS_DIR", "checkpoints/jobs")
 MAX_TRAIN_STEPS = int(os.environ.get("CHIT_MAX_TRAIN_STEPS", "100000"))
 MEMORY_PATH = os.environ.get("CHIT_MEMORY_PATH", "data/memory.json")
+SESSION_DB = os.environ.get("CHIT_SESSION_DB", "data/sessions.db")
 KNOWLEDGE_DB = os.environ.get("CHIT_KNOWLEDGE_DB", "data/knowledge.db")
 MAX_DATASET_BYTES = int(float(os.environ.get("CHIT_MAX_DATASET_MB", "200")) * 1024 * 1024)
 ALLOW_UNAUTHENTICATED_TRAINING = os.environ.get("CHIT_ALLOW_UNAUTHENTICATED_TRAINING") == "1"
 MAX_KNOWLEDGE_BATCH = 500
 
-_state: dict = {"runtime": None, "bridge": None, "error": None, "jobs": None, "memory": None, "knowledge": None}
+_state: dict = {
+    "runtime": None,
+    "bridge": None,
+    "error": None,
+    "jobs": None,
+    "memory": None,
+    "knowledge": None,
+    "sessions": None,
+}
 _lock = threading.Lock()  # one generation at a time; the model is not built for parallel calls
 
 
@@ -80,8 +91,15 @@ def _load_served_model() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _state.update(runtime=None, bridge=None, error=None, jobs=None,
-                  memory=MemoryStore(MEMORY_PATH), knowledge=KnowledgeStore(KNOWLEDGE_DB))
+    _state.update(
+        runtime=None,
+        bridge=None,
+        error=None,
+        jobs=None,
+        memory=MemoryStore(MEMORY_PATH),
+        knowledge=KnowledgeStore(KNOWLEDGE_DB),
+        sessions=SessionStore(SESSION_DB),
+    )
     _load_served_model()
     _state["jobs"] = TrainingJobManager(JOBS_DIR, on_success=promote_checkpoint)
     try:
@@ -128,6 +146,12 @@ def get_knowledge() -> KnowledgeStore:
     return _state["knowledge"]
 
 
+def get_sessions() -> SessionStore:
+    if _state["sessions"] is None:
+        raise HTTPException(status_code=503, detail="session store not initialised")
+    return _state["sessions"]
+
+
 def get_jobs() -> TrainingJobManager:
     if _state["jobs"] is None:
         raise HTTPException(status_code=503, detail="training service not started")
@@ -150,6 +174,8 @@ class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=2000)
     task: str = Field(default="chat", max_length=50)
+    session_id: str | None = Field(default=None, min_length=1, max_length=128,
+                                    pattern=r"^[A-Za-z0-9_-]+$")
 
 
 Tag = Annotated[str, Field(min_length=1, max_length=50, pattern=r"^[\w.:/-]+$")]
@@ -191,9 +217,52 @@ def generate(r: GenerateRequest):
 @app.post("/chat", dependencies=[Depends(require_key)])
 def chat(r: ChatRequest):
     get_runtime()
+    sessions = get_sessions()
+    if r.session_id:
+        session = sessions.get(r.session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="session not found")
+    else:
+        session = sessions.create()
+
+    turns = session["turns"]
     with _lock:
-        d = _state["bridge"].process(Context(user_input=r.message, task=r.task))
-    return {"text": d.text, "metadata": d.metadata}
+        d = _state["bridge"].process(Context(
+            user_input=r.message,
+            task=r.task,
+            session_turns=turns,
+        ))
+        sessions.append_exchange(session["id"], r.message, d.text)
+        current_turn_count = len(sessions.turns(session["id"]))
+    return {
+        "text": d.text,
+        "session_id": session["id"],
+        "metadata": {
+            **d.metadata,
+            "session_id": session["id"],
+            "session_turn_count": current_turn_count,
+        },
+    }
+
+
+@app.post("/sessions", status_code=201, dependencies=[Depends(require_key)])
+def create_session():
+    return get_sessions().create()
+
+
+@app.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
+def get_session(session_id: str):
+    session = get_sessions().get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    return session
+
+
+@app.delete("/sessions/{session_id}", status_code=204, dependencies=[Depends(require_key)])
+def delete_session(session_id: str):
+    if not get_sessions().delete(session_id):
+        raise HTTPException(status_code=404, detail="session not found")
+    return Response(status_code=204)
 
 
 @app.post("/memory", status_code=201, dependencies=[Depends(require_key)])
@@ -415,6 +484,32 @@ def cancel_training_job(job_id: str):
         raise HTTPException(status_code=409, detail=str(e))
 
 
+@app.post("/train/{job_id}/promote", dependencies=[Depends(require_training_access)])
+def promote_training_job(job_id: str):
+    try:
+        before = get_jobs().get(job_id)
+        if before["state"] != "succeeded":
+            raise HTTPException(
+                status_code=409,
+                detail=f"job {job_id} is {before['state']}; only succeeded candidates can be promoted",
+            )
+        job = get_jobs().promote(job_id)
+    except JobNotFound:
+        raise HTTPException(status_code=404, detail="training job not found")
+    except JobNotReady as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"candidate promotion failed: {type(e).__name__}: {e}")
+
+    knowledge = job.get("metadata", {}).get("knowledge", {})
+    ids = knowledge.get("entry_ids", [])
+    if ids:
+        get_knowledge().mark_trained(ids, job_id)
+    return get_jobs().get(job_id)
+
+
 # --------------------------------------------------------------------------- knowledge
 
 
@@ -558,7 +653,7 @@ def train_on_knowledge(r: KnowledgeTrainRequest, response: Response):
                 store.mark_trained(ids, snapshot["id"])
 
         meta = {"init": r.init, "knowledge": {
-            "entries": len(ids), "select": r.select, "tags": r.tags, "repeat": r.repeat,
+            "entries": len(ids), "entry_ids": ids, "select": r.select, "tags": r.tags, "repeat": r.repeat,
             "include_base": r.include_base, "dataset_bytes": ds.size_bytes, "dataset_sha256": ds.sha256,
             "manifest": str(ds.manifest_file)}}
         job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata=meta, after_success=mark_trained)

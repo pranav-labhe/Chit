@@ -63,6 +63,10 @@ class JobFinished(Exception):
     """The job already reached a terminal state."""
 
 
+class JobNotReady(Exception):
+    """A candidate is not in a state where it can be promoted."""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -101,6 +105,7 @@ class TrainingJob:
             'config': self.config,
             'promote': self.promote,
             'promoted': self.promoted,
+            'candidate_checkpoint': self.checkpoint if self.state == JobState.SUCCEEDED and not self.promoted else None,
             'promotion_error': self.promotion_error,
             'checkpoint': self.checkpoint,
             'init_checkpoint': self.init_checkpoint,
@@ -126,6 +131,7 @@ class TrainingJobManager:
         self.max_jobs = max_jobs
         self._jobs: OrderedDict[str, TrainingJob] = OrderedDict()
         self._lock = threading.Lock()
+        self._promotion_lock = threading.Lock()
         self._active: tuple[TrainingJob, threading.Thread] | None = None
         self._load_history()
 
@@ -197,6 +203,34 @@ class TrainingJobManager:
             job.cancel_event.set()
             log.info('training job %s: cancellation requested', job_id)
             return job.snapshot()
+
+    def promote(self, job_id: str) -> dict:
+        """Promote a successful candidate through the configured promotion callback."""
+        with self._promotion_lock:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    raise JobNotFound(job_id)
+                if job.state != JobState.SUCCEEDED:
+                    raise JobNotReady(
+                        f"job {job_id} is {job.state.value}; only succeeded jobs can be promoted"
+                    )
+                if job.promoted:
+                    return job.snapshot()
+                if not job.checkpoint:
+                    raise JobNotReady(f"job {job_id} has no candidate checkpoint")
+                callback = self.on_success
+                checkpoint = Path(job.checkpoint)
+
+            if callback is None:
+                raise RuntimeError("no checkpoint promotion callback is configured")
+            try:
+                callback(checkpoint)
+            except Exception as e:
+                self._update(job, persist=True, promotion_error=f'{type(e).__name__}: {e}')
+                raise
+            self._update(job, persist=True, promoted=True, promotion_error=None)
+            return self.get(job_id)
 
     def shutdown(self, timeout: float = 30.0) -> None:
         """Cancel the active job (if any) and wait for its thread to stop."""

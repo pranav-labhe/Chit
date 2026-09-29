@@ -1,61 +1,35 @@
-# Chit — चित् — Pranav's Atmini Brain
+# Chit pending improvements — check-in bundle
 
-Chit is a from-scratch neural-model layer for Atmini.
+Target branch: `main_training_teaching`
 
-Milestones covered by this scaffold:
-1. neural fundamentals
-2. tiny language model
-3. tiny Transformer
-4. own tokenizer + weights
-5. Chit training data
-6. external memory
-7. reasoning examples
-8. Atmini integration boundary
-9. CPU/GPU-ready training
-10. checkpoint/export foundation for Chit v1
+This bundle implements only the three pending areas discussed:
 
-## Quick start
+1. Persistent turn-by-turn session context, separate from `MemoryStore`.
+2. External material extraction/chunking feeding the existing Teach API.
+3. Candidate training with an explicit promotion step, plus a regression test for Knowledge → Training → Candidate → Master promotion.
 
-Python 3.11+ recommended.
+No Transformer, tokenizer, MemoryStore, vector DB, Bridge replacement, automatic memory retraining, or teaching architecture replacement is included.
 
-```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux/macOS
-source .venv/bin/activate
-pip install -r requirements-dev.txt     # requirements.txt for runtime only
-python -m pranav.chit.tools.train --config configs/chit_cpu_learning.json
-python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
-python -m pytest
-```
+## New files
 
-The package is `pranav.chit` (under the `pranav` namespace) and the project is Chit.
+- `pranav/chit/session.py`
+- `pranav/chit/ingest.py`
+- `pranav/chit/tools/ingest.py`
+- `tests/test_session.py`
+- `tests/test_ingest.py`
+- `tests/test_candidate_pipeline.py`
 
-## Training over HTTP
+## Existing files included as complete updated copies
 
-The API can also train and hot-swap the model. See [docs/TRAINING_API.md](docs/TRAINING_API.md).
+These are ready to copy over the same paths after review:
 
-```bash
-export CHIT_API_KEY=change-me
-uvicorn pranav.chit.api:app --port 8000
-curl -X POST localhost:8000/train -H "X-API-Key: $CHIT_API_KEY" \
-  -H "Content-Type: application/json" -d '{"training": {"max_steps": 300}}'
-```
+- `pranav/chit/api.py`
+- `pranav/chit/formats.py`
+- `pranav/chit/bridge.py`
+- `pranav/chit/jobs.py`
+- `tests/conftest.py`
+- `requirements.txt`
 
-## Teaching Chit
+`MODIFICATIONS.md` explains the important deltas and why the candidate promotion path is needed for knowledge bookkeeping.
 
-Store knowledge now; train on it when you decide. See [docs/KNOWLEDGE_API.md](docs/KNOWLEDGE_API.md).
-
-```bash
-curl -X POST localhost:8000/knowledge -H "X-API-Key: $CHIT_API_KEY" -H "Content-Type: application/json" \
-  -d '{"items": [{"kind": "qa", "question": "Who is building Chit?", "answer": "Pranav is building Chit."}]}'
-curl -X POST localhost:8000/knowledge/train -H "X-API-Key: $CHIT_API_KEY" \
-  -H "Content-Type: application/json" -d '{"training": {"max_steps": 500}}'
-```
-
-## Other endpoints
-
-`GET /health`, `GET /model` (loaded checkpoint details), `POST /generate`,
-`POST /chat`, `POST /memory`, `GET /memory/search`, `DELETE /memory/{id}`.
-Interactive docs are served at `/docs` while the API runs.
+The new files were syntax-checked with `py_compile`. The full repository pytest suite could not be executed because the execution environment cannot clone the GitHub repository.
