@@ -8,5 +8,7 @@ class ChitDecision:
 class Bridge:
     def __init__(self,runtime): self.runtime=runtime
     def process(self,c):
-        mem='\n'.join('- '+m.get('content','') for m in c.memories); prompt=f'Task: {c.task}\nKnown memory:\n{mem}\nUser: {c.user_input}\nChit:'
+        memories = c.memories or self.runtime.recall(c.user_input)
+        mem = '\n'.join('- ' + m.get('content', '') for m in memories)
+        prompt = f'Task: {c.task}\nKnown memory:\n{mem}\nUser: {c.user_input}\nChit:'
         return ChitDecision(self.runtime.generate(prompt),metadata={'task':c.task})
