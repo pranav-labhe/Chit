@@ -1,4 +1,4 @@
-# Chit — Pranav's Atmini Brain
+# Chit — चित् — Pranav's Atmini Brain
 
 Chit is from-scratch neural-model layer for Atmini.
 
