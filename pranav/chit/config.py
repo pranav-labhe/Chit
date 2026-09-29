@@ -10,4 +10,11 @@ class DataConfig: train_file:str='data/train.txt'; eval_file:str='data/eval.txt'
 class ChitConfig:
     seed:int=42; device:str='auto'; model:ModelConfig=field(default_factory=ModelConfig); training:TrainingConfig=field(default_factory=TrainingConfig); data:DataConfig=field(default_factory=DataConfig)
 def load_config(path):
-    r=json.loads(open(path,encoding='utf-8').read()); return ChitConfig(r.get('seed',42),r.get('device','auto'),ModelConfig(**r.get('model',{})),TrainingConfig(**r.get('training',{})),DataConfig(**r.get('data',{})))
+    with open(path, encoding='utf-8') as f:
+        r = json.load(f)
+    return ChitConfig(
+        r.get('seed', 42), r.get('device', 'auto'),
+        ModelConfig(**r.get('model', {})),
+        TrainingConfig(**r.get('training', {})),
+        DataConfig(**r.get('data', {})),
+    )
