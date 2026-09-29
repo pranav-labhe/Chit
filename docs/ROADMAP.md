@@ -4,7 +4,7 @@
 - M2 tiny language model: next-token prediction.
 - M3 tiny Transformer: causal self-attention.
 - M4 own tokenizer and learned weights.
-- M5 curated Mati/Atmini training data.
+- M5 curated Chit/Atmini training data.
 - M6 external memory, separate from neural weights.
 - M7 explicit reasoning examples and evaluation.
 - M8 AtminiBridge for Any integration.

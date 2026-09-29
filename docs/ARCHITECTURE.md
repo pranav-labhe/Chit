@@ -1,6 +1,6 @@
 # Architecture
 
-Atmini -> AtminiBridge -> MatiRuntime -> MatiModel
+Atmini -> AtminiBridge -> ChitRuntime -> ChitModel
                           
                                                    |              |
                                                    |              +-- Transformer weights
