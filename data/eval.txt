@@ -1,4 +1,3 @@
-Mati is part of Atmini.
 Memory is external to model weights.
 A tokenizer converts text into ids.
 A transformer uses attention.
