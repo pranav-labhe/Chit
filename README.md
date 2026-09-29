@@ -1,6 +1,6 @@
-# Mati — Pranav's Atmini Brain
+# Chit — Pranav's Atmini Brain
 
-Mati is an experimental from-scratch neural-model layer for Atmini.
+Chit is from-scratch neural-model layer for Atmini.
 
 Milestones covered by this scaffold:
 1. neural fundamentals
@@ -14,8 +14,6 @@ Milestones covered by this scaffold:
 9. CPU/GPU-ready training
 10. checkpoint/export foundation for Mati v1
 
-This is intentionally small and beginner-friendly. The initial model is not a ChatGPT replacement; the goal is to give Pranav a real model that he can understand, train, modify and eventually grow.
-
 ## Quick start
 
 Python 3.11+ recommended.
@@ -27,8 +25,8 @@ python -m venv .venv
 # Linux/macOS
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m pranav_mati.tools.train --config configs/mati_cpu_learning.json
-python -m pranav_mati.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
+python -m pranav.chit.tools.train --config configs/mati_cpu_learning.json
+python -m pranav.chit.tools.generate --checkpoint checkpoints/latest.pt --prompt "Atmini"
 ```
 
-The package name is `pranav_mati` and the project is `Mati`.
+The package name is `pranav_mati` and the project is `Chit`.
