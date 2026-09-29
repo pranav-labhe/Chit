@@ -4,7 +4,9 @@ from pathlib import Path
 class MemoryStore:
     def __init__(self,path='data/memory.json'):
         self.path=Path(path); self.path.parent.mkdir(parents=True,exist_ok=True)
-        if not self.path.exists(): self.path.write_text('[]',encoding='utf-8')
+        if not self.path.exists():
+            seed = Path('data/memory_seed.json')
+            self.path.write_text(seed.read_text(encoding='utf-8') if seed.exists() else '[]', encoding='utf-8')
     def _load(self): return json.loads(self.path.read_text(encoding='utf-8'))
     def _save(self,x): self.path.write_text(json.dumps(x,indent=2,ensure_ascii=False),encoding='utf-8')
     def add(self,content,memory_type='experience',importance=.5,tags=None):
