@@ -11,8 +11,11 @@ class MemoryStore:
         x=self._load(); item={'id':str(uuid.uuid4()),'type':memory_type,'content':content,'importance':float(importance),'tags':tags or [],'created_at':datetime.now(timezone.utc).isoformat()}; x.append(item); self._save(x); return item
     def all(self): return self._load()
     def search(self,q,limit=5):
-        terms=set(q.lower().split()); scored=[]
+        strip = lambda w: w.strip('.,!?;:"\'()')
+        terms = {strip(w) for w in q.lower().split()} - {''}
+        scored=[]
         for x in self._load():
-            score=sum(t in x['content'].lower() for t in terms)
+            words = {strip(w) for w in x['content'].lower().split()}
+            score = len(terms & words)
             if score: scored.append((score,x))
         scored.sort(key=lambda z:(z[0],z[1].get('importance',0)),reverse=True); return [x for _,x in scored[:limit]]
