@@ -28,5 +28,5 @@ def train(c):
         if step%c.training.eval_interval==0 or step==1: print(f'\nstep={step} train={loss(m,tr,c.training.batch_size,c.training.eval_steps,dev):.4f} eval={loss(m,ev,c.training.batch_size,c.training.eval_steps,dev):.4f}')
         if step % c.training.checkpoint_interval == 0 or step == c.training.max_steps:
             ck = {'model': m.state_dict(), 'optimizer': opt.state_dict(), 'model_config': vars(c.model), 'step': step}
-        torch.save(ck, f'checkpoints/step_{step:06d}.pt')
-        torch.save(ck, 'checkpoints/latest.pt')
+            torch.save(ck, f'checkpoints/step_{step:06d}.pt')
+            torch.save(ck, 'checkpoints/latest.pt')
