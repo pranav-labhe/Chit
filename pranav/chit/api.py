@@ -94,7 +94,7 @@ app = FastAPI(title="Chit API", version=__version__, lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- auth & deps
-
+ALLOW_UNAUTHENTICATED_TRAINING=1
 
 def require_key(x_api_key: str | None = Header(default=None)):
     if API_KEY and not (x_api_key and secrets.compare_digest(x_api_key, API_KEY)):
