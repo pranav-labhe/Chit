@@ -37,15 +37,15 @@ jobs:
       - name: Build image
         run: |
           docker build \
-            -t $ECR_REPOSITORY:${GITHUB_SHA} \
+            -t $ECR_REPOSITORY:${{ github.run_number }} \
             -t $ECR_REPOSITORY:latest \
             .
 
       - name: Tag image
         run: |
           docker tag \
-            $ECR_REPOSITORY:${GITHUB_SHA} \
-            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${GITHUB_SHA}
+            $ECR_REPOSITORY:${{ github.run_number }} \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.run_number }}
 
           docker tag \
             $ECR_REPOSITORY:latest \
@@ -54,7 +54,7 @@ jobs:
       - name: Push image
         run: |
           docker push \
-            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${GITHUB_SHA}
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.run_number }}
 
           docker push \
             ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
