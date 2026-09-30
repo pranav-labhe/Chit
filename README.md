@@ -72,6 +72,7 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 | Give Chit a fact **right now**, without retraining | `POST /memory` | Stored outside the model; recalled by `/chat`. Never changes the weights. |
 | Teach Chit new material and train on it | `POST /knowledge`, then `POST /knowledge/train` | Knowledge is queued, then baked into the weights when you train. |
 | Retrain from my own text file | Edit `data/train.txt`, then `POST /train` or the CLI | See [section 3](#3-recommended-workflow-train-on-your-own-text). |
+| Prepare train/eval from one big text file (for example a mounted folder) | `POST /data/split`, then check with `GET /data` | Holds out an eval set with no overlap. Docs: `docs/DATA_API.md`. |
 | Explore the API in a browser | `http://localhost:8000/docs` | Interactive; works the same on every operating system. |
 | Connect Atmini | `POST /generate` or `POST /chat` with the `X-API-Key` header | Keep the server on `127.0.0.1`. |
 
@@ -92,6 +93,8 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 
 ## 3. Recommended workflow: train on your own text
 
+0. **Big corpus?** Put it in the data folder as `corpus.txt` and run `POST /data/split` (or
+   `python -m pranav.chit.tools.split corpus.txt`) to create both files with no overlap. Then `GET /data` shows `ready_to_train`.
 1. **Write your text in `data/train.txt`** — one fact or sentence per line. Vary the wording, and
    repeat the important lines. Put a few *different* lines in `data/eval.txt`.
    The eval file must be **larger than `model.block_size` bytes** (64 by default), or the API
@@ -165,6 +168,8 @@ uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
 | --- | --- | --- |
 | GET | `/health` | Server status, whether a model is loaded, active training job (no key needed) |
 | GET | `/model` | Loaded model details |
+| GET | `/data` | Check the train/eval files on the server: size, hash, overlap, `ready_to_train` |
+| POST | `/data/split` | Split a corpus file from the data folder into train and eval (`overwrite`, `dry_run`) |
 | POST | `/generate` | Continue text: `prompt`, `tokens` (1–500), `temperature` (0 = greedy), `top_k`, `stop` |
 | POST | `/chat` | Chat template + recalled memory: `message`, `task` |
 | POST | `/memory` | Store a fact (`content`, optional `tags`, `importance`) |
@@ -262,6 +267,7 @@ Then ask with `POST /generate`, prompt `"User: Who created Chit?\nChit:"`, `temp
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper limit on `training.max_steps` |
 | `CHIT_MAX_DATASET_MB` | `200` | Upper limit on a generated training set |
 | `CHIT_MEMORY_PATH` | `data/memory.json` | Memory file |
+| `CHIT_DATA_DIR` | `data` | Folder `POST /data/split` reads corpus files from |
 | `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database |
 
 Setting a variable: `export NAME=value` (Linux/macOS/Git Bash), `$env:NAME = "value"` (PowerShell),

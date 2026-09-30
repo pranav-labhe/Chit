@@ -15,6 +15,8 @@ Environment variables:
     CHIT_MAX_TRAIN_STEPS  upper bound for training.max_steps (default: 100000)
     CHIT_KNOWLEDGE_DB     knowledge database                (default: data/knowledge.db)
     CHIT_MAX_DATASET_MB   upper bound for a generated training set (default: 200)
+    Training data (see docs/DATA_API.md):
+    CHIT_DATA_DIR         folder POST /data/split reads corpus files from (default: data)
     Chat sessions (see docs/SESSIONS.md):
     CHIT_SESSIONS_DB      session database                  (default: data/sessions.db)
     CHIT_SESSION_TTL_DAYS delete sessions idle this long at start-up (default: 30; 0 = keep forever)
@@ -45,7 +47,7 @@ import torch
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import __version__
+from . import __version__, datasets
 from .bridge import Bridge, Context
 from .config import ChitConfig, ConfigError, ModelConfig, load_config
 from .jobs import JobConflict, JobFinished, JobNotFound, TrainingJobManager
@@ -68,6 +70,7 @@ KNOWLEDGE_DB = os.environ.get("CHIT_KNOWLEDGE_DB", "data/knowledge.db")
 MAX_DATASET_BYTES = int(float(os.environ.get("CHIT_MAX_DATASET_MB", "200")) * 1024 * 1024)
 ALLOW_UNAUTHENTICATED_TRAINING = os.environ.get("CHIT_ALLOW_UNAUTHENTICATED_TRAINING") == "1"
 MAX_KNOWLEDGE_BATCH = 500
+DATA_DIR = os.environ.get("CHIT_DATA_DIR", "data")
 SESSIONS_DB = os.environ.get("CHIT_SESSIONS_DB", "data/sessions.db")
 SESSION_TTL_DAYS = float(os.environ.get("CHIT_SESSION_TTL_DAYS", "30"))
 MAX_SESSION_TURNS = int(os.environ.get("CHIT_MAX_SESSION_TURNS", "200"))
@@ -75,6 +78,7 @@ HISTORY_TURNS = int(os.environ.get("CHIT_HISTORY_TURNS", "8"))
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
 
 _state: dict = {"runtime": None, "bridge": None, "error": None, "jobs": None, "memory": None, "knowledge": None, "sessions": None}
+_data_lock = threading.Lock()  # one data split at a time
 _lock = threading.Lock()  # one generation at a time; the model is not built for parallel calls
 
 
@@ -647,3 +651,99 @@ def train_on_knowledge(r: KnowledgeTrainRequest, response: Response):
         raise
     response.headers["Location"] = f"/train/{job['id']}"
     return job
+
+
+# --------------------------------------------------------------------------- training data
+
+
+class SplitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$", description=(
+        "name of a text file inside CHIT_DATA_DIR (for example a mounted corpus.txt); no folders"))
+    config: str = Field(default="chit_cpu_learning", pattern=r"^[A-Za-z0-9_-]{1,64}$", description=(
+        "the config whose data.train_file / data.eval_file are written and whose block_size is checked"))
+    by: Literal["line", "paragraph"] = Field(default="line", description=(
+        "paragraph keeps blocks separated by blank lines together, e.g. User:/Chit: pairs"))
+    eval_fraction: float = Field(default=0.1, gt=0, lt=0.5)
+    seed: int = Field(default=42, ge=0, le=2**32 - 1)
+    overwrite: bool = Field(default=False, description="replace existing train/eval files (old ones are kept as .bak)")
+    dry_run: bool = Field(default=False, description="report what would be written and write nothing")
+
+
+def _data_paths(config: str) -> tuple[ChitConfig, Path, Path]:
+    cfg = build_config(TrainRequest(config=config))
+    return cfg, Path(cfg.data.train_file), Path(cfg.data.eval_file)
+
+
+def _resolve_source(name: str) -> Path:
+    root = Path(DATA_DIR).resolve()
+    path = (root / name).resolve()  # follows symlinks, so a link pointing outside is caught below
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"source not found in the data folder: {name}")
+    if path.stat().st_size > MAX_DATASET_BYTES:
+        raise HTTPException(status_code=422, detail=[f"source is larger than the {MAX_DATASET_BYTES} byte limit"])
+    return path
+
+
+@app.get("/data", dependencies=[Depends(require_training_access)])
+def data_status(config: str = Query("chit_cpu_learning", pattern=r"^[A-Za-z0-9_-]{1,64}$")):
+    """What is on the server right now: the config's train/eval files, checks, and splittable sources.
+
+    Use it after mounting or editing files, before training.
+    """
+    cfg, train_path, eval_path = _data_paths(config)
+    report = datasets.analyze(train_path, eval_path, cfg.model.block_size, MAX_DATASET_BYTES)
+    return {"config": config, "block_size": cfg.model.block_size, **report,
+            "sources": datasets.list_sources(DATA_DIR)}
+
+
+@app.post("/data/split", dependencies=[Depends(require_training_access)])
+def split_data(r: SplitRequest):
+    """Split a corpus file from the data folder into the config's train and eval files."""
+    cfg, train_path, eval_path = _data_paths(r.config)
+    source = _resolve_source(r.source)
+    _ensure_idle()
+    try:
+        text = source.read_text(encoding="utf-8")
+        res = datasets.split_corpus(text, r.by, r.eval_fraction, r.seed)
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=422, detail=["source must be UTF-8 text"])
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=[str(e)])
+
+    train_text, eval_text = datasets.join_items(res.train, r.by), datasets.join_items(res.eval, r.by)
+    train_bytes, eval_bytes = len(train_text.encode("utf-8")), len(eval_text.encode("utf-8"))
+    block = cfg.model.block_size
+    problems = [f"the {name} file would be {n} bytes; it must be larger than model.block_size ({block})"
+                for name, n in (("train", train_bytes), ("eval", eval_bytes)) if n <= block]
+    if problems:
+        raise HTTPException(status_code=422, detail=problems + ["add more text or raise eval_fraction"])
+
+    existing = [p for p in (train_path, eval_path) if p.exists()]
+    report = {
+        "source": r.source, "config": r.config, "by": r.by, "seed": r.seed,
+        "duplicates_removed": res.duplicates_removed,
+        "train": {"path": str(train_path), "items": len(res.train), "bytes": train_bytes},
+        "eval": {"path": str(eval_path), "items": len(res.eval), "bytes": eval_bytes},
+        "would_overwrite": [str(p) for p in existing],
+        "warnings": ([f"eval is under {datasets.MIN_USEFUL_EVAL_BYTES} bytes, so the eval loss will be noisy"]
+                     if eval_bytes < datasets.MIN_USEFUL_EVAL_BYTES else []),
+    }
+    if r.dry_run:
+        return {**report, "written": False, "backups": []}
+    if existing and not r.overwrite:
+        raise HTTPException(status_code=409, detail={
+            "message": "train/eval files already exist; send overwrite=true to replace them (the old files are kept as .bak)",
+            "existing": [str(p) for p in existing]})
+
+    with _data_lock:
+        _ensure_idle()
+        try:
+            backups = [b for b in (datasets.backup(p) for p in existing) if b]
+            datasets.write_text(train_path, train_text)
+            datasets.write_text(eval_path, eval_text)
+        except OSError as e:
+            log.exception("could not write training data")
+            raise HTTPException(status_code=500, detail=f"could not write {e.filename or 'the data files'}: "
+                                                        f"{e.strerror or e} (is the folder mounted read-only?)")
+    return {**report, "written": True, "backups": backups}

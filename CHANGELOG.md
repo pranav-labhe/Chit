@@ -3,6 +3,7 @@
 ## 0.2.0
 
 ### Added
+- **Training data API** (`GET /data`, `POST /data/split`) and `python -m pranav.chit.tools.split`: check the train/eval files as they are on the server (size, hash, leakage), and split a corpus into held-out train/eval files, with `.bak` backups. See `docs/DATA_API.md`.
 - **Chat sessions** (`/sessions`, `session_id` on `/chat`): each conversation keeps its
   turn-by-turn history in SQLite under a session id, and recent turns are sent to the
   model as context, trimmed to fit its context window. See `docs/SESSIONS.md`.
