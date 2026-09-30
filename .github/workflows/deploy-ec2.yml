@@ -1,0 +1,68 @@
+name: Deploy Chit to EC2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Chit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: ChitEC2Deployment
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy to EC2
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
+          EC2_HOST: ${{ secrets.CHIT_EC2_HOST }}
+          EC2_USER: ${{ secrets.CHIT_EC2_USER }}
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/chit-github-deploy
+          chmod 600 ~/.ssh/chit-github-deploy
+
+          ssh -F none \
+            -o StrictHostKeyChecking=no \
+            -i ~/.ssh/chit-github-deploy \
+            "${EC2_USER}@${EC2_HOST}" << REMOTE
+              set -e
+
+              ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+
+              aws ecr get-login-password --region "${AWS_REGION}" \
+                | docker login \
+                    --username AWS \
+                    --password-stdin \
+                    "${ECR_REGISTRY}"
+
+              docker pull "\$ECR_IMAGE"
+
+              sudo docker stop chit || true
+              sudo docker rm chit || true
+
+              sudo docker run -d \
+                --name chit \
+                -p 127.0.0.1:8000:8000 \
+                --restart unless-stopped \
+                "\$ECR_IMAGE"
+
+              sleep 5
+
+              curl --fail http://127.0.0.1:8000/health
+          REMOTE
