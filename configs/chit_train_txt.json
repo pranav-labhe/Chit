@@ -1,0 +1,18 @@
+{
+  "seed": 42,
+  "device": "cpu",
+  "model": {"vocab_size": 256, "block_size": 64, "n_layer": 2, "n_head": 2, "n_embd": 64, "dropout": 0.0},
+  "training": {
+    "batch_size": 8,
+    "learning_rate": 0.003,
+    "weight_decay": 0.1,
+    "max_steps": 2500,
+    "eval_interval": 500,
+    "eval_steps": 10,
+    "checkpoint_interval": 2500,
+    "grad_clip": 1.0,
+    "warmup_steps": 100,
+    "lr_schedule": "cosine"
+  },
+  "data": {"train_file": "data/train.txt", "eval_file": "data/eval.txt"}
+}

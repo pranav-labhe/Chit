@@ -1,0 +1,12 @@
+[
+  {
+    "id": "seed-001",
+    "type": "concept",
+    "content": "Chit is the learning/model layer.",
+    "importance": 1.0,
+    "tags": [
+      "chit",
+      "identity"
+    ]
+  }
+]

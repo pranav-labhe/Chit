@@ -1,20 +1,124 @@
-from dataclasses import dataclass, field
+"""Typed configuration for Chit, loaded from JSON files in ``configs/``.
+
+Unknown keys are rejected so a typo in a config file fails loudly instead of
+being silently ignored, and every value is range-checked on construction.
+"""
+from __future__ import annotations
+
 import json
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
+from typing import Any
+
+DEVICES = ("auto", "cpu", "cuda")
+LR_SCHEDULES = ("constant", "cosine")
+
+
+class ConfigError(ValueError):
+    """A configuration value is missing, unknown or out of range."""
+
+
+def _require(ok: bool, message: str) -> None:
+    if not ok:
+        raise ConfigError(message)
+
+
 @dataclass
-class ModelConfig: vocab_size:int=256; block_size:int=128; n_layer:int=4; n_head:int=4; n_embd:int=128; dropout:float=0.0
+class ModelConfig:
+    vocab_size: int = 256
+    block_size: int = 128
+    n_layer: int = 4
+    n_head: int = 4
+    n_embd: int = 128
+    dropout: float = 0.0
+
+    def __post_init__(self) -> None:
+        for name in ("vocab_size", "block_size", "n_layer", "n_head", "n_embd"):
+            _require(isinstance(getattr(self, name), int) and getattr(self, name) >= 1,
+                     f"model.{name} must be a positive integer")
+        _require(self.n_embd % self.n_head == 0,
+                 f"model.n_embd ({self.n_embd}) must be divisible by model.n_head ({self.n_head})")
+        _require(0.0 <= self.dropout < 1.0, "model.dropout must be in [0, 1)")
+
+
 @dataclass
-class TrainingConfig: batch_size:int=16; learning_rate:float=3e-4; weight_decay:float=0.1; max_steps:int=1000; eval_interval:int=100; eval_steps:int=20; checkpoint_interval:int=100; grad_clip:float=1.0
+class TrainingConfig:
+    batch_size: int = 16
+    learning_rate: float = 3e-4
+    weight_decay: float = 0.1
+    max_steps: int = 1000
+    eval_interval: int = 100
+    eval_steps: int = 20
+    checkpoint_interval: int = 100
+    grad_clip: float = 1.0
+    warmup_steps: int = 0
+    lr_schedule: str = "constant"
+    min_lr_ratio: float = 0.1
+
+    def __post_init__(self) -> None:
+        for name in ("batch_size", "max_steps", "eval_interval", "eval_steps", "checkpoint_interval"):
+            _require(isinstance(getattr(self, name), int) and getattr(self, name) >= 1,
+                     f"training.{name} must be a positive integer")
+        _require(self.learning_rate > 0, "training.learning_rate must be > 0")
+        _require(self.weight_decay >= 0, "training.weight_decay must be >= 0")
+        _require(self.grad_clip > 0, "training.grad_clip must be > 0")
+        _require(isinstance(self.warmup_steps, int) and self.warmup_steps >= 0,
+                 "training.warmup_steps must be a non-negative integer")
+        _require(self.lr_schedule in LR_SCHEDULES, f"training.lr_schedule must be one of {LR_SCHEDULES}")
+        _require(0.0 <= self.min_lr_ratio <= 1.0, "training.min_lr_ratio must be in [0, 1]")
+
+
 @dataclass
-class DataConfig: train_file:str='data/train.txt'; eval_file:str='data/eval.txt'
+class DataConfig:
+    train_file: str = "data/train.txt"
+    eval_file: str = "data/eval.txt"
+
+
 @dataclass
 class ChitConfig:
-    seed:int=42; device:str='auto'; model:ModelConfig=field(default_factory=ModelConfig); training:TrainingConfig=field(default_factory=TrainingConfig); data:DataConfig=field(default_factory=DataConfig)
-def load_config(path):
-    with open(path, encoding='utf-8') as f:
-        r = json.load(f)
+    seed: int = 42
+    device: str = "auto"
+    model: ModelConfig = field(default_factory=ModelConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
+    data: DataConfig = field(default_factory=DataConfig)
+
+    def __post_init__(self) -> None:
+        _require(isinstance(self.seed, int) and 0 <= self.seed < 2**32, "seed must be an integer in [0, 2**32)")
+        _require(self.device in DEVICES, f"device must be one of {DEVICES}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _section(cls, raw: Any, name: str):
+    if raw is None:
+        return cls()
+    _require(isinstance(raw, dict), f"{name} must be an object")
+    unknown = set(raw) - {f.name for f in fields(cls)}
+    _require(not unknown, f"unknown key(s) in {name}: {', '.join(sorted(unknown))}")
+    try:
+        return cls(**raw)
+    except TypeError as e:  # wrong value types that dataclass construction rejects
+        raise ConfigError(f"{name}: {e}") from e
+
+
+def config_from_dict(raw: dict[str, Any]) -> ChitConfig:
+    _require(isinstance(raw, dict), "config must be a JSON object")
+    unknown = set(raw) - {f.name for f in fields(ChitConfig)}
+    _require(not unknown, f"unknown top-level key(s): {', '.join(sorted(unknown))}")
     return ChitConfig(
-        r.get('seed', 42), r.get('device', 'auto'),
-        ModelConfig(**r.get('model', {})),
-        TrainingConfig(**r.get('training', {})),
-        DataConfig(**r.get('data', {})),
+        seed=raw.get("seed", 42),
+        device=raw.get("device", "auto"),
+        model=_section(ModelConfig, raw.get("model"), "model"),
+        training=_section(TrainingConfig, raw.get("training"), "training"),
+        data=_section(DataConfig, raw.get("data"), "data"),
     )
+
+
+def load_config(path: str | Path) -> ChitConfig:
+    """Load and validate a config file. Raises ConfigError, or OSError if unreadable."""
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ConfigError(f"{path}: invalid JSON ({e})") from e
+    return config_from_dict(raw)

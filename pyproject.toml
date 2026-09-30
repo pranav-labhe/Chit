@@ -1,0 +1,16 @@
+[project]
+name = "pranav-chit"
+dynamic = ["version"]
+description = "Chit: a from-scratch neural-model layer for Atmini"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+
+[tool.setuptools.dynamic]
+version = { attr = "pranav.chit.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["pranav*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
