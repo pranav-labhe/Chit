@@ -37,6 +37,7 @@ jobs:
       - name: Build image
         run: |
           docker build \
+            -f Containerfile \
             -t $ECR_REPOSITORY:${{ github.run_number }} \
             -t $ECR_REPOSITORY:latest \
             .
