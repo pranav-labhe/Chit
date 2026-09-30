@@ -3,8 +3,7 @@ name: Deploy Chit to EC2
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   deploy:
@@ -35,6 +34,7 @@ jobs:
             -i ~/.ssh/chit-github-deploy \
             "${EC2_USER}@${EC2_HOST}" \
             "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' CHIT_API_KEY='${CHIT_API_KEY}' bash -s" << 'REMOTE'
+
               set -e
 
               ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
@@ -49,16 +49,16 @@ jobs:
 
               echo "Pulling latest Chit image..."
 
-              sudo docker pull "${ECR_IMAGE}"
+              docker pull "${ECR_IMAGE}"
 
               echo "Stopping existing Chit container..."
 
-              sudo docker stop chit || true
-              sudo docker rm chit || true
+              docker stop chit || true
+              docker rm chit || true
 
               echo "Starting new Chit container..."
 
-              sudo docker run -d \
+              docker run -d \
                 --name chit \
                 -p 127.0.0.1:8000:8000 \
                 --restart unless-stopped \
@@ -73,5 +73,7 @@ jobs:
 
               curl --fail http://127.0.0.1:8000/health
 
+              echo
               echo "Deployment successful."
+
           REMOTE
