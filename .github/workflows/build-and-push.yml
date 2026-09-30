@@ -46,7 +46,7 @@ jobs:
             --platform linux/arm64 \
             -f Containerfile \
             -t $ECR_REPOSITORY:${{ github.run_number }} \
-            -t $ECR_REPOSITORY:latest \
+            -t $ECR_REPOSITORY:latest
             
 
       - name: Tag image
