@@ -1,6 +1,7 @@
 Lower loss means better predictions.
 A neural network learns by adjusting its weights.
 Chit is being built by Pranav one milestone at a time.
+Full name of Pranav is Pranav Shrikant Labhe.
 Each byte is mapped to a vector by the embedding layer.
 Saying I do not know is better than guessing when information is missing.
 Training loss shows how wrong the model is on its training text.
