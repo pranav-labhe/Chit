@@ -1,0 +1,43 @@
+Even a small model can pick up simple patterns.
+Whatever is in train.txt is what Chit can learn.
+The text Chit trains on is where its skills come from.
+Chit finishes a sentence when it gets the start of it.
+Recalled memories are given to Chit as context.
+I am one part of Atmini.
+Training the model produces its own weights.
+Batch size is how many pieces of text are used at once.
+I keep learning as I get more examples.
+A small model such as Chit can make mistakes.
+Atmini is bigger than Chit, because Chit is only one component.
+An example of reasoning has an input, the reasoning steps, and an answer.
+Tags and importance help Atmini find the memories that matter.
+A tokenizer and weights made from scratch belong to Chit.
+Final decisions belong to the user.
+Memory gives me context when I answer.
+Making the model bigger without more data does not make it stronger.
+After Chit responds, Atmini gets the response.
+Predicting one byte after another is how Chit writes text.
+Atmini uses Chit as its model layer.
+Building Chit in milestones keeps every step small and testable.
+When training grows, a GPU helps.
+For a small experiment, a CPU is enough.
+Without positions, a transformer would not know the order of the text.
+Every lesson starts with an example.
+Cancelling a job stops training without breaking the server.
+Token ids are made from text by the tokenizer.
+I finish sentences that begin like the ones I have learned.
+FastAPI serves the API of Chit.
+Byte by byte, I continue the text.
+The eval file checks whether the model has learned more than memorized.
+The more varied the training text, the better Chit learns.
+The optimizer improves the weights gradually.
+Available information is the basis of reasoning.
+Knowledge waits in the database as pending until training.
+A training job runs in the background while the server keeps answering.
+Temperature zero gives the same answer every time.
+A vector of numbers stands for each token after embedding.
+The loss measures how well the model predicts the next byte.
+Chit cannot answer what it never learned.
+A larger block size lets Chit see more context.
+Chit keeps training protected with an API key.
+More layers give Chit more capacity.

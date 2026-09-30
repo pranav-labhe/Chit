@@ -35,16 +35,29 @@ curl -X POST localhost:8000/train \
         "config": "chit_cpu_learning",
         "seed": 7,
         "device": "cpu",
+        "init": "scratch",
         "model":    {"block_size": 64, "n_layer": 2, "n_head": 2, "n_embd": 64, "dropout": 0.0},
         "training": {"max_steps": 500, "learning_rate": 0.0005, "batch_size": 8},
         "promote": true
       }'
 ```
 
+`init` chooses the starting weights: `scratch` (default, random init),
+`current` (fine-tune the served model; its architecture is used and
+architecture overrides are rejected) or `auto` (`current` when possible,
+otherwise `scratch`). When fine-tuning, the served checkpoint is copied to
+`checkpoints/jobs/<id>/init.pt` first, so the run is reproducible.
+
+`training` also accepts `warmup_steps`, `lr_schedule` (`constant` or `cosine`)
+and `min_lr_ratio` (the cosine floor as a fraction of `learning_rate`).
+
+To train on knowledge you have taught Chit, use `POST /knowledge/train`
+instead; see [KNOWLEDGE_API.md](KNOWLEDGE_API.md).
+
 Poll `GET /train/{id}` (the `Location` header) until `state` is `succeeded`,
 `failed` or `cancelled`. The response includes `step`, `progress` (0–1), `latest`
 and `history` (train/eval loss at each evaluation), `error`, `promoted` and
-`promotion_error`.
+`promotion_error`, plus `init_checkpoint` and `metadata`.
 
 Requests are validated before a job starts. Unknown fields, out-of-range
 values, `n_embd` not divisible by `n_head`, `max_steps` above
@@ -66,7 +79,9 @@ point training at arbitrary files.
   The in-memory list keeps the last 50 jobs. Job directories are never deleted
   automatically, so set up retention for your storage.
 - **Restarts.** A job running when the server stops is cancelled on graceful
-  shutdown and is not resumed.
+  shutdown and is not resumed. Job history is reloaded from `job.json` files on
+  start-up; a job that was still active when the process died is shown as
+  `failed` with an `interrupted` error.
 
 ## Configuration
 
@@ -77,7 +92,7 @@ point training at arbitrary files.
 | `CHIT_CONFIG_DIR` | `configs` | Trainable configs |
 | `CHIT_JOBS_DIR` | `checkpoints/jobs` | Per-job output |
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper bound for `training.max_steps` |
-| `CHIT_ALLOW_UNAUTHENTICATED_TRAINING` | – | `1` = allow training without a key (dev only) |
+| `CHIT_ALLOW_UNAUTHENTICATED_TRAINING` | – | `1` = allow training and knowledge without a key (dev only) |
 
 ## Production notes
 

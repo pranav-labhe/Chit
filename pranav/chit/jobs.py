@@ -9,7 +9,9 @@ promote the checkpoint and hot-reload the model.
 
 Job records are kept in memory (the most recent ``max_jobs``) and written to
 ``<job dir>/job.json`` at every state change, as an audit trail that survives
-restarts. A job that was running when the process stopped is not resumed.
+restarts. On start-up the manager reloads that history; a job that was still
+queued or running when the process stopped is recorded as ``failed``
+(interrupted) and is not resumed.
 """
 from __future__ import annotations
 
@@ -82,6 +84,9 @@ class TrainingJob:
     checkpoint: str | None = None
     promoted: bool = False
     promotion_error: str | None = None
+    init_checkpoint: str | None = None
+    metadata: dict = field(default_factory=dict)
+    post_success_error: str | None = None
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def snapshot(self) -> dict:
@@ -98,6 +103,9 @@ class TrainingJob:
             'promoted': self.promoted,
             'promotion_error': self.promotion_error,
             'checkpoint': self.checkpoint,
+            'init_checkpoint': self.init_checkpoint,
+            'metadata': self.metadata,
+            'post_success_error': self.post_success_error,
             'error': self.error,
             'cancel_requested': self.cancel_event.is_set(),
             'created_at': self.created_at,
@@ -119,24 +127,41 @@ class TrainingJobManager:
         self._jobs: OrderedDict[str, TrainingJob] = OrderedDict()
         self._lock = threading.Lock()
         self._active: tuple[TrainingJob, threading.Thread] | None = None
+        self._load_history()
 
     # ---------- public API (thread-safe; returns snapshots, never live objects)
 
-    def submit(self, cfg: ChitConfig, promote: bool = True) -> dict:
+    def submit(
+        self,
+        cfg: ChitConfig,
+        promote: bool = True,
+        *,
+        job_id: str | None = None,
+        init_checkpoint: str | os.PathLike | None = None,
+        metadata: dict | None = None,
+        after_success: Callable[[dict], None] | None = None,
+    ) -> dict:
+        """Start a job. ``after_success(snapshot)`` runs once the job succeeded and any
+        promotion was attempted (check ``snapshot['promoted']``); its errors are
+        recorded as ``post_success_error`` and never fail the job."""
         with self._lock:
             if self._active and not self._active[0].state.terminal:
                 raise JobConflict(self._active[0].id)
-            job_id = uuid.uuid4().hex
+            job_id = job_id or uuid.uuid4().hex
+            if job_id in self._jobs:
+                raise ValueError(f'job id {job_id} already exists')
             out = self.jobs_dir / job_id
             job = TrainingJob(id=job_id, config=asdict(cfg), output_dir=str(out),
-                              promote=promote, max_steps=cfg.training.max_steps)
+                              promote=promote, max_steps=cfg.training.max_steps,
+                              init_checkpoint=str(init_checkpoint) if init_checkpoint else None,
+                              metadata=dict(metadata or {}))
             self._jobs[job_id] = job
             while len(self._jobs) > self.max_jobs:
                 oldest = next(iter(self._jobs))
                 if not self._jobs[oldest].state.terminal:
                     break
                 self._jobs.popitem(last=False)
-            thread = threading.Thread(target=self._run, args=(job, cfg),
+            thread = threading.Thread(target=self._run, args=(job, cfg, after_success),
                                       name=f'chit-train-{job_id[:8]}', daemon=True)
             self._active = (job, thread)
             self._persist(job)
@@ -199,12 +224,15 @@ class TrainingJobManager:
             if len(job.history) > MAX_HISTORY_POINTS:
                 del job.history[0]
 
-    def _run(self, job: TrainingJob, cfg: ChitConfig) -> None:
+    def _run(self, job: TrainingJob, cfg: ChitConfig,
+             after_success: Callable[[dict], None] | None = None) -> None:
         self._update(job, persist=True, state=JobState.RUNNING, started_at=_now())
         try:
             ckpt = train(
                 cfg,
                 output_dir=job.output_dir,
+                init_checkpoint=job.init_checkpoint,
+                metadata={'job_id': job.id, **job.metadata},
                 on_step=lambda s: self._update(job, step=s),
                 on_eval=lambda s, tl, el: self._on_eval(job, s, tl, el),
                 should_stop=job.cancel_event.is_set,
@@ -228,11 +256,50 @@ class TrainingJobManager:
             except Exception as e:  # training succeeded; only the hand-off failed
                 log.exception('training job %s: promotion failed', job.id)
                 self._update(job, promotion_error=f'{type(e).__name__}: {e}')
+        if after_success:
+            try:
+                with self._lock:
+                    snap = job.snapshot()
+                after_success(snap)
+            except Exception as e:  # e.g. bookkeeping; the checkpoint itself is fine
+                log.exception('training job %s: post-success hook failed', job.id)
+                self._update(job, post_success_error=f'{type(e).__name__}: {e}')
         self._finish(job, JobState.SUCCEEDED)
         log.info('training job %s succeeded (promoted=%s)', job.id, job.promoted)
 
     def _finish(self, job: TrainingJob, state: JobState, error: str | None = None) -> None:
         self._update(job, persist=True, state=state, error=error, finished_at=_now())
+
+    def _load_history(self) -> None:
+        """Reload job records from ``<jobs_dir>/*/job.json`` (newest ``max_jobs``)."""
+        if not self.jobs_dir.is_dir():
+            return
+        records = []
+        for f in self.jobs_dir.glob('*/job.json'):
+            try:
+                records.append(json.loads(f.read_text(encoding='utf-8')))
+            except (OSError, ValueError):
+                log.warning('skipping unreadable job record %s', f)
+        records.sort(key=lambda r: r.get('created_at') or '')
+        for r in records[-self.max_jobs:]:
+            try:
+                job = TrainingJob(
+                    id=r['id'], config=r.get('config') or {}, output_dir=str(self.jobs_dir / r['id']),
+                    promote=bool(r.get('promote')), max_steps=int(r.get('max_steps') or 0),
+                    state=JobState(r['state']), step=int(r.get('step') or 0),
+                    history=list(r.get('history') or []), created_at=r.get('created_at') or _now(),
+                    started_at=r.get('started_at'), finished_at=r.get('finished_at'), error=r.get('error'),
+                    checkpoint=r.get('checkpoint'), promoted=bool(r.get('promoted')),
+                    promotion_error=r.get('promotion_error'), init_checkpoint=r.get('init_checkpoint'),
+                    metadata=r.get('metadata') or {}, post_success_error=r.get('post_success_error'))
+            except (KeyError, ValueError, TypeError):
+                log.warning('skipping malformed job record for %s', r.get('id'))
+                continue
+            if not job.state.terminal:  # the process died while this job was active
+                job.state, job.error = JobState.FAILED, 'interrupted: server stopped before the job finished'
+                job.finished_at = job.finished_at or _now()
+                self._persist(job)
+            self._jobs[job.id] = job
 
     def _persist(self, job: TrainingJob) -> None:
         """Write job.json atomically. Called with self._lock held."""

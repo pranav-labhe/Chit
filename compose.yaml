@@ -1,0 +1,29 @@
+# Run:  podman-compose up -d --build     (or: podman compose up -d --build)
+services:
+  chit:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/chit:latest
+    container_name: chit
+    init: true                      # reaps zombies, forwards SIGTERM
+    restart: unless-stopped
+    stop_grace_period: 40s          # on stop the API cancels a running training job (waits up to 30 s)
+    ports:
+      - "127.0.0.1:8000:8000"       # localhost only; change deliberately if you expose it
+    environment:
+      # Required: the training and knowledge endpoints stay disabled without a key.
+      CHIT_API_KEY: ${CHIT_API_KEY:?set CHIT_API_KEY in .env}
+      CHIT_CHECKPOINT: checkpoints/latest.pt
+      CHIT_JOBS_DIR: checkpoints/jobs
+      CHIT_MEMORY_PATH: data/memory.json
+      CHIT_KNOWLEDGE_DB: data/knowledge.db
+      CHIT_SESSIONS_DB: data/sessions.db
+      CHIT_SESSION_TTL_DAYS: "30"
+      OMP_NUM_THREADS: "4"          # CPU threads PyTorch uses; set to your core count
+    volumes:
+      # Bind mounts, so you can edit data/train.txt and add configs on the host.
+      # "Z" relabels for SELinux (Fedora/RHEL); harmless elsewhere.
+      - ./data:/app/data:Z
+      - ./checkpoints:/app/checkpoints:Z
+      - ./configs:/app/configs:ro,Z
