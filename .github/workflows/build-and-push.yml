@@ -1,0 +1,62 @@
+```yaml
+name: Build and Push Chit to ECR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: chit
+
+jobs:
+  build-and-push:
+    name: Build and Push Chit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ChitGitHubActions
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        run: |
+          docker build \
+            -t $ECR_REPOSITORY:${GITHUB_SHA} \
+            -t $ECR_REPOSITORY:latest \
+            .
+
+      - name: Tag image
+        run: |
+          docker tag \
+            $ECR_REPOSITORY:${GITHUB_SHA} \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${GITHUB_SHA}
+
+          docker tag \
+            $ECR_REPOSITORY:latest \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+
+      - name: Push image
+        run: |
+          docker push \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${GITHUB_SHA}
+
+          docker push \
+            ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+```
