@@ -33,7 +33,13 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
+        
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+  
       - name: Build image
         run: |
           docker build \
@@ -41,7 +47,7 @@ jobs:
             -f Containerfile \
             -t $ECR_REPOSITORY:${{ github.run_number }} \
             -t $ECR_REPOSITORY:latest \
-            .
+            
 
       - name: Tag image
         run: |
