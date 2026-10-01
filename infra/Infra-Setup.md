@@ -18,12 +18,8 @@ Amazon ECR
 AWS EC2 (ARM64)
    │
    ├── Caddy :443
-   │       │
-   │       ▼
-   │   127.0.0.1:8000
-   │       │
-   │       ▼
-   │   Chit Docker container
+   │       ├── /console → 127.0.0.1:8001 (browser console)
+   │       └── other paths → 127.0.0.1:8000 (API)
    │
    └── HTTPS
           ▲
@@ -419,7 +415,7 @@ docker pull 316672688107.dkr.ecr.ap-south-1.amazonaws.com/chit:latest
 The container listens internally on:
 
 ```text
-8000
+8000 (API) and 8001 (browser console)
 ```
 
 The current container was verified as healthy.
@@ -506,7 +502,14 @@ Current Caddyfile:
 
 ```caddyfile
 api.chitt.online {
-    reverse_proxy 127.0.0.1:8000
+    @console path /console /console/*
+    handle @console {
+        uri strip_prefix /console
+        reverse_proxy 127.0.0.1:8001
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8000
+    }
 }
 ```
 
@@ -519,7 +522,16 @@ https://api.chitt.online
         ↓
 127.0.0.1:8000
         ↓
-     Chit
+      Chit API (port 8000)
+```
+
+The browser console is available at `https://api.chitt.online/console`. The deploy workflow binds its
+port 8001 to the EC2 loopback interface; Caddy routes `/console` to it. Do not open port 8001 in the
+EC2 security group. After changing the Caddyfile, validate and reload Caddy:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
 ```
 
 Caddy automatically handles HTTPS certificates for the domain.
@@ -760,8 +772,12 @@ The intended production-style public architecture is:
                        :443
                             │
                             ▼
-                  127.0.0.1:8000
-                            │
+                  ┌─────────┴─────────┐
+                  ▼                   ▼
+             127.0.0.1:8000     127.0.0.1:8001
+               Chit API          Browser console
+                  │                   │
+                  └─────────┬─────────┘
                             ▼
                     Chit Container
                             │
@@ -771,7 +787,7 @@ The intended production-style public architecture is:
 
 Only Caddy should be publicly exposed for the application.
 
-Port `8000` is an internal application port.
+Ports `8000` (API) and `8001` (browser console) are internal application ports.
 
 ---
 

@@ -61,8 +61,10 @@ jobs:
               docker run -d \
                 --name chit \
                 -p 127.0.0.1:8000:8000 \
+                -p 127.0.0.1:8001:8001 \
                 --restart unless-stopped \
                 -e CHIT_API_KEY="${CHIT_API_KEY}" \
+                -e CHIT_UI_BASE_PATH=/console \
                 "${ECR_IMAGE}"
 
               echo "Waiting for Chit..."
@@ -72,6 +74,7 @@ jobs:
               echo "Checking Chit health..."
 
               curl --fail http://127.0.0.1:8000/health
+              curl --fail http://127.0.0.1:8001/
 
               echo
               echo "Deployment successful."

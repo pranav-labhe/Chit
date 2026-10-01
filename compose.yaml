@@ -11,9 +11,11 @@ services:
     stop_grace_period: 40s          # on stop the API cancels a running training job (waits up to 30 s)
     ports:
       - "127.0.0.1:8000:8000"       # localhost only; change deliberately if you expose it
+      - "127.0.0.1:8001:8001"       # browser console; route through Caddy for public HTTPS access
     environment:
       # Required: the training and knowledge endpoints stay disabled without a key.
       CHIT_API_KEY: ${CHIT_API_KEY:?set CHIT_API_KEY in .env}
+      CHIT_UI_BASE_PATH: ""
       CHIT_CHECKPOINT: checkpoints/latest.pt
       CHIT_JOBS_DIR: checkpoints/jobs
       CHIT_MEMORY_PATH: data/memory.json

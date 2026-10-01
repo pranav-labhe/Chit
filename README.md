@@ -41,14 +41,15 @@ pip install -r requirements.txt
 # 3. Train Chit's CPU preset on the curated data
 python -m pranav.chit.tools.train --config configs/chit_assistant_cpu.json
 
-# 4. Start the API and send an assistant request from another terminal
-uvicorn pranav.chit.api:app --reload
+# 4. Start both the API and browser console from the repository root
+python -m pranav.chit.ui
 ```
 
 Training prints `step=... train=... eval=...` lines and writes `checkpoints/latest.pt`.
 The CPU preset trains Chit's current architecture within the available resources; lower loss does not by itself prove
 that it understands new requests or can solve unfamiliar problems well. With the server running, try `POST /generate` using the examples
-below or visit `http://127.0.0.1:8000/docs`.
+below or visit `http://127.0.0.1:8000/docs`. The console is at `http://127.0.0.1:8001/`; enter the configured
+`CHIT_API_KEY` once to unlock it.
 
 > **Why `chit_train_txt.json` and not `chit_cpu_learning.json`?**
 > `chit_cpu_learning.json` runs only 300 steps at a low learning rate, which is too little to learn
@@ -76,6 +77,7 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 | Retrain from my own text file | Edit `data/train.txt`, then `POST /train` or the CLI | See [section 3](#3-recommended-workflow-train-on-your-own-text). |
 | Prepare train/eval from one big text file (for example a mounted folder) | `POST /data/split`, then check with `GET /data` | Holds out an eval set with no overlap. Docs: `docs/DATA_API.md`. |
 | Explore the API in a browser | `http://localhost:8000/docs` | Interactive; works the same on every operating system. |
+| Open the Chit browser console | `http://localhost:8001/` | Chat, generation, and controls for every documented API route. |
 | Connect Atmini | `POST /generate` or `POST /chat` with the `X-API-Key` header | Keep the server on `127.0.0.1`. |
 
 **Memory vs knowledge vs weights**
@@ -145,16 +147,17 @@ In `/generate`, send the request as `prompt`. In `/chat`, send it as `message` a
 ```bash
 # Linux / macOS / Git Bash
 export CHIT_API_KEY="$(python -c 'import secrets; print(secrets.token_hex(24))')"
-uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
+python -m pranav.chit.ui
 ```
 
 ```powershell
 # Windows PowerShell
 $env:CHIT_API_KEY = python -c "import secrets; print(secrets.token_hex(24))"
-uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
+python -m pranav.chit.ui
 ```
 
 - Open **http://localhost:8000/docs** for an interactive page where you can try every endpoint.
+- Open **http://localhost:8001/** for the Chit console. It asks for the same API key once per browser session.
 - Use **one worker** (the default). The loaded model and the training-job list live in the process.
 - Keep `--host 127.0.0.1` unless you have set `CHIT_API_KEY` and put HTTPS in front of the server.
 - If no model is trained yet, the server still starts: `GET /health` reports `no_model` and

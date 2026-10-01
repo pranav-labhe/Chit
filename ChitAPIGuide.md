@@ -108,13 +108,14 @@ for POST requests, the **body** (the JSON you send). Here is how to actually sen
 
 In the examples I write `YOUR_KEY` for your API key. Replace it with your real key.
 
-### Way 1 — The built-in web page (easiest, nothing to install)
-1. Open `https://api.chitt.online/docs` in your browser.
-2. Click an endpoint, for example **POST /generate**. It opens.
-3. Click **Try it out**.
-4. Type your key into the `x-api-key` box.
-5. If there is a body box, replace the example text with your own JSON.
-6. Click **Execute**. The answer appears below, under **Server response**.
+### Way 1 — The browser console (easiest, nothing to install)
+1. Open `https://api.chitt.online/console` (deployed) or `http://127.0.0.1:8001/` (local).
+2. Enter your API key once. The console keeps it server-side for this browser session.
+3. Use Chat or Generate for model requests, or choose an operation under **All API routes**.
+4. Replace the sample values as needed. The console asks before deleting, cancelling work, training, or writing split files.
+
+The interactive FastAPI reference remains at `https://api.chitt.online/docs`. In Swagger, click an endpoint,
+choose **Try it out**, enter your key in the `x-api-key` box, and click **Execute**.
 
 ### Way 2 — curl (Mac, Linux, or "Git Bash" on Windows)
 ```bash
