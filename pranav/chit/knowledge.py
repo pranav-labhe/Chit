@@ -250,9 +250,9 @@ def build_dataset(entries: list[dict], out_dir: str | Path, *, base_text: str = 
                   max_bytes: int | None = None) -> BuiltDataset:
     """Write ``train.txt`` = base corpus + rendered knowledge (repeated), plus a manifest.
 
-    ``repeat`` upweights knowledge against a larger base corpus: a small model
-    sees each window at random, so a fact that appears once in a large file is
-    rarely sampled. The manifest records exactly which entries went in, so
+    ``repeat`` upweights knowledge against a larger base corpus: random window
+    sampling can otherwise make a fact that appears once in a large file rare.
+    The manifest records exactly which entries went in, so
     every trained checkpoint can be traced back to its knowledge.
     """
     if repeat < 1:

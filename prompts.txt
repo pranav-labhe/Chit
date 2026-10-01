@@ -38,7 +38,7 @@ First Atmini observes, then
 A model that only
 I am Chit, the
 A model that memorizes
-Even a small model
+Even Chit
 Whatever is in train.txt
 The text Chit trains
 Chit finishes a sentence
@@ -47,7 +47,7 @@ I am one part
 Training the model produces
 Batch size is how
 I keep learning as
-A small model such
+Chit such
 Atmini is bigger than
 An example of reasoning
 Tags and importance help

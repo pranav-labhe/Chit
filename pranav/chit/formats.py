@@ -28,9 +28,9 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
 
     ``history`` is a list of ``{"role": "user"|"assistant", "content": ...}``, oldest first.
     With ``max_bytes`` (the model's context size) the prompt is shortened until it fits:
-    first the oldest turns are dropped, then the lowest-ranked memories. The new
-    message is never dropped. Without history the result is identical to the
-    original single-turn prompt.
+    first the oldest turns are dropped, then the lowest-ranked memories, then the
+    end of an overlong current message is truncated. Without history or a size
+    limit the result is identical to the original single-turn prompt.
     """
     mems = [m for m in memories if m]
     turns = [(t["role"], t["content"]) for t in (history or [])]
@@ -40,6 +40,7 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
         past = "".join(f"{USER if r == 'user' else ASSISTANT} {c.strip()}\n" for r, c in turns)
         return f"Task: {task}\nKnown memory:\n{mem}\n{past}{USER} {user_input.strip()}\n{ASSISTANT}"
 
+    user_input = user_input.strip()
     prompt = build()
     if max_bytes is None:
         return prompt
@@ -51,4 +52,16 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
     while len(prompt.encode("utf-8")) > max_bytes and mems:
         mems.pop()  # search returns the best match first, so drop from the end
         prompt = build()
+    # A long new request can itself exceed the context window. Preserve its
+    # beginning (where instructions usually appear) and truncate only after
+    # dropping older turns and memories. Keep the old behavior for tiny test or
+    # legacy models whose entire prompt scaffold cannot fit.
+    if len(prompt.encode("utf-8")) > max_bytes:
+        original = user_input
+        user_input = ""
+        scaffold = build()
+        budget = max_bytes - len(scaffold.encode("utf-8"))
+        if budget >= 0:
+            user_input = original.encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+            prompt = build()
     return prompt

@@ -167,6 +167,9 @@ def get_jobs() -> TrainingJobManager:
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1, max_length=2000)
+    mode: Literal["assistant", "continue"] = Field(
+        default="assistant",
+        description="assistant formats the request with memory; continue preserves raw text continuation")
     tokens: int = Field(default=100, ge=1, le=500)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="0 = greedy")
     top_k: int = Field(default=50, ge=1, le=256)
@@ -176,8 +179,10 @@ class GenerateRequest(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=2000)
-    task: str = Field(default="chat", max_length=50, description='"chat" (Q&A-trained model) or "continue" (plain-text model)')
+    task: str = Field(default="chat", max_length=50, description='"chat" formats a request; "continue" performs raw text continuation')
     temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="default: the Bridge's own (0.7)")
+    tokens: int | None = Field(default=None, ge=1, le=500,
+                               description="maximum new bytes; omitted uses the server default")
     session_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$", description=(
         "continue this conversation; omit to start a new one (its id is returned)"))
 
@@ -212,9 +217,15 @@ def model_info():
 
 @app.post("/generate", dependencies=[Depends(require_key)])
 def generate(r: GenerateRequest):
-    rt = get_runtime()
+    get_runtime()
     with _lock:
-        text = rt.generate(r.prompt, r.tokens, r.temperature, r.top_k, stop=r.stop)
+        if r.mode == "continue":
+            text = _state["runtime"].generate(r.prompt, r.tokens, r.temperature, r.top_k, stop=r.stop)
+        else:
+            decision = _state["bridge"].process(
+                Context(user_input=r.prompt, task="chat"), r.temperature,
+                max_new_tokens=r.tokens, top_k=r.top_k, stop=r.stop or None)
+            text = decision.text
     return {"text": text}
 
 
@@ -232,7 +243,8 @@ def chat(r: ChatRequest):
         except SessionNotFound:
             raise HTTPException(status_code=404, detail="session not found")
     with _lock:
-        d = _state["bridge"].process(Context(user_input=r.message, task=r.task, history=history), r.temperature)
+        d = _state["bridge"].process(Context(user_input=r.message, task=r.task, history=history),
+                                     r.temperature, max_new_tokens=r.tokens)
     session_id = None
     if use_session:
         try:

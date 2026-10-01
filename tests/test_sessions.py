@@ -91,6 +91,21 @@ def test_prompt_trims_oldest_turns_first_and_keeps_message():
     assert "- fact" not in tiny and tiny.endswith("User: Who am I?\nChit:")   # message is never dropped
 
 
+def test_prompt_truncates_long_utf8_message_to_fit_when_scaffold_fits():
+    p = render_chat_prompt("नमस्ते " * 100, [], max_bytes=128)
+    assert len(p.encode("utf-8")) <= 128
+    assert p.startswith("Task: chat\nKnown memory:\n- (none)\nUser: नमस्ते")
+    assert p.endswith("\nChit:")
+
+
+def test_prompt_preserves_markdown_structure_and_code_fences():
+    message = "Review this:\n## Error\n```python\nprint(items[3])\n```\nWhy does it fail?"
+    prompt = render_chat_prompt(message, [], max_bytes=256)
+    assert "## Error" in prompt
+    assert "```python\nprint(items[3])\n```" in prompt
+    assert prompt.endswith("\nChit:")
+
+
 def test_trimming_never_starts_on_an_orphan_reply():
     hist = HIST + [{"role": "user", "content": "Q2"}, {"role": "assistant", "content": "A2"}]
     full = render_chat_prompt("Now", [], history=hist)

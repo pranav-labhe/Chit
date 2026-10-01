@@ -76,7 +76,7 @@ fields are accepted (`config`, `seed`, `device`, `model`, `training`,
 | `include_base` | `true` | mix in the config's `train_file` corpus |
 | `repeat` | `3` | times the knowledge appears in the dataset (1–100) |
 
-**Why `select: all` is the default.** A small model fine-tuned only on new
+**Why `select: all` is the default.** Fine-tuning only on new
 facts tends to forget older ones. Retraining on everything (plus the base
 corpus) avoids that; use `pending` for quick top-ups.
 

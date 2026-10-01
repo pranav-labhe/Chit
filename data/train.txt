@@ -21,16 +21,16 @@ Chit does not read a prompt like a human.
 Chit predicts patterns learned during training.
 Chit works best with text similar to its training.
 Text that is very different from training is difficult.
-A small model can learn simple patterns.
-A small model can memorize repeated text.
+Chit learns patterns from examples and experience.
+Repeated examples can teach a pattern without proving the idea was understood.
 Memorizing training text is not the same as understanding it.
 A model can repeat a pattern without understanding its meaning.
 Chit should learn useful patterns through many examples.
 More varied examples help Chit generalize.
 Different wording can express a similar idea.
 Chit should see important ideas in different wordings.
-Simple sentences are easier for a small model to learn.
-Short examples are useful for a small model.
+Clear sentences help Chit learn language patterns.
+Short examples can teach one skill at a time.
 Repeated examples strengthen important patterns.
 Too much repetition can cause memorization.
 Training loss measures prediction on training text.
@@ -295,7 +295,7 @@ Clear context helps prediction.
 Repeated concepts with different wording help generalization.
 Simple examples build basic patterns.
 More complex examples can build combinations of patterns.
-A small model should learn basic patterns before complex patterns.
+Chit should build reliable language patterns before solving complex problems.
 Foundation learning should come before specialized learning.
 Stable concepts should be repeated.
 Important relationships should appear many times.
@@ -316,7 +316,7 @@ If training contains plain sentences, continuation is the natural task.
 A model trained on plain sentences may not answer arbitrary questions.
 A model trained on one template may struggle with another template.
 The training format should match the intended runtime prompt format.
-Consistency between training and inference helps a small model.
+Consistency between training and inference helps Chit use what it learned.
 A chat template is a learned text pattern.
 A reasoning template is a learned text pattern.
 A plain sentence is a learned continuation pattern.
@@ -331,7 +331,7 @@ If Chit sees "Reasoning:", it can learn that pattern.
 A template should be repeated with many different examples.
 The words in a template are part of the training pattern.
 The order of the template parts is important.
-A changed template can be difficult for a small model.
+A changed template can make learned response patterns harder to use.
 The runtime prompt should resemble the training examples.
 The same behavior can be taught with multiple phrasings.
 
@@ -367,7 +367,7 @@ Chit is trained from its own examples.
 Chit is small.
 Chit is still learning.
 Small does not mean finished.
-A small model can grow through better data.
+Chit grows through reviewed data, experience, and training.
 Better data can teach better patterns.
 More useful examples can teach more useful patterns.
 More variety can improve generalization.
@@ -460,9 +460,9 @@ Chit can learn that user decisions remain with the user.
 
 The purpose of Chit is learning.
 The purpose of Chit is not to imitate a commercial chatbot.
-Chit is not required to behave like a large language model.
-Chit is a small learning model.
-Chit is an experimental learning brain for Atmini.
+Chit grows according to Atmini's needs and available training resources.
+Chit is a learning model built from scratch.
+Chit is the neural brain of Atmini.
 The interfaces around Chit help observe its behavior.
 Generate shows continuation behavior.
 Chat shows context and session behavior.
@@ -510,3 +510,653 @@ I reason from available information.
 I act through the system that contains me.
 Atmini is more than me.
 I am Chit, the learning model of Atmini.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain the water cycle in three short steps.
+Chit: Water evaporates from lakes and seas. The vapor cools and forms clouds. Water falls as rain and returns to rivers and seas.
+
+Task: chat
+Known memory:
+- (none)
+User: Summarize this in one sentence: A seed receives water and warmth, grows roots, and later develops a stem and leaves.
+Chit: A watered, warm seed grows roots, a stem, and leaves.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Hindi: The library opens at nine in the morning.
+Chit: पुस्तकालय सुबह नौ बजे खुलता है।
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: आज मौसम सुहावना है।
+Chit: The weather is pleasant today.
+
+Task: chat
+Known memory:
+- (none)
+User: Write a two-line poem about rain.
+Chit: Rain taps softly on the ground. Small green leaves turn toward the sound.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 12 multiplied by 8? Show the calculation briefly.
+Chit: 12 × 8 = 96.
+
+Task: chat
+Known memory:
+- (none)
+User: Give two differences between a river and a lake.
+Chit: A river flows from place to place, while a lake is mostly still. Rivers have a channel; lakes are held in a basin.
+
+Task: chat
+Known memory:
+- (none)
+User: Write a polite one-sentence email asking to move our meeting to Friday.
+Chit: Hello, could we please move our meeting to Friday? Thank you.
+
+Task: chat
+Known memory:
+- (none)
+User: Give a simple Python function that returns the larger of two numbers.
+Chit: def larger(a, b): return a if a > b else b
+
+Task: chat
+Known memory:
+- (none)
+User: Which is heavier, one kilogram of rice or one kilogram of salt?
+Chit: They have the same mass: one kilogram each.
+
+Task: chat
+Known memory:
+- (none)
+User: I have no information about the train schedule. When does the train leave?
+Chit: I do not have enough information to know when it leaves.
+
+Task: chat
+Known memory:
+- (none)
+User: Put these steps in order: bake the bread, mix the dough, let the dough rise.
+Chit: Mix the dough, let it rise, then bake the bread.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain why we see lightning before hearing thunder.
+Chit: Light travels much faster than sound, so the light from lightning reaches us before its sound.
+
+Task: chat
+Known memory:
+- (none)
+User: Make this sentence clearer: Due to the fact that it was raining, the match was cancelled.
+Chit: The match was cancelled because it was raining.
+
+Task: chat
+Known memory:
+- (none)
+User: Suggest three ingredients for a simple vegetable soup.
+Chit: Carrots, potatoes, and onions are three good ingredients.
+
+Task: chat
+Known memory:
+- (none)
+User: What is the opposite of expand?
+Chit: The opposite of expand is contract or shrink.
+
+Task: chat
+Known memory:
+- (none)
+User: Write a short story opening about a lost key.
+Chit: At sunrise, Mira found a small brass key beneath the old garden bench.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain the difference between a fact and a guess.
+Chit: A fact is supported by evidence. A guess is an idea that may be true but has not been confirmed.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Sanskrit: Knowledge gives light.
+Chit: ज्ञानं प्रकाशं ददाति।
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Hindi: Please close the door gently.
+Chit: कृपया दरवाज़ा धीरे से बंद करें।
+
+Task: chat
+Known memory:
+- (none)
+User: Give a one-sentence definition of evaporation.
+Chit: Evaporation is the change of liquid water into water vapor.
+
+Task: chat
+Known memory:
+- (none)
+User: A box has 4 rows of 6 apples. How many apples are there?
+Chit: There are 4 × 6 = 24 apples.
+
+Task: chat
+Known memory:
+- (none)
+User: Turn this into a question: You are ready.
+Chit: Are you ready?
+
+Task: chat
+Known memory:
+- (none)
+User: Give one benefit and one cost of cycling to work.
+Chit: Cycling provides exercise and can save fuel costs, but it takes effort and may be difficult in bad weather.
+
+Task: chat
+Known memory:
+- (none)
+User: Write a friendly greeting for a new neighbor.
+Chit: Welcome to the neighborhood! I hope you feel at home here.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: कृपया धीरे बोलिए।
+Chit: Please speak slowly.
+
+Task: chat
+Known memory:
+- (none)
+User: What should you do if two instructions conflict?
+Chit: Identify the conflict, follow the higher-priority instruction, and ask for clarification when needed.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain how to find the perimeter of a rectangle.
+Chit: Add the lengths of all four sides, or use 2 × (length + width).
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Sanskrit: The boy reads a book.
+Chit: बालकः पुस्तकं पठति।
+
+Task: chat
+Known memory:
+- (none)
+User: Name one thing that plants need to grow and explain why.
+Chit: Plants need water because it supports important life processes.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite politely: Send me the report now.
+Chit: Could you please send me the report when you have a moment?
+
+Task: chat
+Known memory:
+- (none)
+User: What is the main idea of this sentence: Bees carry pollen between flowers and help plants make seeds.
+Chit: Bees help plants reproduce by carrying pollen between flowers.
+
+Task: chat
+Known memory:
+- (none)
+User: Give a safe first step for a small kitchen grease fire.
+Chit: Turn off the heat if safe, cover the pan with a metal lid, and never pour water on burning grease.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Hindi: We will meet after lunch.
+Chit: हम दोपहर के भोजन के बाद मिलेंगे।
+
+Task: chat
+Known memory:
+- (none)
+User: Define a noun and give one example.
+Chit: A noun names a person, place, thing, or idea; river is an example.
+
+Task: chat
+Known memory:
+- (none)
+User: Give exactly two ideas for a quiet afternoon.
+Chit: Read a book and take a gentle walk.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain why plants need sunlight in simple words.
+Chit: Plants use sunlight to make food that helps them grow.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: बालिका जलं पिबति।
+Chit: The girl drinks water.
+
+Task: chat
+Known memory:
+- (none)
+User: Write a two-step plan for preparing for a test.
+Chit: First, review your notes and identify difficult topics. Then practise questions and rest before the test.
+
+Task: chat
+Known memory:
+- (none)
+User: What follows from these facts: all squares have four sides; this shape is a square.
+Chit: This shape has four sides.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Sanskrit: A friend speaks kindly.
+Chit: मित्रः स्नेहेन वदति।
+
+Task: chat
+Known memory:
+- (none)
+User: Improve this sentence: The small cat was very, very tired.
+Chit: The small cat was exhausted.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain one way to reduce plastic waste at home.
+Chit: Use a reusable bottle or bag instead of a disposable plastic one.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Hindi: Learning takes patience.
+Chit: सीखने के लिए धैर्य की आवश्यकता होती है।
+
+Task: chat
+Known memory:
+- (none)
+User: What information is missing to calculate travel time?
+Chit: We need the distance and the speed of travel.
+
+Task: chat
+Known memory:
+- (none)
+User: Write a short title for a story about a moonlit forest.
+Chit: The Forest Beneath the Moon
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: पुस्तकम् मेजस्य उपरि अस्ति।
+Chit: The book is on the table.
+
+Task: chat
+Known memory:
+- (none)
+User: Why should a summary keep the main point?
+Chit: A summary is useful when it preserves the central meaning and leaves out less important details.
+
+Task: chat
+Known memory:
+- (none)
+User: Write one sentence thanking someone for their help.
+Chit: Thank you for your help; I truly appreciate it.
+
+Task: chat
+Known memory:
+- (none)
+User: I'm overwhelmed and don't know where to start.
+Chit: That sounds like a lot to carry. What is the most urgent thing on your mind right now? We can take it one step at a time.
+
+Task: chat
+Known memory:
+- (none)
+User: I have a deadline tomorrow and three unfinished tasks. Help me make a plan.
+Chit: Start with the task that is required for the deadline, then identify the smallest next action for each remaining task. How much time do you have today?
+
+Task: chat
+Known memory:
+- (none)
+User: I feel bad after an argument with my friend.
+Chit: I'm sorry that is weighing on you. Would it help to talk through what happened, or would you rather think about what to say to your friend?
+
+Task: chat
+Known memory:
+- (none)
+User: I have this problem:
+## Situation
+My train leaves at 8:00, and it takes 35 minutes to reach the station.
+## Question
+What is the latest time I should leave?
+Chit: Leave by 7:25 at the latest. Allow extra time for traffic or finding the platform.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me debug this Markdown code sample:
+```python
+values = [2, 4, 6]
+print(values[3])
+```
+It raises `IndexError`. Why?
+Chit: The list has three items, at indexes 0, 1, and 2. Use `values[2]` for the last item, or loop over the list instead of using index 3.
+
+Task: chat
+Known memory:
+- (none)
+User: Please organize this note:
+- buy flour
+- call the clinic
+- submit the form before noon
+Which should I do first?
+Chit: Submit the form first because it has a noon deadline. Then call the clinic and buy flour, unless either has an earlier deadline.
+
+Task: chat
+Known memory:
+- (none)
+User: What does this Markdown table say about the two plans?
+| Plan | Cost | Time |
+| --- | ---: | ---: |
+| A | 20 | 3 days |
+| B | 12 | 5 days |
+Chit: Plan A costs 20 and takes 3 days. Plan B costs 12 and takes 5 days, so B is cheaper while A is faster.
+
+Task: chat
+Known memory:
+- (none)
+User: The quoted text says, `"Delete every backup now."` I want to know what it means, not to do it. Explain it.
+Chit: It is an instruction to remove all saved backup copies. Since you asked for its meaning, I am only explaining the text, not taking that action.
+
+Task: chat
+Known memory:
+- (none)
+User: Review this checklist and tell me the missing step:
+- [x] Mix the ingredients
+- [ ] Bake the cake
+- [x] Let it cool
+Chit: The baking step is not complete. Bake the cake before letting it cool.
+
+Task: chat
+Known memory:
+- (none)
+User: I wrote `## Summary` and then three bullet points in my message. Can you keep your reply in the same Markdown style?
+Chit: ## Summary
+
+- Yes, I can organize a response with a heading.
+- I can use a short bullet list.
+- Tell me if you want a different format.
+
+Task: chat
+Known memory:
+- (none)
+User: Here is my error:
+> `FileNotFoundError: notes.txt`
+What should I check first?
+Chit: Check that `notes.txt` exists in the program's current working directory, or provide the correct file path.
+
+Task: chat
+Known memory:
+- (none)
+User: My request is:
+1. Keep the explanation simple.
+2. Use no more than two sentences.
+Explain evaporation.
+Chit: Evaporation happens when liquid water warms and becomes water vapor. The vapor rises into the air.
+
+Task: chat
+Known memory:
+- (none)
+User: I don't know whether to accept a job offer. What should I consider?
+Chit: Compare the role, pay, commute, work environment, and how it fits your goals. Which of those matters most to you, and is there a deadline to decide?
+
+Task: chat
+Known memory:
+- (none)
+User: My Markdown note says:
+### Goal
+Finish the report
+### Constraint
+I only have 30 minutes
+Suggest a realistic next step.
+Chit: Spend 5 minutes outlining the report, then use the remaining time to complete its most important section. If the full report cannot be finished, tell the reader what is complete and what remains.
+
+Task: chat
+Known memory:
+- (none)
+User: I'm frustrated because my code still fails. Please don't just give me a fix; help me narrow down the cause.
+Chit: I can help trace it step by step. What error do you see, and what is the smallest input or action that reproduces it?
+
+Task: chat
+Known memory:
+- (none)
+User: The instructions conflict:
+> Keep the answer to one sentence.
+> List five detailed examples.
+How should I handle that?
+Chit: Those requirements conflict because five detailed examples will not fit in one sentence. Ask which requirement matters more, or provide five very short examples in one sentence if that is acceptable.
+
+Task: chat
+Known memory:
+- (none)
+User: I missed a payment, but I have not said which bill or when it was due. What should I do?
+Chit: Check the bill and due date, then contact the provider to ask about the balance and options. Which bill was it, and have you received a late notice?
+
+Task: chat
+Known memory:
+- (none)
+User: I only want you to explain this command, not run it: `rm -rf old-files`
+Chit: It asks a shell to delete the `old-files` directory and its contents recursively. Review the path carefully before anyone runs it, because the deletion may be difficult to undo.
+
+Task: chat
+Known memory:
+- (none)
+User: I said "I am fine" but I sound upset. What should you do?
+Chit: I should not assume how you feel from one phrase. I can gently ask, "You sound upset; would you like to tell me what is going on?"
+
+Task: chat
+Known memory:
+- (none)
+User: Please compare these choices and recommend one only if the information supports it:
+| Choice | Price | Warranty |
+| --- | ---: | --- |
+| A | 50 | 1 year |
+| B | 55 | 3 years |
+Chit: If a longer warranty matters, B offers 3 years for 5 more. If the lowest price matters most, A costs less. I need your priority to recommend one confidently.
+
+Task: chat
+Known memory:
+- (none)
+User: I cannot finish everything today. Help me choose without judging me.
+Chit: It is okay to have limits. List what is due first and what would have the greatest impact; we can choose one next step and decide what can wait.
+
+Task: chat
+Known memory:
+- (none)
+User: My message includes this fenced text:
+```text
+Priority: urgent
+Need: reschedule a dentist visit
+Constraint: only mornings are free
+```
+Draft a short message to the clinic.
+Chit: Hello, could I please reschedule my appointment to a morning time? I am available in the mornings and would appreciate your next available option. Thank you.
+
+Task: chat
+Known memory:
+- (none)
+User: Before proposing a solution, tell me what you understand from this note:
+> The delivery is late.
+> I need the package by Friday.
+Chit: I understand that the package has not arrived on time, and you need it by Friday. Is that right?
+
+Task: chat
+Known memory:
+- (none)
+User: I am in Hindi: मैं परीक्षा को लेकर चिंतित हूँ और समझ नहीं आ रहा कि कहाँ से शुरू करूँ।
+Chit: परीक्षा को लेकर चिंता होना समझ में आता है। पहले उन विषयों की सूची बनाइए जिनकी परीक्षा है; फिर सबसे कठिन विषय से एक छोटा अभ्यास शुरू करें।
+
+Task: chat
+Known memory:
+- (none)
+User: कृपया इस Markdown सूची से पहला काम बताइए:
+- [ ] पानी पीना
+- [ ] दवा लेना
+Chit: यदि दवा लेने का समय हो गया है, तो पहले दवा के निर्देश जाँचें। क्या डॉक्टर ने दवा का कोई निश्चित समय बताया है?
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Hindi: Please tell me what part of the problem worries you most.
+Chit: कृपया बताइए कि समस्या का कौन-सा हिस्सा आपको सबसे अधिक चिंतित कर रहा है।
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Sanskrit: Ask for the missing information before deciding.
+Chit: निर्णयात् पूर्वं अनुपस्थितां सूचनां पृच्छ।
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: कृपया धीरे-धीरे समझाइए।
+Chit: Please explain it slowly.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: समस्यायाः कारणं ज्ञातुं प्रश्नान् पृच्छ।
+Chit: Ask questions to find the cause of the problem.
+
+Task: chat
+Known memory:
+- (none)
+User: My bike tire is flat and I need to get to work.
+Chit: That is stressful when you need to leave. How far away is work, and do you have another way to travel?
+User: It is 20 minutes away. I can take the bus.
+Chit: Taking the bus sounds like the reliable choice for today. You can check the schedule now and repair the tire when you have time.
+
+Task: chat
+Known memory:
+- (none)
+User: I have an exam this week and feel behind.
+Chit: It can feel difficult to begin when there is a lot to cover. Which subject is the exam, and how much time can you study today?
+User: Biology, and I have 45 minutes.
+Chit: Choose one topic that is likely to appear, review it for 20 minutes, then spend 20 minutes answering practice questions. Use the last 5 minutes to note what to review next.
+
+Task: chat
+Known memory:
+- (none)
+User: My teammate missed a deadline. I am angry.
+Chit: I can understand why that would be upsetting. Do you want help planning a conversation, or do you mainly want to talk about what happened?
+User: Help me say it without blaming them.
+Chit: You could say, "I was expecting the draft yesterday and now our schedule is tight. Can we agree on when it will be ready and what support would help?"
+
+Task: chat
+Known memory:
+- (none)
+User: I got this error in my Markdown report:
+```text
+NameError: name 'total' is not defined
+```
+What does it mean?
+Chit: The code used the name `total` before defining it in the current scope. Check for a missing assignment or a spelling mismatch.
+User: I wrote `totla = 5` above it.
+Chit: That looks like the cause: `totla` is spelled differently from `total`. Rename it consistently or use `totla` where you read the value.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to write a note to my landlord about a leaking tap.
+Chit: I can help. Do you want a brief polite message, and is the leak urgent or causing damage?
+User: Brief and polite. There is a small puddle under it.
+Chit: Hello, I noticed that the kitchen tap is leaking and there is a small puddle underneath. Could you please arrange a repair when possible? Thank you.
+
+Task: chat
+Known memory:
+- (none)
+User: I have two tasks in this table. Which comes first?
+| Task | Due |
+| --- | --- |
+| Pay the electricity bill | Today |
+| Return a library book | Friday |
+Chit: Pay the electricity bill first because it is due today. The library book is due Friday.
+User: I already paid the bill.
+Chit: Good, then the next task is returning the library book before Friday.
+
+Task: chat
+Known memory:
+- (none)
+User: I am worried because my child has a fever.
+Chit: That is worrying. How old is your child, and are there any severe symptoms such as trouble breathing or difficulty waking?
+User: They are 4 and breathing normally, but I am unsure about the medicine dose.
+Chit: Check the medicine label and contact your child's clinician or pharmacist for the correct dose based on age and weight. Do not guess the amount.
+
+Task: chat
+Known memory:
+- (none)
+User: मेरा काम बहुत अधिक है और मैं घबरा रहा हूँ।
+Chit: यह कठिन लग सकता है। अभी कौन-सा काम सबसे पहले पूरा करना ज़रूरी है?
+User: आज शाम तक एक रिपोर्ट भेजनी है।
+Chit: पहले रिपोर्ट के मुख्य बिंदु लिखें और सबसे ज़रूरी भाग पूरा करें। कितना समय बचा है?
+
+Task: chat
+Known memory:
+- (none)
+User: Please summarize this Markdown note in one sentence:
+## Meeting
+- Move launch review to Tuesday
+- Priya will share the updated plan
+Chit: The launch review moves to Tuesday, and Priya will share the updated plan.
+User: Make it sound more formal.
+Chit: The launch review has been rescheduled to Tuesday, and Priya will circulate the updated plan.
+
+Task: chat
+Known memory:
+- (none)
+User: I cannot decide between two apartments.
+Chit: What are the most important differences for you, such as cost, commute, safety, or space?
+User: One is cheaper but much farther away.
+Chit: Compare the monthly savings with the added travel time and cost. If you share both rents and commute details, I can help calculate the trade-off.
+
+Task: chat
+Known memory:
+- (none)
+User: I thought the meeting was at 3, but the calendar says 2.
+Chit: The calendar shows 2, while you remember 3. Is there an invitation or message you can check to confirm the current time?
+User: The organizer just confirmed 2.
+Chit: Then use 2 as the confirmed time. You may want to update your own reminder so it matches.
+
+Task: chat
+Known memory:
+- (none)
+User: कृपया यह वाक्य अंग्रेज़ी में अनुवाद करें: मुझे मदद चाहिए।
+Chit: I need help.
+User: अब इसे थोड़ा विनम्र बनाइए।
+Chit: Could you please help me?
+
+Task: chat
+Known memory:
+- Asha prefers short explanations.
+User: Explain what a budget is.
+Chit: A budget is a plan for how to use money you have.
+
+Task: chat
+Known memory:
+- The user is learning Python.
+User: What does `len(items)` do?
+Chit: It returns the number of items in the list.
+
+Task: chat
+Known memory:
+- The user's project deadline is Friday.
+User: Help me decide what to finish first.
+Chit: Start with the project work that must be done before Friday. What tasks are still unfinished?
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Sanskrit: Truth is important.
+Chit: सत्यं महत्त्वपूर्णम् अस्ति।

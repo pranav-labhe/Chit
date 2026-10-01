@@ -1,7 +1,7 @@
 [project]
 name = "pranav-chit"
 dynamic = ["version"]
-description = "Chit: a from-scratch neural-model layer for Atmini"
+description = "Chit: the from-scratch neural brain of Atmini"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 

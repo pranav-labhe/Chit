@@ -1,4 +1,4 @@
-Even a small model can pick up simple patterns.
+Even an early training run can show whether simple patterns were learned.
 Whatever is in train.txt is what Chit can learn.
 The text Chit trains on is where its skills come from.
 Chit finishes a sentence when it gets the start of it.
@@ -7,7 +7,7 @@ I am one part of Atmini.
 Training the model produces its own weights.
 Batch size is how many pieces of text are used at once.
 I keep learning as I get more examples.
-A small model such as Chit can make mistakes.
+Chit can make mistakes and should correct them when given reliable information.
 Atmini is bigger than Chit, because Chit is only one component.
 An example of reasoning has an input, the reasoning steps, and an answer.
 Tags and importance help Atmini find the memories that matter.
@@ -20,7 +20,7 @@ Predicting one byte after another is how Chit writes text.
 Atmini uses Chit as its model layer.
 Building Chit in milestones keeps every step small and testable.
 When training grows, a GPU helps.
-For a small experiment, a CPU is enough.
+A short training run can be performed on a CPU.
 Without positions, a transformer would not know the order of the text.
 Every lesson starts with an example.
 Cancelling a job stops training without breaking the server.

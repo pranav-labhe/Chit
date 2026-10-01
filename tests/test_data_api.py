@@ -81,13 +81,14 @@ def corpus(client, tmp_path):
     return "corpus.txt"
 
 
-def test_data_status(client, corpus):
+def test_data_status(client, corpus, tmp_path):
     r = client.get("/data", params={"config": "test"}, headers=H)
     assert r.status_code == 200
     d = r.json()
     assert d["ready_to_train"] and d["train"]["bytes"] > 0 and len(d["train"]["sha256"]) == 64
     assert d["checks"]["eval_lines_also_in_train"] == 0
-    assert {"name": "corpus.txt", "bytes": len(CORPUS)} in d["sources"]
+    corpus_bytes = (tmp_path / "data" / "corpus.txt").stat().st_size
+    assert {"name": "corpus.txt", "bytes": corpus_bytes} in d["sources"]
     assert client.get("/data", params={"config": "missing"}, headers=H).status_code == 404
 
 
@@ -133,11 +134,19 @@ def test_split_rejects_files_not_larger_than_block_size(client, tmp_path):
 def test_split_source_must_stay_inside_the_data_folder(client, tmp_path):
     outside = tmp_path / "secret.txt"
     outside.write_text(CORPUS, encoding="utf-8")
-    os.symlink(outside, tmp_path / "data" / "link.txt")
+    symlink_created = True
+    try:
+        os.symlink(outside, tmp_path / "data" / "link.txt")
+    except OSError as e:
+        # Creating symlinks on Windows may require Developer Mode or a privilege.
+        if os.name != "nt" or getattr(e, "winerror", None) != 1314:
+            raise
+        symlink_created = False
     body = {"config": "test", "overwrite": True}
     for name in ("../secret.txt", "/etc/passwd", "a/b.txt", "..", ".hidden"):
         assert client.post("/data/split", json={**body, "source": name}, headers=H).status_code == 422
-    assert client.post("/data/split", json={**body, "source": "link.txt"}, headers=H).status_code == 404
+    if symlink_created:
+        assert client.post("/data/split", json={**body, "source": "link.txt"}, headers=H).status_code == 404
     assert client.post("/data/split", json={**body, "source": "missing.txt"}, headers=H).status_code == 404
 
 

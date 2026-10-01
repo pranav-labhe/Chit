@@ -33,13 +33,13 @@ Before each reply the Bridge builds the prompt from the task header, recalled me
 the last `CHIT_HISTORY_TURNS` messages of the session, and the new message, all in the
 `User:` / `Chit:` format. The prompt is then shortened to fit the model's context
 (`block_size`): the oldest turns are dropped first, then the lowest-ranked memories.
-The new message is never dropped. Messages are always stored in full, even when they
-are trimmed from the prompt.
+The current message is kept at the end of the prompt; if it alone exceeds the remaining model context, its end is
+truncated for generation. Messages are always stored in full, even when their full text does not fit in the context.
 
-**Limit:** a model with `block_size` 64 or 128 has room for at most a turn or two after
-the header. History only helps a model trained on multi-turn text in this format, and a
-larger context. The session store is the foundation; how much the model can use it
-depends on the model.
+**Limit:** history only helps a model trained on multi-turn text in this format. The
+`chit_assistant_cpu` preset uses a 512-byte context, but the byte tokenizer means
+multibyte scripts use that space more quickly. The session store is the foundation;
+how much the model can use it depends on the model.
 
 ## Settings (environment variables)
 

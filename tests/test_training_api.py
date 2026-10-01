@@ -59,6 +59,11 @@ def test_unknown_config_and_job(client):
     assert client.get("/train/configs", headers=H).json() == {"configs": ["test"]}
 
 
+def test_training_requests_keep_the_existing_default_preset():
+    from pranav.chit.api import TrainRequest
+    assert TrainRequest().config == "chit_cpu_learning"
+
+
 def test_training_requires_auth(client, monkeypatch):
     assert client.post("/train", json=body()).status_code == 401
     assert client.post("/train", json=body(), headers={"X-API-Key": "wrong"}).status_code == 401

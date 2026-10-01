@@ -14,11 +14,20 @@ class TextDataset(Dataset):
         if (source is None) == (text is None):
             raise ValueError("pass exactly one of a file path or text=")
         if text is None:
-            text = Path(source).read_text(encoding="utf-8")
-        ids = tokenizer.encode(text)
-        if len(ids) <= block_size:
-            raise ValueError(f"dataset has {len(ids)} tokens; it must be larger than block_size ({block_size})")
-        self.data = torch.tensor(ids, dtype=torch.long)
+            # ByteTokenizer's ids are exactly the normalized UTF-8 bytes. Keep
+            # them packed as uint8 instead of materializing a Python int per
+            # byte and then an int64 tensor (roughly 8x the corpus size). Read
+            # incrementally to avoid creating a corpus-sized Python str. The
+            # text wrapper retains read_text's universal-newline behavior.
+            raw = bytearray()
+            with Path(source).open("r", encoding="utf-8", newline=None) as f:
+                while chunk := f.read(1 << 20):
+                    raw.extend(chunk.encode("utf-8"))
+        else:
+            raw = bytearray(tokenizer.encode(text))
+        if len(raw) <= block_size:
+            raise ValueError(f"dataset has {len(raw)} tokens; it must be larger than block_size ({block_size})")
+        self.data = torch.frombuffer(raw, dtype=torch.uint8)
         self.block_size = block_size
 
     @classmethod
@@ -38,4 +47,7 @@ def random_batch(ds: TextDataset, batch_size: int, device, generator: torch.Gene
     starts = torch.randint(0, len(ds), (batch_size, 1), generator=generator)
     idx = starts + torch.arange(ds.block_size + 1)  # (batch, block+1), gathered in one op
     chunk = ds.data[idx]
-    return chunk[:, :-1].to(device, non_blocking=True), chunk[:, 1:].to(device, non_blocking=True)
+    # Embedding indices must be integer tensors. Convert only the sampled batch;
+    # the complete corpus stays packed in one byte per token in host memory.
+    return (chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True),
+            chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True))

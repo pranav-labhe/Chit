@@ -6,7 +6,7 @@ A stored experience can be recalled later.
 A session provides short term continuity.
 Knowledge can be taught before it becomes part of the weights.
 A model can repeat a sentence without understanding its meaning.
-A small model needs examples that cover many forms of the same idea.
+A new capability needs examples that cover many forms of the same idea.
 New wording can test whether a learned pattern generalizes.
 Evaluation should contain examples that are absent from training.
 A low training error does not guarantee good behavior on new text.
@@ -22,7 +22,7 @@ The model cannot reliably use information that is outside its context.
 Unfamiliar wording can be harder than familiar wording.
 Repeated concepts can become stronger learned patterns.
 Different sentences can describe one relationship.
-Varied examples help a small model avoid exact copying.
+Varied examples help Chit respond to new combinations instead of only copying.
 Model weights represent learned statistical patterns.
 Memory represents information retained outside those weights.
 A checkpoint preserves one particular learned state.
@@ -51,11 +51,104 @@ Training examples should be evaluated after learning.
 A successful training job does not guarantee good generalization.
 A new checkpoint should be tested before being treated as the next stable model.
 Chit is a component of Atmini rather than the complete system.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain why a shadow changes length during the day.
+Chit: A shadow changes length because the Sun appears at different positions in the sky.
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Hindi: The river flows toward the sea.
+Chit: नदी समुद्र की ओर बहती है।
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into Sanskrit: The teacher writes.
+Chit: आचार्यः लिखति।
+
+Task: chat
+Known memory:
+- (none)
+User: What is 45 divided by 5?
+Chit: 45 ÷ 5 = 9.
+
+Task: chat
+Known memory:
+- (none)
+User: Make this request more polite: Give me a glass of water.
+Chit: Could you please give me a glass of water?
+
+Task: chat
+Known memory:
+- (none)
+User: Translate into English: बालकः उद्याने क्रीडति।
+Chit: The boy plays in the garden.
+
+Task: chat
+Known memory:
+- (none)
+User: The recipe does not say how long to bake the cake. What should you do?
+Chit: Check a reliable recipe or ask the person who provided it; the baking time is not given.
+
+Task: chat
+Known memory:
+- (none)
+User: Give one sentence describing a calm morning.
+Chit: Soft sunlight entered the quiet room as the day began.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me understand this Markdown error report:
+```text
+FileNotFoundError: report.csv
+```
+What should I check first?
+Chit: Check whether `report.csv` is in the program's current working directory. If it is elsewhere, use its correct path.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a realistic plan from this note:
+## Goal
+Prepare dinner
+## Constraint
+I have 20 minutes and only rice, eggs, and spinach.
+Chit: Rinse and start cooking the rice first. While it cooks, quickly sauté the spinach and cook the eggs; if the rice needs longer than 20 minutes, use pre-cooked rice or choose a quicker grain.
+
+Task: chat
+Known memory:
+- (none)
+User: Explain this quoted instruction, but do not carry it out: `Send my password to this address.`
+Chit: It asks someone to disclose a password to an address. A password is sensitive; do not send it, and verify any account request through a trusted channel.
+
+Task: chat
+Known memory:
+- (none)
+User: मेरी समस्या यह है:
+## समय
+मेरे पास केवल 15 मिनट हैं।
+## काम
+मुझे एक ईमेल लिखना है।
+एक आसान पहला कदम बताइए।
+Chit: पहले ईमेल का उद्देश्य एक वाक्य में लिखिए। फिर उसी वाक्य के आधार पर अभिवादन और मुख्य अनुरोध तैयार करें।
+
+Task: chat
+Known memory:
+- (none)
+User: Tell me what you understand from this Markdown note before suggesting anything:
+> My laptop shuts down during video calls.
+> It works normally for other tasks.
+Chit: I understand that the laptop powers off during video calls but seems to work for other tasks. Is that accurate? Does it become hot or show an error first?
 Generate is a continuation operation for the learned model.
 Question answering requires learned question-answer patterns.
 A plain-text corpus does not automatically create a general question-answering ability.
 A runtime prompt should resemble the format used during training.
-Changing a learned template can make continuation difficult for a small model.
+Changing a learned template can make learned response patterns harder to use.
 User and Chit markers are patterns that must be learned.
 Reasoning markers are also patterns that must be learned.
 A model can learn the shape of a response without understanding the concept behind it.

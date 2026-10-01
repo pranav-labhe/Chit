@@ -25,18 +25,18 @@ return `403`, unless `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` is set (local devel
 
 ## Starting a job
 
-Every field is optional. Values not given come from the named config file
-in `configs/`.
+Every field is optional. The default config remains `chit_cpu_learning`; pass `chit_assistant_cpu` for the new assistant corpus. Other
+values come from the selected config file in `configs/`.
 
 ```bash
 curl -X POST localhost:8000/train \
   -H "X-API-Key: $CHIT_API_KEY" -H "Content-Type: application/json" \
   -d '{
-        "config": "chit_cpu_learning",
+        "config": "chit_assistant_cpu",
         "seed": 7,
         "device": "cpu",
         "init": "scratch",
-        "model":    {"block_size": 64, "n_layer": 2, "n_head": 2, "n_embd": 64, "dropout": 0.0},
+        "model":    {"block_size": 512, "n_layer": 4, "n_head": 4, "n_embd": 128, "dropout": 0.05},
         "training": {"max_steps": 500, "learning_rate": 0.0005, "batch_size": 8},
         "promote": true
       }'

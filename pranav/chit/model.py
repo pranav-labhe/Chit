@@ -1,4 +1,4 @@
-"""Small decoder-only Transformer trained from scratch for Chit."""
+"""Byte-level decoder-only Transformer trained from scratch for Chit."""
 from __future__ import annotations
 
 import torch
@@ -52,7 +52,7 @@ class Block(nn.Module):
 
 
 class ChitModel(nn.Module):
-    """Small decoder-only Transformer trained from scratch for Chit."""
+    """Byte-level decoder-only Transformer trained from scratch for Chit."""
 
     def __init__(self, vocab_size: int = 256, block_size: int = 128, n_layer: int = 4,
                  n_head: int = 4, n_embd: int = 128, dropout: float = 0.0):
