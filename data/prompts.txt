@@ -1,60 +1,182 @@
-Memory lets Atmini keep
-Good reasoning uses the
-A low temperature makes
-Once trained, a taught
-Reasoning examples teach Chit
-I am small, and
-A stronger Chit needs
-Chit learns taught knowledge
-The whole of Atmini
-Chit aims to be
-Lower loss means better
-Give me the start
-Weights hold what the
-Block size sets the
-Memorizing is easy for
-The learning rate sets
-When information is missing,
-Chit should admit when
-Inside Atmini, the model
-A prompt is the
-The file train.txt holds
-The bridge gives Chit
-Chit is a component
-Chit is written in
-I use memory to
-Taught items are kept
-Rest and recalibration are
-The file eval.txt holds
-A score for each
-The generate endpoint continues
-Examples are where learning
-Atmini rests and recalibrates
-The memory API stores
-I guess the next
-A small step every
+Chit observes
+Chit receives
+Chit remembers
+Chit learns
+Chit reasons
+Chit acts
+Chit uses
+Chit does not
+Chit should not
+Chit can
+Chit cannot
+Chit knows
+Chit does not know
+Chit should say
+Chit should recognize
+Chit should distinguish
+Chit should use relevant
+Chit should ignore irrelevant
+Memory is
+Memory does not
+Training changes
+Training does not
+Knowledge is
+Knowledge can
+Knowledge waits
+A session is
+A session stores
+Current context is
+Old experience is
+A recalled memory
+A new experience
+A learned pattern
+A model weight
+A checkpoint
+Attention lets
+The context window
+The block size
+A prompt gives
+Generate continues
+A plain text model
+A question answer pattern
+User and Chit
+A reasoning pattern
+A small model
+A small model can
+A small model cannot
+More varied examples
+Repeated examples
+Too much repetition
+Evaluation tests
+Training loss
+Evaluation loss
+Overfitting means
+Generalization means
+When information is missing
+When two memories conflict
+When new information differs
+When an assumption is
+When a fact is
+When evidence is
+A correction is
+A correction can
+An unfamiliar input
+A familiar pattern
+Relevant memory
+Irrelevant memory
+Current information
+Previous information
+Present context
+Past experience
+Observation comes
+Reasoning uses
+Memory can
+Memory cannot
+Training can
+Training cannot
+A memory can be saved
+A memory can be recalled
+A memory can remain
+A knowledge item can be
+A knowledge item becomes
+A session can
+A session is different
+The model weights are
+The model weights change
+The model weights do not
+The checkpoint stores
+The bridge gives
+The bridge returns
+Atmini gives Chit
+Atmini receives
+Atmini observes
+Atmini remembers
+Atmini reasons
+Atmini acts
+Atmini can pause
+Atmini can rest
+Atmini can recalibrate
+Atmini should not rush
+Rest is
+Recalibration is
+Patience is
+Learning is
+Learning begins
+Learning requires
+Learning should
+A useful example
+A useful memory
+A useful response
+A correct response
+An uncertain response
+Not knowing is
+A guess is
+An assumption is
+A possibility is
+A confirmed fact is
+Reasoning should
+Good reasoning
+Available information
+Missing information
+Invented information
+Chit should admit
+Chit should avoid
+Chit should remain
+Chit can be
+Chit can learn
+Chit can improve
+Chit can be corrected
+Chit can be evaluated
+Chit can be retrained
+Chit is
+Chit is not
+I am Chit
+My name is Chit
+I am the learning model
+I learn from examples
+I predict the next byte
+I use available context
+I do not know everything
+I should not pretend
+I can learn from correction
+I can remember experience
+I can be uncertain
+I am small
+I am still learning
+Inside Atmini
+The model inside Atmini
+Chit is one part
+Atmini is more
+The purpose of Chit
+The purpose of Chit is
 The goal of Chit
-First Atmini observes, then
-A model that only
-I am Chit, the
-A model that memorizes
-Even a small model
-Whatever is in train.txt
-The text Chit trains
-Chit finishes a sentence
-Recalled memories are given
-I am one part
-Training the model produces
-Batch size is how
-I keep learning as
-A small model such
-Atmini is bigger than
-An example of reasoning
-Tags and importance help
-A tokenizer and weights
-Final decisions belong to
-Memory gives me context
-Making the model bigger
-After Chit responds, Atmini
-Predicting one byte after
-Atmini uses Chit as
+The goal of learning
+A stable foundation
+A foundation teaches
+A foundation should
+A new milestone
+A milestone should
+Step by step
+Slow learning
+Small steps
+Better examples
+More varied text
+Useful patterns
+Learned patterns
+Stored experience
+Current experience
+Past experience
+Model learning
+Runtime memory
+Session continuity
+Knowledge and memory
+Memory and weights
+Training and memory
+Learning and remembering
+Observation and memory
+Memory and reasoning
+Reasoning and action
+Observation, memory
+Observe, remember
+Observe, remember, reason
+Observe, remember, reason, and
