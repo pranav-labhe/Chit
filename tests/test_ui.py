@@ -144,3 +144,16 @@ def test_expired_or_restarted_server_session_requires_login_again():
         with ui._key_sessions_lock:
             ui._key_sessions.clear()
         assert client.get("/_ui/session").json() == {"authenticated": False}
+
+
+def test_console_prefix_login_works_when_reverse_proxy_preserves_prefix(monkeypatch):
+    monkeypatch.setattr(ui, "BASE_PATH", "/console")
+    with TestClient(ui.app, base_url="https://app.chitt.online") as client:
+        page = client.get("/console/")
+        assert page.status_code == 200
+        assert 'const BASE="/console"' in page.text
+        login = client.post("/console/_ui/login", json={"api_key": KEY},
+                            headers={"Origin": "https://app.chitt.online"})
+        assert login.status_code == 200
+        assert login.json() == {"authenticated": True}
+        assert "path=/console" in login.headers["set-cookie"].lower()

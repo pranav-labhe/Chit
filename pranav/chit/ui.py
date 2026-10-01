@@ -102,6 +102,21 @@ class ProxyRequest(BaseModel):
 app = FastAPI(title="Chit Browser Console", docs_url=None, redoc_url=None, openapi_url=None)
 
 
+@app.middleware("http")
+async def accept_console_prefix(request: Request, call_next):
+    """Accept requests whether the reverse proxy strips BASE_PATH or preserves it."""
+    prefix = BASE_PATH
+    path = request.scope["path"]
+    if prefix and (path == prefix or path.startswith(prefix + "/")):
+        stripped = path[len(prefix):] or "/"
+        request.scope["path"] = stripped
+        raw_path = request.scope.get("raw_path")
+        raw_prefix = prefix.encode("ascii", errors="ignore")
+        if raw_path and raw_path.startswith(raw_prefix):
+            request.scope["raw_path"] = raw_path[len(raw_prefix):] or b"/"
+    return await call_next(request)
+
+
 def _page() -> str:
     route_data = json.dumps([
         {key: value for key, value in route.items() if key != "pattern"}
