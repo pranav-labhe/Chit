@@ -157,3 +157,16 @@ def test_console_prefix_login_works_when_reverse_proxy_preserves_prefix(monkeypa
         assert login.status_code == 200
         assert login.json() == {"authenticated": True}
         assert "path=/console" in login.headers["set-cookie"].lower()
+
+
+def test_login_accepts_public_origin_behind_https_reverse_proxy():
+    proxy_headers = {
+        "Origin": "https://app.chitt.online",
+        "Host": "127.0.0.1:8001",
+        "X-Forwarded-Host": "app.chitt.online",
+        "X-Forwarded-Proto": "https",
+    }
+    with TestClient(ui.app) as client:
+        response = client.post("/_ui/login", json={"api_key": KEY}, headers=proxy_headers)
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": True}

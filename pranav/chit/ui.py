@@ -19,6 +19,7 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 import uvicorn
@@ -192,7 +193,33 @@ async def logout(request: Request, response: Response):
 
 def _check_origin(request: Request) -> None:
     origin = request.headers.get("origin")
-    if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+    if not origin:
+        return
+
+    parsed_origin = urlsplit(origin)
+    forwarded_scheme = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    expected_scheme = forwarded_scheme or request.url.scheme
+    expected_authority = forwarded_host or request.headers.get("host", "")
+
+    def authority(value: str, scheme: str) -> tuple[str, int] | None:
+        parsed = urlsplit(f"//{value}")
+        try:
+            port = parsed.port or (443 if scheme == "https" else 80)
+        except ValueError:
+            return None
+        if not parsed.hostname or parsed.username or parsed.password:
+            return None
+        return parsed.hostname.rstrip(".").casefold(), port
+
+    if (
+        parsed_origin.scheme not in {"http", "https"}
+        or parsed_origin.path not in {"", "/"}
+        or parsed_origin.query
+        or parsed_origin.fragment
+        or parsed_origin.scheme != expected_scheme
+        or authority(parsed_origin.netloc, parsed_origin.scheme) != authority(expected_authority, expected_scheme)
+    ):
         raise HTTPException(status_code=403, detail="Cross-origin UI requests are not allowed.")
 
 
