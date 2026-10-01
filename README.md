@@ -8,7 +8,7 @@ storing memory, teaching new material and training in the background.
 > hundred thousand parameters, trained on whatever you put in `data/train.txt`. It can finish
 > sentences it has seen and answer questions it was trained on. It cannot reason about, or answer,
 > things that are not in its training text — those come out as gibberish. It is a learning
-> project and a component of Atmini, not a ChatGPT replacement.
+> project and a component of Atmini, not a ChatGPT, Claude, Gemini replacement.
 
 ---
 
