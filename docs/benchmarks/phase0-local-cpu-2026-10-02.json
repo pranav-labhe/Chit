@@ -1,0 +1,47 @@
+{
+  "requests": 100,
+  "tokens": 32,
+  "serialized_baseline": {
+    "elapsed_seconds": 9.043002100021113,
+    "throughput_rps": 11.058274552404066,
+    "latency": {
+      "p50_ms": 85.59079997939989,
+      "p95_ms": 129.9326000153087,
+      "p99_ms": 162.42890001740307,
+      "mean_ms": 90.42764400015585
+    }
+  },
+  "bounded_queue": {
+    "elapsed_seconds": 7.528497499995865,
+    "throughput_rps": 13.28286288200998,
+    "latency": {
+      "p50_ms": 3496.3038000278175,
+      "p95_ms": 7203.915700025391,
+      "p99_ms": 7446.828400017694,
+      "mean_ms": 3545.5423520022305
+    }
+  },
+  "manager": {
+    "queue_depth": 0,
+    "queue_capacity": 100,
+    "active": 0,
+    "completed": 100,
+    "rejected": 0,
+    "accepting": true
+  },
+  "checkpoint": "checkpoints\\latest.pt",
+  "device": "cpu",
+  "model_config": {
+    "vocab_size": 256,
+    "block_size": 64,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "dropout": 0.0
+  },
+  "tokenizer": "byte-utf8",
+  "torch_version": "2.14.0+cpu",
+  "python": "3.13.0",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "cuda_peak_allocated_bytes": null
+}

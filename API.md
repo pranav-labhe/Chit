@@ -14,7 +14,7 @@ authority for what is deployed.
 
 1. [Conventions](#1-conventions)
 2. [Endpoint index](#2-endpoint-index)
-3. [Health and model](#3-health-and-model) — `GET /health`, `GET /model`
+3. [Health and model](#3-health-and-model) — `GET /health`, `GET /ready`, `GET /model`
 4. [Text generation](#4-text-generation) — `POST /generate`, `POST /chat`
 5. [Sessions](#5-sessions) — `/sessions`
 6. [Memory](#6-memory) — `/memory`
@@ -41,14 +41,15 @@ an error and never silently ignored.
 | Access level | Endpoints | Rule |
 | --- | --- | --- |
 | Public | `GET /health` | No key needed. |
-| Key | `/model`, `/generate`, `/chat`, `/sessions*`, `/memory*` | If the server has `CHIT_API_KEY` set, the header is required (`401` otherwise). If the server has no key, these are open. |
+| Key | `/ready`, `/model`, `/generate`, `/chat`, `/sessions*`, `/memory*` | If the server has `CHIT_API_KEY` set, the header is required (`401` otherwise). If the server has no key, these are open. |
 | Training | `/train*`, `/knowledge*`, `/data*` | Same key rule, plus: if the server has **no** key configured these return `403`, unless it was started with `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` (local development only). |
 
-**Concurrency.** The server generates one reply at a time and runs one training job at a time. While a
-job runs, generation stays available but is slower, because both share the CPU.
+**Concurrency.** A bounded FIFO inference queue runs one generation at a time per process/device.
+Requests are rejected with `429` when the queue is full or queue wait expires. The server runs one
+training job at a time; training and inference may compete for CPU/GPU resources.
 
-**Model type matters.** Chit is Atmini's byte-level neural brain, trained from scratch without
-pretrained weights or an external AI service. Its learned knowledge, available memory, and context
+**Model type matters.** Chit defaults to a byte-level neural brain trained from scratch, with optional
+versioned BPE checkpoints and RoPE position encoding. It does not require an external AI service. Its learned knowledge, available memory, and context
 determine what it can answer or create. `/generate` and `/chat` use assistant request formatting by
 default; `/generate` retains raw continuation through `mode: "continue"`.
 
@@ -69,6 +70,7 @@ instead of `curl`.
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | GET | `/health` | Public | Is the server up, is a model loaded, is a job running |
+| GET | `/ready` | Key | Is the model, stores, and inference scheduler ready |
 | GET | `/model` | Key | Size, settings and training history of the loaded model |
 | POST | `/generate` | Key | Generate a response to a request; `mode: "continue"` opts into raw text continuation |
 | POST | `/chat` | Key | Assistant request with memory and session history (or raw continuation via `task: "continue"`) |
@@ -132,6 +134,12 @@ curl $BASE/health
 **Recommended.** Poll this after a deployment until `status` is `ok`. A new server with no checkpoint
 reports `no_model`: that is normal until the first training job finishes.
 
+### GET /ready
+
+**Purpose.** Readiness check for traffic routing. Returns `200` only when a model, memory, knowledge,
+session store, and inference scheduler are initialized; otherwise returns `503` with per-component checks.
+**Access:** key.
+
 ### GET /model
 
 **Purpose.** Describes the model that is being served. **Access:** key. **Request.** No parameters.
@@ -164,8 +172,12 @@ curl -H "X-API-Key: $KEY" $BASE/model
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `model_config.vocab_size` | integer | Number of possible tokens. Always 256 (one per byte). |
-| `model_config.block_size` | integer | Context window in bytes: how much text the model sees at once. |
+| `model_config.vocab_size` | integer | Number of possible tokens. 256 for the byte tokenizer; configured vocabulary size for BPE. |
+| `model_config.block_size` | integer | Context window in model tokens (for byte models, one token is one UTF-8 byte). |
+| `model_config.position_encoding` | string | `absolute` (legacy default) or `rope`. |
+| `tokenizer.name`, `tokenizer.vocab_size` | string, integer | Active tokenizer and vocabulary size. BPE responses include the tokenizer asset fingerprint. |
+| `memory_search` | object | Keyword or hybrid retrieval mode and embedding coverage. |
+| `inference` | object | Queue capacity and timeout; `batching` indicates whether dynamic batching is active. |
 | `model_config.n_layer`, `n_head`, `n_embd` | integer | Number of transformer layers, attention heads, and the model width. |
 | `model_config.dropout` | number | Dropout used in training. |
 | `parameters` | integer | Number of weights. |
@@ -198,7 +210,7 @@ the model memorized its training text.
 | --- | --- | --- | --- | --- | --- |
 | `prompt` | string | yes | — | 1–2000 characters | The user's request in assistant mode, or a raw text prefix in continue mode. |
 | `mode` | string | no | `"assistant"` | `assistant` or `continue` | `assistant` formats the prompt as a request and includes relevant memory; `continue` sends it directly as a text prefix. |
-| `tokens` | integer | no | 100 | 1–500 | Maximum number of new bytes (about characters) to generate. |
+| `tokens` | integer | no | 100 | 1–500 | Maximum new model tokens. For the byte tokenizer, each token is one UTF-8 byte. |
 | `temperature` | number | no | 0.7 | 0–2 | Randomness. `0` always picks the most likely byte (same answer each time). Higher is more random. |
 | `top_k` | integer | no | 50 | 1–256 | At each step, choose only among the `top_k` most likely bytes. Has no effect when `temperature` is 0. |
 | `stop` | array of strings | no | none | up to 8 strings | Custom stop strings. In assistant mode, omitted or empty uses chat-turn markers; in continue mode, omitted or empty means no explicit stop. |
@@ -248,7 +260,7 @@ and recent session messages, then stores the exchange. **Access:** key.
 | `message` | string | yes | — | 1–2000 characters | The user's message. |
 | `task` | string | no | `"chat"` | up to 50 characters | `chat` uses the template. `continue` sends `message` straight to the model as the start of a sentence (like `/generate`, stopping at the end of the line). Any other value is written into the template as the task name. |
 | `temperature` | number or null | no | `null` | 0–2 | Randomness. `null` uses the server default, 0.7. |
-| `tokens` | integer or null | no | `null` | 1–500 | Maximum new bytes; omitted uses the server default of 256. |
+| `tokens` | integer or null | no | `null` | 1–500 | Maximum new model tokens; for the byte tokenizer, each token is one UTF-8 byte. |
 | `session_id` | string or null | no | `null` | 32 lowercase hex characters | Continue this conversation. Omit it to start a new one; the new id is returned. Not allowed with `task: "continue"`. |
 
 **Behavior.** With `task: "chat"` the prompt is built as:
@@ -385,6 +397,8 @@ curl -H "X-API-Key: $KEY" $BASE/sessions/eefa8d7646ca4a99bf1ef6b514cf75c5
   "created_at": "2026-10-01T08:21:49.590569+00:00",
   "updated_at": "2026-10-01T08:21:49.683996+00:00",
   "turns": 4,
+  "summary": "User asked about memory and the assistant explained its function.",
+  "facts": [{"key": "user_location", "value": "India"}],
   "messages": [
     {"role": "user", "content": "Hello, I am", "created_at": "2026-10-01T08:21:49.592302+00:00"},
     {"role": "assistant", "content": "...", "created_at": "2026-10-01T08:21:49.592302+00:00"},
@@ -408,7 +422,7 @@ stored in `data/sessions.db`.
 
 ## 6. Memory
 
-Memory is a list of stored facts, kept in a file separate from the model's weights. Storing a memory
+Memory records are stored in SQLite, separate from the model's weights; legacy JSON is imported and retained for recovery. Storing a memory
 **never changes the model**; assistant-mode `/generate` and `/chat` find relevant memories and put them in the prompt.
 
 ### POST /memory
@@ -987,6 +1001,7 @@ Errors are JSON with a `detail` field. The shape of `detail` depends on the caus
 | `404` | Unknown job, session, memory, knowledge entry, config or source | a short string such as `"session not found"` |
 | `409` | A job is already running, or a file would be overwritten | an object, see below |
 | `422` | The request is invalid | a list; see below |
+| `429` | Inference queue is full or queue wait expires | object with `code: "inference_overloaded"`; includes `Retry-After: 1` |
 | `500` | A server-side problem such as an invalid config file or an unwritable folder | a string |
 | `503` | No model is loaded yet | a string such as `"checkpoint not found: checkpoints/latest.pt (train first)"` |
 
@@ -1082,7 +1097,13 @@ Set as environment variables on the server (not request parameters).
 | `CHIT_JOBS_DIR` | `checkpoints/jobs` | Where each job's files are written. |
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper limit for `training.max_steps`. |
 | `CHIT_MAX_DATASET_MB` | `200` | Upper limit for a generated dataset or a split source. |
-| `CHIT_MEMORY_PATH` | `data/memory.json` | Memory file. |
+| `CHIT_MEMORY_PATH` | `data/memory.json` | Legacy memory JSON import and recovery source. |
+| `CHIT_MEMORY_DB` | `data/memory.db` | Canonical SQLite memory database. |
+| `CHIT_INFERENCE_QUEUE_SIZE` | `32` | Maximum waiting inference requests. |
+| `CHIT_INFERENCE_QUEUE_TIMEOUT` | `30` seconds | Maximum time waiting before inference starts. |
+| `CHIT_EMBEDDING_MODEL_PATH` | unset | Local Sentence-Transformers model directory; optional hybrid retrieval. |
+| `CHIT_EMBEDDING_MODEL_VERSION` | asset fingerprint | Stable ID for vectors from this embedding model. |
+| `CHIT_EMBEDDING_SEMANTIC_THRESHOLD` | unset | Optional threshold calibrated using retrieval evaluation. |
 | `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database. |
 | `CHIT_SESSIONS_DB` | `data/sessions.db` | Session database. |
 | `CHIT_SESSION_TTL_DAYS` | `30` | Idle sessions older than this are deleted at start-up. `0` keeps them forever. |

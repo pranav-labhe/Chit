@@ -2,6 +2,11 @@ name: Deploy Chit to EC2
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable ECR image tag produced by build-and-push
+        required: true
+        type: string
 
 permissions: {}
 
@@ -9,99 +14,90 @@ jobs:
   deploy:
     name: Deploy Chit
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy to EC2
+      - name: Deploy selected image with rollback
         env:
           SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
           CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.CHIT_EC2_KNOWN_HOSTS }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
           EC2_HOST: ${{ vars.EC2_HOST }}
           EC2_USER: ${{ vars.EC2_USER }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           set -euo pipefail
-
+          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]
+          test -n "$SSH_KNOWN_HOSTS"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/chit-github-deploy
-          chmod 600 ~/.ssh/chit-github-deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/chit-github-deploy ~/.ssh/known_hosts
 
-          ssh -F none \
-            -o StrictHostKeyChecking=no \
-            -i ~/.ssh/chit-github-deploy \
-            "${EC2_USER}@${EC2_HOST}" \
-            "AWS_REGION='${AWS_REGION}' \
-             ECR_REGISTRY='${ECR_REGISTRY}' \
-             ECR_REPOSITORY='${ECR_REPOSITORY}' \
-             CHIT_API_KEY='${CHIT_API_KEY}' \
-             bash -s" << 'REMOTE'
+          # Send the API key through encrypted stdin into a root-owned-by-user,
+          # mode-600 temporary env file. It is never interpolated into an SSH command.
+          printf 'CHIT_API_KEY=%s\n' "$CHIT_API_KEY" | ssh -F none \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -i ~/.ssh/chit-github-deploy "${EC2_USER}@${EC2_HOST}" \
+            'install -d -m 700 /opt/chit && umask 077 && cat > /opt/chit/deploy.env'
 
-            set -euo pipefail
+          ssh -F none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -i ~/.ssh/chit-github-deploy "${EC2_USER}@${EC2_HOST}" \
+            "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          CHIT_HOME=/opt/chit
+          ENV_FILE="$CHIT_HOME/deploy.env"
+          ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          mkdir -p "$CHIT_HOME/data" "$CHIT_HOME/configs" "$CHIT_HOME/checkpoints" "$CHIT_HOME/models"
 
-            CHIT_HOME="/opt/chit"
-            ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker pull "$ECR_IMAGE"
+          OLD_IMAGE="$(docker inspect --format '{{.Image}}' chit 2>/dev/null || true)"
+          docker rm -f chit >/dev/null 2>&1 || true
 
-            echo "Preparing persistent directories..."
+          run_chit() {
+            local image="$1"
+            docker run -d --name chit \
+              -p 127.0.0.1:8000:8000 -p 127.0.0.1:8001:8001 \
+              --restart unless-stopped --env-file "$ENV_FILE" \
+              -e CHIT_UI_BASE_PATH=/console -e CHIT_CHECKPOINT=checkpoints/latest.pt \
+              -e CHIT_JOBS_DIR=checkpoints/jobs -e CHIT_MEMORY_PATH=data/memory.json \
+              -e CHIT_KNOWLEDGE_DB=data/knowledge.db -e CHIT_SESSIONS_DB=data/sessions.db \
+              -e CHIT_MEMORY_ANN=auto -e CHIT_EMBEDDING_MODEL_PATH=/app/models/sentence-transformer \
+              -v "$CHIT_HOME/data:/app/data" \
+              -v "$CHIT_HOME/configs:/app/configs:ro" \
+              -v "$CHIT_HOME/checkpoints:/app/checkpoints" \
+              -v "$CHIT_HOME/models:/app/models:ro" "$image" >/dev/null
+          }
 
-            mkdir -p \
-              "${CHIT_HOME}/data" \
-              "${CHIT_HOME}/configs" \
-              "${CHIT_HOME}/checkpoints"
-
-            echo "Logging in to Amazon ECR..."
-
-            aws ecr get-login-password --region "${AWS_REGION}" \
-              | docker login \
-                  --username AWS \
-                  --password-stdin \
-                  "${ECR_REGISTRY}"
-
-            echo "Pulling latest Chit image..."
-
-            docker pull "${ECR_IMAGE}"
-
-            echo "Stopping existing Chit container..."
-
-            docker stop chit >/dev/null 2>&1 || true
-            docker rm chit >/dev/null 2>&1 || true
-
-            echo "Starting Chit..."
-
-            docker run -d \
-              --name chit \
-              -p 127.0.0.1:8000:8000 \
-              -p 127.0.0.1:8001:8001 \
-              --restart unless-stopped \
-              -v "${CHIT_HOME}/data:/app/data" \
-              -v "${CHIT_HOME}/configs:/app/configs:ro" \
-              -v "${CHIT_HOME}/checkpoints:/app/checkpoints" \
-              -e CHIT_API_KEY="${CHIT_API_KEY}" \
-              -e CHIT_UI_BASE_PATH=/console \
-              "${ECR_IMAGE}" >/dev/null
-
-            echo "Waiting for Chit..."
-
+          if run_chit "$ECR_IMAGE"; then
             for _ in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 \
+              if docker exec chit python -c 'import os,urllib.request; r=urllib.request.Request("http://127.0.0.1:8000/ready",headers={"X-API-Key":os.environ["CHIT_API_KEY"]}); urllib.request.urlopen(r,timeout=4)' \
                 && curl -fsS http://127.0.0.1:8001/ >/dev/null 2>&1; then
-
-                echo
-                echo "Deployment successful."
+                rm -f "$ENV_FILE"
+                echo "Deployment of $ECR_IMAGE passed readiness checks."
                 exit 0
               fi
-
               sleep 2
             done
+          fi
 
-            echo
-            echo "Chit did not become healthy in 60 seconds."
-            echo
-            echo "Last container logs:"
-            docker logs --tail 60 chit || true
-
-            exit 1
-
+          echo "New image failed readiness; restoring the previous image." >&2
+          docker logs --tail 60 chit || true
+          docker rm -f chit >/dev/null 2>&1 || true
+          if [[ -n "$OLD_IMAGE" ]]; then
+            run_chit "$OLD_IMAGE"
+            for _ in $(seq 1 30); do
+              if docker exec chit python -c 'import os,urllib.request; r=urllib.request.Request("http://127.0.0.1:8000/ready",headers={"X-API-Key":os.environ["CHIT_API_KEY"]}); urllib.request.urlopen(r,timeout=4)'; then
+                rm -f "$ENV_FILE"
+                echo "Previous image restored and ready." >&2
+                exit 1
+              fi
+              sleep 2
+            done
+            echo "Previous image did not recover; inspect container logs immediately." >&2
+          fi
+          exit 1
           REMOTE

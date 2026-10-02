@@ -13,7 +13,7 @@ class TextDataset(Dataset):
     def __init__(self, source: str | Path | None, tokenizer, block_size: int, *, text: str | None = None):
         if (source is None) == (text is None):
             raise ValueError("pass exactly one of a file path or text=")
-        if text is None:
+        if tokenizer.name == "byte-utf8" and text is None:
             # ByteTokenizer's ids are exactly the normalized UTF-8 bytes. Keep
             # them packed as uint8 instead of materializing a Python int per
             # byte and then an int64 tensor (roughly 8x the corpus size). Read
@@ -23,11 +23,17 @@ class TextDataset(Dataset):
             with Path(source).open("r", encoding="utf-8", newline=None) as f:
                 while chunk := f.read(1 << 20):
                     raw.extend(chunk.encode("utf-8"))
+            token_data = torch.frombuffer(raw, dtype=torch.uint8)
         else:
-            raw = bytearray(tokenizer.encode(text))
-        if len(raw) <= block_size:
-            raise ValueError(f"dataset has {len(raw)} tokens; it must be larger than block_size ({block_size})")
-        self.data = torch.frombuffer(raw, dtype=torch.uint8)
+            if text is None:
+                text = Path(source).read_text(encoding="utf-8")
+            ids = tokenizer.encode(text)
+            if len(ids) <= block_size:
+                raise ValueError(f"dataset has {len(ids)} tokens; it must be larger than block_size ({block_size})")
+            token_data = torch.tensor(ids, dtype=torch.int32)
+        if len(token_data) <= block_size:
+            raise ValueError(f"dataset has {len(token_data)} tokens; it must be larger than block_size ({block_size})")
+        self.data = token_data
         self.block_size = block_size
 
     @classmethod
@@ -42,10 +48,14 @@ class TextDataset(Dataset):
         return chunk[:-1], chunk[1:]
 
 
-def random_batch(ds: TextDataset, batch_size: int, device, generator: torch.Generator | None = None):
+def random_batch(ds: TextDataset, batch_size: int, device, generator: torch.Generator | None = None,
+                 block_size: int | None = None):
     """Sample ``batch_size`` random windows as ``(x, y)`` tensors on ``device``."""
-    starts = torch.randint(0, len(ds), (batch_size, 1), generator=generator)
-    idx = starts + torch.arange(ds.block_size + 1)  # (batch, block+1), gathered in one op
+    width = ds.block_size if block_size is None else block_size
+    if width < 1 or width > ds.block_size:
+        raise ValueError("batch block_size must be between 1 and dataset.block_size")
+    starts = torch.randint(0, len(ds.data) - width, (batch_size, 1), generator=generator)
+    idx = starts + torch.arange(width + 1)  # (batch, block+1), gathered in one op
     chunk = ds.data[idx]
     # Embedding indices must be integer tensors. Convert only the sampled batch;
     # the complete corpus stays packed in one byte per token in host memory.

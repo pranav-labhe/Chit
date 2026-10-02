@@ -1,0 +1,64 @@
+{
+  "eval_file": "data/eval.txt",
+  "heldout_utf8_bytes": 9183,
+  "seed": 42,
+  "training_steps": 300,
+  "shared_training_config": {
+    "device": "cpu",
+    "batch_size": 8,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.1,
+    "grad_clip": 1.0,
+    "block_size": 64,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "dropout": 0.0,
+    "position_encoding": "absolute"
+  },
+  "byte": {
+    "tokenizer": "byte-utf8",
+    "vocab_size": 256,
+    "parameters": 120576,
+    "train_eval_loss_nats_per_token": 2.4723381280899046,
+    "deterministic_heldout_nats_per_token": 2.441551027877532,
+    "heldout_bits_per_byte": 3.522029980168324,
+    "generated_tokens_per_second": 463.5410479905518,
+    "output_characters_per_second": 463.5410479905518,
+    "generation_latency_ms": {
+      "p50": 61.80639998638071,
+      "p95": 113.66355000645852,
+      "p99": 142.9111030080821,
+      "mean": 69.03380000265315,
+      "stdev": 22.070674332100182
+    }
+  },
+  "bpe": {
+    "tokenizer": "bpe-tokenizers-json-v1",
+    "tokenizer_vocab_size": 2000,
+    "tokenizer_sha256": "404663d12fd362649704d97252b0590b099292438e20fe3792ec1aea1461ce43",
+    "parameters": 232192,
+    "train_eval_loss_nats_per_token": 4.812157917022705,
+    "deterministic_heldout_nats_per_token": 5.009226987135391,
+    "heldout_tokens": 2485,
+    "heldout_bits_per_byte": 1.9548446849221435,
+    "generated_tokens_per_second": 427.7855254692219,
+    "output_characters_per_second": 1176.4101950403603,
+    "generation_latency_ms": {
+      "p50": 62.200749991461635,
+      "p95": 147.29139998962637,
+      "p99": 167.4545329599641,
+      "mean": 74.8038399964571,
+      "stdev": 29.847690755459748
+    }
+  },
+  "generation_measurement": {
+    "prompt": "Task: continue\\nUser: Explain why it helps to check one assumption before acting.\\nChit:",
+    "runs_per_model": 50,
+    "max_new_tokens": 32,
+    "warmups_per_model": 3,
+    "order": "alternating",
+    "decoding": "greedy"
+  },
+  "decision": "retain byte champion; BPE remains challenger pending more seeds and golden-set pass"
+}

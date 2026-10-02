@@ -13,6 +13,8 @@ class Context:
     current_state: dict = field(default_factory=dict)
     task: str = "chat"
     history: list[dict] = field(default_factory=list)  # earlier turns of this session, oldest first
+    facts: list[dict] = field(default_factory=list)  # explicit user statements; latest correction active
+    summary: str = ""  # derived context, never a replacement for the retained transcript
 
 
 @dataclass
@@ -48,7 +50,8 @@ class Bridge:
         memories = (c.memories or self.runtime.recall(c.user_input, self.max_memories))[: self.max_memories]
         context = (getattr(self.runtime, "model_config", None) or {}).get("block_size")
         prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
-                                    history=c.history, max_bytes=context)
+                                    history=c.history, max_tokens=context, tokenizer=self.runtime.tokenizer,
+                                    facts=c.facts, summary=c.summary)
         text = self.runtime.generate(prompt, n_tokens, t, top_k,
                                      stop=stop if stop is not None else self.STOP).strip()
         return ChitDecision(text, metadata={"task": c.task, "memory_ids": [m.get("id") for m in memories]})

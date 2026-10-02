@@ -5,14 +5,14 @@ from pathlib import Path
 
 import torch
 
-from .memory import MemoryStore
 from .model import ChitModel, load_model_state
-from .tokenizer import ByteTokenizer
+from .memory import MemoryStore
+from .tokenizer import BpeTokenizer, ByteTokenizer, create_tokenizer
 from .training import load_checkpoint
 
 
 class ChitRuntime:
-    def __init__(self, model: ChitModel, device: str | torch.device = "cpu", memory: MemoryStore | None = None,
+    def __init__(self, model: ChitModel, device: str | torch.device = "cpu", memory=None,
                  model_config: dict | None = None, checkpoint_meta: dict | None = None):
         self.device = torch.device(device)
         self.model = model.to(self.device).eval()
@@ -23,17 +23,24 @@ class ChitRuntime:
 
     @classmethod
     def from_checkpoint(cls, path: str | Path, device: str | None = None,
-                        memory: MemoryStore | None = None) -> "ChitRuntime":
+                        memory=None) -> "ChitRuntime":
         ck = load_checkpoint(path)
         tok = ck.get("tokenizer", ByteTokenizer.name)
-        if tok != ByteTokenizer.name:
-            raise ValueError(f"checkpoint uses tokenizer {tok!r}; this runtime supports {ByteTokenizer.name!r}")
+        tok_cfg = (ck.get("config") or {}).get("tokenizer") or {}
+        tokenizer = create_tokenizer(tok, model_file=tok_cfg.get("model_file"),
+                                     asset=ck.get("tokenizer_asset"))
+        if isinstance(tokenizer, BpeTokenizer) and tokenizer.asset_sha256 != ck.get("tokenizer_sha256"):
+            raise ValueError("checkpoint BPE tokenizer asset hash does not match its metadata")
+        if tokenizer.vocab_size != ck["model_config"].get("vocab_size", tokenizer.vocab_size):
+            raise ValueError("checkpoint tokenizer vocabulary does not match model_config.vocab_size")
         model = load_model_state(ChitModel(**ck["model_config"]), ck["model"])
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         meta = {k: ck.get(k) for k in ("format", "chit_version", "step", "total_steps",
                                         "init_from", "best_eval_loss", "last_eval", "metadata")}
         meta["path"] = str(path)
-        return cls(model, device, memory=memory, model_config=dict(ck["model_config"]), checkpoint_meta=meta)
+        runtime = cls(model, device, memory=memory, model_config=dict(ck["model_config"]), checkpoint_meta=meta)
+        runtime.tokenizer = tokenizer
+        return runtime
 
     def generate(self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8, top_k: int | None = 50,
                  stop: list[str] | None = None) -> str:

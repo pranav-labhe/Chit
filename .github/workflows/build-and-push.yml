@@ -42,12 +42,17 @@ jobs:
   
       - name: Build image
         run: |
-          docker build \
+          docker buildx build \
             --platform linux/arm64 \
+            --build-arg CHIT_WITH_EMBEDDINGS=1 \
             -f Containerfile \
             -t $ECR_REPOSITORY:${{ github.run_number }} \
             -t $ECR_REPOSITORY:latest \
+            --load \
             .
+
+      - name: Verify Linux ARM64 FAISS runtime
+        run: docker run --rm --platform linux/arm64 $ECR_REPOSITORY:${{ github.run_number }} python -c "import faiss; print('FAISS', faiss.__version__)"
             
 
       - name: Tag image

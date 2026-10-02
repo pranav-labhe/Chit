@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from conftest import H, train_body, wait_job
+from conftest import H, install_candidate_for_test, train_body, wait_job
 from pranav.chit import api
 from pranav.chit.formats import render_chat_prompt
 from pranav.chit.sessions import SessionNotFound, SessionStore
@@ -50,7 +50,13 @@ def test_max_turns_drops_oldest(tmp_path):
     sid = s.create()["id"]
     for i in range(5):
         s.append(sid, [("user", f"q{i}"), ("assistant", f"a{i}")])
+        if s.summary_needed(sid):
+            s.summarize_overflow(sid)
     assert [m["content"] for m in s.history(sid)] == ["q3", "a3", "q4", "a4"]
+    session = s.get(sid)
+    assert session["summary_status"] == "ready"
+    assert session["summary_through_seq"] > 0
+    assert "q0" in session["summary"]
 
 
 def test_delete_cascades_and_prune(tmp_path):
@@ -82,6 +88,15 @@ def test_prompt_without_history_is_unchanged():
 def test_prompt_includes_history_in_order():
     p = render_chat_prompt("Who am I?", [], history=HIST)
     assert p.endswith("User: My name is Asha.\nChit: Hello Asha.\nUser: Who am I?\nChit:")
+
+
+def test_prompt_distinguishes_user_facts_and_derived_summary():
+    p = render_chat_prompt("What is my deadline?", [],
+                           facts=[{"key": "deadline", "value": "Thursday"}],
+                           summary="The user is preparing a report.")
+    assert "User-stated facts (latest correction wins):\n- deadline: Thursday" in p
+    assert "Earlier conversation summary (derived context):\nThe user is preparing a report." in p
+    assert p.endswith("User: What is my deadline?\nChit:")
 
 
 def test_prompt_trims_oldest_turns_first_and_keeps_message():
@@ -121,7 +136,9 @@ def served(client):
     body = train_body()
     body["model"] = {**body["model"], "block_size": 128}    # room for history; the default test model has 16
     job = client.post("/train", json=body, headers=H).json()
-    assert wait_job(client, job["id"])["promoted"]
+    completed = wait_job(client, job["id"])
+    assert not completed["promoted"]
+    install_candidate_for_test(completed)
     return client
 
 
@@ -139,7 +156,7 @@ def test_chat_creates_then_continues_a_session(served):
     assert second["session_id"] == sid
 
     assert "Asha" not in prompts[0].split("User:")[0]        # nothing earlier for the first message
-    assert "User: My name is Asha." in prompts[1]            # turn 1 was sent as context for turn 2
+    assert "User-stated facts (latest correction wins):\n- name: Asha" in prompts[1]
     msgs = served.get(f"/sessions/{sid}", headers=H).json()["messages"]
     assert [m["role"] for m in msgs] == ["user", "assistant", "user", "assistant"]
     assert msgs[0]["content"] == "My name is Asha." and msgs[2]["content"] == "Who am I?"
@@ -147,7 +164,9 @@ def test_chat_creates_then_continues_a_session(served):
 
 def test_history_is_trimmed_to_the_model_context(client):
     job = client.post("/train", json=train_body(), headers=H).json()   # block_size 16: no room for history
-    assert wait_job(client, job["id"])["promoted"]
+    completed = wait_job(client, job["id"])
+    assert not completed["promoted"]
+    install_candidate_for_test(completed)
     prompts = []
     rt = api._state["runtime"]
     real = rt.generate
@@ -184,6 +203,25 @@ def test_session_crud_and_auth(served):
     for call in (lambda: served.post("/sessions"), lambda: served.get("/sessions"),
                  lambda: served.get(f"/sessions/{sid}")):
         assert call().status_code == 401
+
+
+def test_session_fact_controls_api(served):
+    sid = served.post("/sessions", headers=H).json()["id"]
+    served.post("/chat", json={"message": "I prefer tea.", "session_id": sid}, headers=H)
+    facts_url = f"/sessions/{sid}/facts"
+    initial = served.get(facts_url, headers=H).json()
+    assert initial["enabled"] and initial["facts"][0]["value"] == "tea"
+
+    disabled = served.patch(facts_url, json={"enabled": False}, headers=H).json()
+    assert disabled["enabled"] is False
+    served.post("/chat", json={"message": "My budget is $50.", "session_id": sid}, headers=H)
+    assert [fact["key"] for fact in served.get(facts_url, headers=H).json()["facts"]] == ["preference"]
+
+    served.patch(facts_url, json={"enabled": True}, headers=H)
+    refreshed = served.post(f"{facts_url}/refresh", headers=H).json()
+    assert {fact["key"]: fact["value"] for fact in refreshed["facts"]} == {
+        "preference": "tea", "budget": "$50"}
+    assert served.delete(facts_url, headers=H).json()["facts"] == []
 
 
 def test_continue_task_does_not_use_sessions(served):

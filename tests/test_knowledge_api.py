@@ -2,7 +2,7 @@ import json
 
 import torch
 
-from conftest import H, TINY, train_body, wait_job
+from conftest import H, TINY, install_candidate_for_test, train_body, wait_job
 from pranav.chit import api
 
 TRAIN = {"max_steps": 6, "batch_size": 2, "eval_interval": 3, "eval_steps": 1, "checkpoint_interval": 3}
@@ -61,12 +61,12 @@ def test_knowledge_requires_auth(client):
     assert client.post("/knowledge/train", json={}).status_code == 401
 
 
-def test_train_on_knowledge_marks_entries_and_writes_manifest(client):
+def test_train_on_knowledge_keeps_entries_pending_until_promotion(client):
     ids = [i["id"] for i in teach(client, QA, FACT)["items"]]
     r = ktrain(client)
     assert r.status_code == 202, r.text
     job = wait_job(client, r.json()["id"])
-    assert job["state"] == "succeeded" and job["promoted"], job
+    assert job["state"] == "succeeded" and not job["promoted"], job
     assert job["init_checkpoint"] is None                          # nothing was served: auto -> scratch
 
     meta = job["metadata"]["knowledge"]
@@ -78,28 +78,31 @@ def test_train_on_knowledge_marks_entries_and_writes_manifest(client):
 
     for i in ids:
         e = client.get(f"/knowledge/{i}", headers=H).json()
-        assert e["status"] == "trained" and e["trained_job_id"] == job["id"]
-    ck = torch.load(api.CHECKPOINT, weights_only=True)
+        assert e["status"] == "pending" and e["trained_job_id"] is None
+    ck = torch.load(job["checkpoint"], weights_only=True)
     assert ck["metadata"]["knowledge"]["dataset_sha256"] == meta["dataset_sha256"]
+    assert client.get("/knowledge/stats", headers=H).json()["by_status"]["pending"] == 2
 
 
 def test_second_run_fine_tunes_the_served_model(client):
     teach(client, QA)
     first = wait_job(client, ktrain(client).json()["id"])
+    install_candidate_for_test(first)
     teach(client, FACT)
     r = ktrain(client, select="pending", model={})           # no overrides: use served architecture
     second = wait_job(client, r.json()["id"])
     assert second["state"] == "succeeded", second
     assert second["init_checkpoint"].endswith("init.pt")
-    assert second["metadata"]["knowledge"]["entries"] == 1   # only the new entry
-    ck = torch.load(api.CHECKPOINT, weights_only=True)
+    assert second["metadata"]["knowledge"]["entries"] == 2   # neither item is trained before promotion
+    ck = torch.load(second["checkpoint"], weights_only=True)
     assert ck["total_steps"] == 12 and ck["step"] == 6        # continued from the first run
     assert first["id"] != second["id"]
 
 
 def test_init_current_cannot_change_architecture(client):
     teach(client, QA)
-    wait_job(client, ktrain(client).json()["id"])
+    first = wait_job(client, ktrain(client).json()["id"])
+    install_candidate_for_test(first)
     r = ktrain(client, init="current", model={"n_layer": 3})
     assert r.status_code == 422 and "architecture" in r.text
 
@@ -119,13 +122,14 @@ def test_not_promoted_leaves_entries_pending(client):
 def test_nothing_to_train(client):
     assert ktrain(client).status_code == 422
     teach(client, QA)
-    wait_job(client, ktrain(client).json()["id"])
-    assert ktrain(client, select="pending").status_code == 422  # everything already trained
+    first = wait_job(client, ktrain(client).json()["id"])
+    assert not first["promoted"]
+    assert ktrain(client, select="pending").status_code == 202  # candidate is pending promotion
 
 
 def test_knowledge_train_conflicts_with_active_job(client):
     teach(client, QA)
-    active = client.post("/train", json=train_body(max_steps=100_000), headers=H).json()
+    active = client.post("/train", json=train_body(max_steps=100_000, checkpoint_interval=1000), headers=H).json()
     r = ktrain(client)
     assert r.status_code == 409 and r.json()["detail"]["active_job"] == active["id"]
     client.post(f"/train/{active['id']}/cancel", headers=H)

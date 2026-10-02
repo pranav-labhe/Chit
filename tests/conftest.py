@@ -1,11 +1,15 @@
 """Shared fixtures: an isolated API instance with tiny data and configs."""
 import json
+import shutil
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from pranav.chit import api
+from pranav.chit.bridge import Bridge
+from pranav.chit.runtime import ChitRuntime
 
 KEY = "test-key"
 H = {"X-API-Key": KEY}
@@ -50,4 +54,14 @@ def train_body(**training):
     return {"config": "test", "model": TINY,
             "training": {"max_steps": 6, "batch_size": 2, "eval_interval": 3,
                          "eval_steps": 1, "checkpoint_interval": 3, **training}}
+
+
+def install_candidate_for_test(job):
+    """Install a test candidate directly to seed API tests with a served model."""
+    source, target = Path(job["checkpoint"]), Path(api.CHECKPOINT)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    rt = ChitRuntime.from_checkpoint(target, memory=api._state["memory"])
+    rt.checkpoint_meta["path"] = str(target)
+    api._state.update(runtime=rt, bridge=Bridge(rt), error=None)
 

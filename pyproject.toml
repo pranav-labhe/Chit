@@ -5,6 +5,11 @@ description = "Chit: the from-scratch neural brain of Atmini"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 
+[project.optional-dependencies]
+bpe = ["tokenizers>=0.20,<1"]
+embeddings = ["sentence-transformers>=3.0,<6"]
+ann = ["faiss-cpu==1.15.1"]
+
 [tool.setuptools.dynamic]
 version = { attr = "pranav.chit.__version__" }
 

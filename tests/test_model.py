@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from pranav.chit.model import ChitModel, load_model_state
+from pranav.chit.model import CausalSelfAttention, ChitModel, load_model_state
 
 CFG = dict(vocab_size=256, block_size=16, n_layer=2, n_head=2, n_embd=32)
 
@@ -57,3 +57,36 @@ def test_generate_restores_mode_and_greedy_is_deterministic():
 def test_generate_rejects_empty_prompt():
     with pytest.raises(ValueError):
         ChitModel(**CFG).generate(torch.zeros(1, 0, dtype=torch.long), 5)
+
+
+def test_rope_matches_manual_two_dimensional_rotation():
+    attn = CausalSelfAttention(n_embd=2, n_head=1, dropout=0.0, position_encoding="rope").eval()
+    x = torch.tensor([[[[1.0, 0.0], [1.0, 0.0]]]])
+    actual = attn._apply_rope(x)
+    expected = torch.tensor([[[[1.0, 0.0], [math.cos(1.0), math.sin(1.0)]]]])
+    assert torch.allclose(actual, expected, atol=1e-6)
+
+
+def test_rope_model_is_causal_and_has_finite_gradients():
+    torch.manual_seed(3)
+    model = ChitModel(**CFG, position_encoding="rope").train()
+    ids = torch.randint(0, CFG["vocab_size"], (2, 10))
+    logits, loss = model(ids, ids)
+    assert logits.shape == (2, 10, CFG["vocab_size"])
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert all(p.grad is None or torch.isfinite(p.grad).all() for p in model.parameters())
+    model.eval()
+    with torch.no_grad():
+        prefix, _ = model(ids[:, :5])
+        full, _ = model(ids[:, :10])
+    assert torch.allclose(prefix, full[:, :5], atol=1e-5)
+
+
+def test_rope_checkpoint_round_trip():
+    model = ChitModel(**CFG, position_encoding="rope")
+    clone = load_model_state(ChitModel(**CFG, position_encoding="rope"), model.state_dict())
+    assert clone.position_encoding == "rope"
+    with pytest.raises(ValueError, match="even attention head"):
+        ChitModel(vocab_size=256, block_size=8, n_layer=1, n_head=1, n_embd=3,
+                  position_encoding="rope")

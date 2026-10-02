@@ -25,3 +25,30 @@ def test_byte_corpus_still_rejects_invalid_utf8(tmp_path):
     path.write_bytes(b"valid prefix " + bytes([0xFF]) * 8)
     with pytest.raises(UnicodeDecodeError):
         TextDataset(path, ByteTokenizer(), block_size=4)
+
+
+def test_random_batch_supports_shorter_curriculum_window():
+    dataset = TextDataset.from_text("0123456789abcdef" * 4, ByteTokenizer(), block_size=12)
+    x, y = random_batch(dataset, 3, "cpu", generator=torch.Generator().manual_seed(1), block_size=5)
+    assert x.shape == y.shape == (3, 5)
+    assert torch.equal(x[:, 1:], y[:, :-1])
+
+
+def test_bpe_dataset_keeps_token_ids_above_byte_range():
+    tokenizers = pytest.importorskip("tokenizers")
+    from tokenizers import decoders, models, pre_tokenizers, trainers
+    from pranav.chit.tokenizer import BpeTokenizer
+
+    inner = tokenizers.Tokenizer(models.BPE(unk_token=None))
+    inner.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+    inner.decoder = decoders.ByteLevel()
+    inner.train_from_iterator(["hello world नमस्ते 🌍"] * 5,
+                              trainers.BpeTrainer(vocab_size=300, min_frequency=1,
+                                                  initial_alphabet=pre_tokenizers.ByteLevel.alphabet(),
+                                                  special_tokens=[]))
+    tokenizer = BpeTokenizer(inner)
+    text = "hello world नमस्ते 🌍 " * 4
+    dataset = TextDataset.from_text(text, tokenizer, block_size=4)
+    assert dataset.data.max().item() > 255
+    x, y = random_batch(dataset, 2, "cpu", block_size=4)
+    assert x.shape == y.shape == (2, 4)

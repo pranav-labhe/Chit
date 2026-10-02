@@ -156,7 +156,7 @@ def test_split_requires_the_key(client, corpus):
 
 
 def test_split_is_blocked_while_training_runs(client, corpus):
-    job = client.post("/train", json=train_body(max_steps=100000), headers=H)
+    job = client.post("/train", json=train_body(max_steps=100000, checkpoint_interval=1000), headers=H)
     assert job.status_code == 202
     try:
         r = client.post("/data/split", json={"source": corpus, "config": "test", "overwrite": True}, headers=H)

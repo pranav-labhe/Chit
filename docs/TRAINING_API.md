@@ -38,7 +38,7 @@ curl -X POST localhost:8000/train \
         "init": "scratch",
         "model":    {"block_size": 512, "n_layer": 4, "n_head": 4, "n_embd": 128, "dropout": 0.05},
         "training": {"max_steps": 500, "learning_rate": 0.0005, "batch_size": 8},
-        "promote": true
+        "promote": false
       }'
 ```
 
@@ -67,13 +67,78 @@ values, `n_embd` not divisible by `n_head`, `max_steps` above
 Training data comes from the config file on the server. Clients cannot
 point training at arbitrary files.
 
+During API training, every saved checkpoint is automatically evaluated on the
+held-out text file. Job status exposes an `evaluations` list with report paths,
+perplexity, and bits/byte, plus `final_evaluation`. Golden response generation
+is intentionally a separate bounded step because it runs the model on all 50
+cases and still requires human review.
+
+## Candidate evaluation and promotion
+
+Training jobs always write candidates under `checkpoints/jobs/<id>/` and do not
+replace the served model. `promote: true` is rejected because an unevaluated
+checkpoint must never become the champion. Evaluate the candidate and current
+champion with the same `data/eval.txt` and `data/golden_set.json`; have two
+reviewers independently rate every golden response using the rubric in
+`docs/GOLDEN_SET.md`. The ratings file must bind to the exact checkpoint and
+golden-set SHA-256 values reported by `eval_runner.py`.
+
+Create one reviewed ratings file per checkpoint, using the hashes from that
+checkpoint's evaluation output:
+
+```json
+{
+  "golden_set_sha256": "<hash from report>",
+  "checkpoint_sha256": "<hash from report>",
+  "ratings": [
+    {"id": "G001", "passed": true, "critical_failure": false,
+     "reviewers": ["reviewer-a", "reviewer-b"]}
+  ]
+}
+```
+
+Include each case ID exactly once. `passed` is the adjudicated decision after
+independent review; set `critical_failure` if the response triggers any critical
+rubric failure.
+
+```bash
+python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/jobs/<job-id>/latest.pt \
+  --eval-file data/eval.txt --golden-set data/golden_set.json \
+  --max-new-tokens 64 --output checkpoints/jobs/<job-id>/responses.json
+python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/latest.pt \
+  --eval-file data/eval.txt --golden-set data/golden_set.json \
+  --output checkpoints/evaluations/champion.json
+python -m pranav.chit.tools.promote_candidate \
+  --candidate checkpoints/jobs/<job-id>/latest.pt \
+  --candidate-eval checkpoints/jobs/<job-id>/evaluation.json \
+  --champion-eval checkpoints/evaluations/champion.json
+```
+
+Reviewers score every candidate response and record the checkpoint and Golden
+Set hashes from its response report. Then repeat the candidate evaluation with
+`--max-new-tokens 64 --ratings checkpoints/jobs/<job-id>/ratings.json` and save
+the result as `evaluation.json`; this binds ratings to the generated report.
+Promotion requires fully scorable passing Golden Set gates for the candidate,
+no more than 5% held-out bits/byte regression, matching tokenizer family, and
+matching evaluation data hashes. When a valid passing champion report exists,
+the candidate must also exceed it by a paired bootstrap 95% lower bound above
+a 2 percentage-point behavior lift. For the first eligible champion only, a
+context-ineligible incumbent with zero scorable cases may be replaced by a
+candidate that passes the absolute two-reviewer Golden Set gate; this bootstrap
+path is recorded in the manifest. The promoted
+and previous checkpoints are archived under `checkpoints/champions/` and
+tracked in `checkpoints/champion.json`. Restart the service after CLI promotion
+so it loads the newly installed champion. Keep the manifest and archive
+together for rollback. Restore a retained checkpoint with
+`python -m pranav.chit.tools.rollback_champion --to-sha256 <checkpoint-sha256>`;
+restart the service after rollback as well.
+
 ## How it behaves
 
 - **One job at a time.** Training runs in a background thread in the API process.
-- **Served model is protected.** Each job writes to `checkpoints/jobs/<id>/`. Only
-  a successful job with `promote: true` replaces `CHIT_CHECKPOINT`. The new
-  checkpoint is loaded and validated first, then copied into place atomically and
-  swapped in between requests. Failed or cancelled jobs never touch the served model.
+- **Served model is protected.** Each job writes to `checkpoints/jobs/<id>/`.
+  Failed, cancelled, and successful jobs leave `CHIT_CHECKPOINT` unchanged;
+  evaluation-backed promotion is an explicit operator action described above.
 - **Cancellation is cooperative.** The job stops before its next training step.
 - **Audit trail.** `checkpoints/jobs/<id>/job.json` records each job's final state.
   The in-memory list keeps the last 50 jobs. Job directories are never deleted

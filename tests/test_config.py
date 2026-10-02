@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from pranav.chit.config import ConfigError, load_config
-from pranav.chit.training import lr_at
+from pranav.chit.config import ChitConfig, ConfigError, ModelConfig, TrainingConfig, load_config
+from pranav.chit.training import context_length_at, lr_at
 
 
 def _write(tmp_path, raw):
@@ -60,7 +60,7 @@ def test_assistant_curriculum_covers_languages_and_holds_out_requests():
     {"training": {"max_step": 5}},                   # typo in a section
     {"model": {"n_embd": 30, "n_head": 4}},          # not divisible
     {"device": "tpu"},
-    {"training": {"lr_schedule": "linear"}},
+    {"training": {"lr_schedule": "exponential"}},
 ])
 def test_invalid_configs_rejected(tmp_path, raw):
     with pytest.raises(ConfigError):
@@ -73,3 +73,25 @@ def test_lr_schedule(tmp_path):
     assert lr_at(5, c) == pytest.approx(0.5)
     assert lr_at(10, c) == pytest.approx(1.0)
     assert lr_at(100, c) == pytest.approx(0.1)
+
+
+def test_linear_lr_schedule(tmp_path):
+    c = load_config(_write(tmp_path, {"training": {"learning_rate": 1.0, "max_steps": 100,
+                                                   "warmup_steps": 20, "lr_schedule": "linear",
+                                                   "min_lr_ratio": 0.1}}))
+    assert lr_at(10, c) == pytest.approx(0.5)
+    assert lr_at(20, c) == pytest.approx(1.0)
+    assert lr_at(60, c) == pytest.approx(0.55)
+    assert lr_at(100, c) == pytest.approx(0.1)
+
+
+def test_context_curriculum_steps_through_windows_and_reaches_maximum():
+    config = ChitConfig(model=ModelConfig(block_size=512),
+                        training=TrainingConfig(max_steps=9, context_curriculum=[128, 256, 512]))
+    assert [context_length_at(step, config) for step in (1, 3, 4, 6, 7, 9)] == [128, 128, 256, 256, 512, 512]
+
+
+def test_context_curriculum_must_end_at_model_window():
+    with pytest.raises(ConfigError, match="end at it"):
+        ChitConfig(model=ModelConfig(block_size=512),
+                   training=TrainingConfig(context_curriculum=[128, 256]))

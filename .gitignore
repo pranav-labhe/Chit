@@ -9,6 +9,9 @@ __pycache__/
 # Distribution / packaging
 .Python
 checkpoints/
+data/memory.db*
+data/memory.json.pre-sqlite
+data/memory.json.backup-*
 build/
 develop-eggs/
 dist/

@@ -1,4 +1,4 @@
-from conftest import H, train_body, wait_job
+from conftest import H, install_candidate_for_test, train_body, wait_job
 from pranav.chit import api
 
 
@@ -6,7 +6,9 @@ def _serve_context_sized_model(client, block_size=128):
     body = train_body()
     body["model"] = {**body["model"], "block_size": block_size}
     job = client.post("/train", json=body, headers=H).json()
-    assert wait_job(client, job["id"])["promoted"]
+    completed = wait_job(client, job["id"])
+    assert not completed["promoted"]
+    install_candidate_for_test(completed)
 
 
 def test_generate_defaults_to_assistant_request_and_uses_memory(client):

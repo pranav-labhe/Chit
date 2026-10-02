@@ -4,8 +4,8 @@ One job runs at a time: a single CPU/GPU cannot usefully train two models at
 once, and a second run would compete with the model that is serving requests.
 Each job trains into its own directory (``<jobs_dir>/<job_id>/``), so a failed
 or cancelled run can never overwrite the checkpoint that is being served.
-Only a successful run is handed to ``on_success``, which the API uses to
-promote the checkpoint and hot-reload the model.
+Every saved checkpoint is automatically scored on the held-out text set. A
+successful run remains a candidate; promotion is a separate reviewed operation.
 
 Job records are kept in memory (the most recent ``max_jobs``) and written to
 ``<job dir>/job.json`` at every state change, as an audit trail that survives
@@ -31,6 +31,8 @@ from .config import ChitConfig
 from .training import TrainingCancelled, train
 
 log = logging.getLogger(__name__)
+GOLDEN_SET_PATH = Path(os.environ.get("CHIT_GOLDEN_SET",
+                                     Path(__file__).resolve().parents[2] / "data" / "golden_set.json"))
 
 MAX_HISTORY_POINTS = 1000  # evaluation points kept per job
 
@@ -77,6 +79,9 @@ class TrainingJob:
     state: JobState = JobState.QUEUED
     step: int = 0
     history: list[dict] = field(default_factory=list)
+    evaluations: list[dict] = field(default_factory=list)
+    evaluation_error: str | None = None
+    final_evaluation: str | None = None
     created_at: str = field(default_factory=_now)
     started_at: str | None = None
     finished_at: str | None = None
@@ -98,6 +103,9 @@ class TrainingJob:
             'progress': round(self.step / self.max_steps, 4) if self.max_steps else 0.0,
             'latest': self.history[-1] if self.history else None,
             'history': list(self.history),
+            'evaluations': list(self.evaluations),
+            'evaluation_error': self.evaluation_error,
+            'final_evaluation': self.final_evaluation,
             'config': self.config,
             'promote': self.promote,
             'promoted': self.promoted,
@@ -118,11 +126,9 @@ class TrainingJobManager:
     def __init__(
         self,
         jobs_dir: str | os.PathLike,
-        on_success: Callable[[Path], None] | None = None,
         max_jobs: int = 50,
     ):
         self.jobs_dir = Path(jobs_dir)
-        self.on_success = on_success
         self.max_jobs = max_jobs
         self._jobs: OrderedDict[str, TrainingJob] = OrderedDict()
         self._lock = threading.Lock()
@@ -134,16 +140,16 @@ class TrainingJobManager:
     def submit(
         self,
         cfg: ChitConfig,
-        promote: bool = True,
+        promote: bool = False,
         *,
         job_id: str | None = None,
         init_checkpoint: str | os.PathLike | None = None,
         metadata: dict | None = None,
         after_success: Callable[[dict], None] | None = None,
     ) -> dict:
-        """Start a job. ``after_success(snapshot)`` runs once the job succeeded and any
-        promotion was attempted (check ``snapshot['promoted']``); its errors are
-        recorded as ``post_success_error`` and never fail the job."""
+        """Start candidate training. ``after_success`` is a bookkeeping hook."""
+        if promote:
+            raise ValueError("training jobs only create candidates; promotion requires the evaluated promotion workflow")
         with self._lock:
             if self._active and not self._active[0].state.terminal:
                 raise JobConflict(self._active[0].id)
@@ -224,6 +230,26 @@ class TrainingJobManager:
             if len(job.history) > MAX_HISTORY_POINTS:
                 del job.history[0]
 
+    def _on_checkpoint(self, job: TrainingJob, cfg: ChitConfig, step: int, checkpoint: Path) -> None:
+        """Score held-out language metrics for every atomic training checkpoint."""
+        try:
+            from .tools.eval_runner import evaluate_checkpoint
+            report = evaluate_checkpoint(checkpoint, Path(cfg.data.eval_file),
+                                         GOLDEN_SET_PATH, include_golden=False)
+            output = checkpoint.parent / f"evaluation_step_{step:06d}.json"
+            tmp = output.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(report, indent=2), encoding="utf-8")
+            os.replace(tmp, output)
+            with self._lock:
+                job.evaluations.append({"step": step, "path": str(output),
+                                        "bits_per_byte": report["language_model_metrics"]["bits_per_byte"],
+                                        "perplexity": report["language_model_metrics"]["perplexity"]})
+                self._persist(job)
+        except Exception as exc:
+            log.exception("training job %s: checkpoint evaluation failed at step %d", job.id, step)
+            self._update(job, persist=True,
+                         evaluation_error=f"step {step}: {type(exc).__name__}: {exc}")
+
     def _run(self, job: TrainingJob, cfg: ChitConfig,
              after_success: Callable[[dict], None] | None = None) -> None:
         self._update(job, persist=True, state=JobState.RUNNING, started_at=_now())
@@ -235,8 +261,9 @@ class TrainingJobManager:
                 metadata={'job_id': job.id, **job.metadata},
                 on_step=lambda s: self._update(job, step=s),
                 on_eval=lambda s, tl, el: self._on_eval(job, s, tl, el),
+                on_checkpoint=lambda s, p: self._on_checkpoint(job, cfg, s, p),
                 should_stop=job.cancel_event.is_set,
-                keep_step_checkpoints=False,
+                keep_step_checkpoints=True,
                 progress=False,
             )
         except TrainingCancelled as e:
@@ -249,13 +276,22 @@ class TrainingJobManager:
             return
 
         self._update(job, checkpoint=str(ckpt))
-        if job.promote and self.on_success:
-            try:
-                self.on_success(ckpt)
-                self._update(job, promoted=True)
-            except Exception as e:  # training succeeded; only the hand-off failed
-                log.exception('training job %s: promotion failed', job.id)
-                self._update(job, promotion_error=f'{type(e).__name__}: {e}')
+        # Write a final deterministic held-out report. Golden response export
+        # remains an explicit eval_runner action because generation is slower
+        # than scoring every saved checkpoint and still needs human review.
+        try:
+            from .tools.eval_runner import evaluate_checkpoint
+            report = evaluate_checkpoint(ckpt, Path(cfg.data.eval_file), GOLDEN_SET_PATH,
+                                         include_golden=False)
+            output = ckpt.parent / "evaluation.json"
+            tmp = output.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(report, indent=2), encoding="utf-8")
+            os.replace(tmp, output)
+            self._update(job, persist=True, final_evaluation=str(output))
+        except Exception as exc:
+            log.exception("training job %s: final behavioral evaluation failed", job.id)
+            self._update(job, persist=True,
+                         evaluation_error=f"final: {type(exc).__name__}: {exc}")
         if after_success:
             try:
                 with self._lock:
@@ -288,6 +324,8 @@ class TrainingJobManager:
                     promote=bool(r.get('promote')), max_steps=int(r.get('max_steps') or 0),
                     state=JobState(r['state']), step=int(r.get('step') or 0),
                     history=list(r.get('history') or []), created_at=r.get('created_at') or _now(),
+                    evaluations=list(r.get('evaluations') or []), evaluation_error=r.get('evaluation_error'),
+                    final_evaluation=r.get('final_evaluation'),
                     started_at=r.get('started_at'), finished_at=r.get('finished_at'), error=r.get('error'),
                     checkpoint=r.get('checkpoint'), promoted=bool(r.get('promoted')),
                     promotion_error=r.get('promotion_error'), init_checkpoint=r.get('init_checkpoint'),

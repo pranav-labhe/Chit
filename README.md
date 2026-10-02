@@ -1,13 +1,14 @@
 # Chit — चित् — Pranav's Atmini Brain
 
-**चित् (Chit) is the neural brain of Atmini.** It is a byte-level Transformer trained from scratch,
+**चित् (Chit) is the neural brain of Atmini.** It is a compact Transformer trained from scratch,
 with its own weights, memory, learning path, and conversation context. Its API supports communication,
 problem solving, storing experience, teaching knowledge, and training.
 
 > **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
 > `/generate` and `/chat` format messages for a context-aware Chit response, while `/generate` can still
-> do raw continuation with `mode: "continue"`. It learns from reviewed data, memory, and dialogue;
-> its context window and available training compute shape how much it can learn and use at once.
+> do raw continuation with `mode: "continue"`. It employs a bounded inference scheduler to handle concurrent
+> requests and a hybrid SQLite/Vector memory store for durable, fast-access experiences. It learns from 
+> reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
 
 ---
 
@@ -84,7 +85,7 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 
 | | Stored in | Changes the model? | Available |
 | --- | --- | --- | --- |
-| **Memory** (`/memory`) | `data/memory.json` | No | immediately in assistant-mode `/generate` and `/chat` |
+| **Memory** (`/memory`) | `data/memory.db` (SQLite) | No | immediately in assistant-mode `/generate` and `/chat` via hybrid keyword/vector search |
 | **Knowledge** (`/knowledge`) | `data/knowledge.db` | Only after `/knowledge/train` | after training |
 | **Weights** | `checkpoints/latest.pt` | — | what the model was trained on |
 
@@ -101,7 +102,7 @@ format and benefit from training examples written in that format.
    `python -m pranav.chit.tools.split corpus.txt`) to create both files with no overlap. Then `GET /data` shows `ready_to_train`.
 1. **Write your text in `data/train.txt`** — one fact or sentence per line. Vary the wording, and
    repeat the important lines. Put a few *different* lines in `data/eval.txt`.
-   The eval file must be **larger than `model.block_size` bytes** (512 for the assistant preset), or the API
+   The eval file must contain **more than `model.block_size` model tokens** (for the default byte tokenizer, 512 bytes), or the API
    rejects the job with `422`.
 2. **Train** — either way (the API accepts a named preset; pass `chit_assistant_cpu` to use the assistant corpus):
    ```bash
@@ -116,6 +117,10 @@ format and benefit from training examples written in that format.
 4. **Check the loss.** A training loss far below the eval loss (for example 0.07 vs 0.9) means the
    model is memorising your text. That is expected at this size. More varied text is the biggest
    improvement.
+
+**Optional model variants.** See [the operating guide](docs/OPERATIONS.md) for tokenizer setup. BPE
+and RoPE configurations create a new training lineage; existing byte/absolute checkpoints remain
+supported. Compare each variant on the held-out set before serving it.
 
 **Teaching requests:** add varied `Task: chat` / `User:` / `Chit:` examples to `data/train.txt` (or
 teach Q&A with `POST /knowledge` and train through `/knowledge/train`). Cover multiple tasks and
@@ -133,10 +138,10 @@ In `/generate`, send the request as `prompt`. In `/chat`, send it as `message` a
 
 | Setting | Effect |
 | --- | --- |
-| `configs/chit_assistant_cpu.json` | 512-byte context and Chit's current CPU training preset with conversation and problem-solving examples. |
+| `configs/chit_assistant_cpu.json` | 512-token context and Chit's current CPU training preset with conversation and problem-solving examples. |
 | `training.max_steps` | Longer training. 300 is too few; 2500–3000 worked on the sample text. |
 | `training.learning_rate` | `0.003` worked for the earlier byte-model preset; `0.0005` learned too slowly there. |
-| `model.block_size` | Context length in bytes. Larger needs a larger `data/eval.txt`. |
+| `model.block_size` | Context length in model tokens. Larger needs a larger `data/eval.txt`; byte models use one byte per token. |
 | `model.n_layer`, `model.n_embd` | Bigger model, slower training. `configs/chit_tiny.json` is a larger preset. |
 | `device` | `cpu`, `cuda` or `auto`. |
 
@@ -274,7 +279,10 @@ Then ask with `POST /generate`, prompt `"Who created Chit?"`, `temperature` 0.
 | `CHIT_JOBS_DIR` | `checkpoints/jobs` | Output folder for background training jobs |
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper limit on `training.max_steps` |
 | `CHIT_MAX_DATASET_MB` | `200` | Upper limit on a generated training set |
-| `CHIT_MEMORY_PATH` | `data/memory.json` | Memory file |
+| `CHIT_MEMORY_PATH` | `data/memory.json` | Legacy memory JSON import/recovery source |
+| `CHIT_MEMORY_DB` | `data/memory.db` | Canonical SQLite memory store |
+| `CHIT_INFERENCE_QUEUE_SIZE` | `32` | Maximum waiting inference requests |
+| `CHIT_INFERENCE_QUEUE_TIMEOUT` | `30` seconds | Queue wait deadline |
 | `CHIT_DATA_DIR` | `data` | Folder `POST /data/split` reads corpus files from |
 | `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database |
 
@@ -289,13 +297,14 @@ Setting a variable: `export NAME=value` (Linux/macOS/Git Bash), `$env:NAME = "va
 | --- | --- |
 | `data/train.txt`, `data/eval.txt` | Training and held-out evaluation examples |
 | `data/prompts.txt`, `data/CORPUS.md` | Open-ended review prompts and corpus provenance/use notes |
-| `data/memory.json`, `data/memory_seed.json` | External memory and the facts it starts with |
+| `data/memory.db` | Canonical external memory store (SQLite) |
+| `data/memory.json`, `data/memory_seed.json` | Legacy import/recovery source and initial facts |
 | `data/knowledge.db` | Taught knowledge (SQLite) |
 | `configs/*.json` | Training presets |
 | `checkpoints/latest.pt` | The trained model that is served |
 | `checkpoints/jobs/<id>/` | One folder per API training job (weights, dataset, `job.json`) |
 | `pranav/chit/` | Source: `model.py`, `training.py`, `api.py`, `jobs.py`, `knowledge.py`, `memory.py`, … |
-| `docs/` | Architecture, roadmap, training and knowledge API guides |
+| `docs/` | Architecture, implementation plan, operations and API guides |
 
 Trained weights and your own data are local files. Add them to `.gitignore` so they are not
 committed by accident:
@@ -303,6 +312,7 @@ committed by accident:
 ```
 checkpoints/
 data/memory.json
+data/memory.db*
 data/knowledge.db*
 ```
 

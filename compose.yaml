@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Containerfile
+      args:
+        CHIT_WITH_EMBEDDINGS: ${CHIT_WITH_EMBEDDINGS:-0}
     image: localhost/chit:latest
     container_name: chit
     init: true                      # reaps zombies, forwards SIGTERM
@@ -21,6 +23,8 @@ services:
       CHIT_MEMORY_PATH: data/memory.json
       CHIT_KNOWLEDGE_DB: data/knowledge.db
       CHIT_SESSIONS_DB: data/sessions.db
+      CHIT_MEMORY_ANN: ${CHIT_MEMORY_ANN:-auto}
+      CHIT_EMBEDDING_MODEL_PATH: ${CHIT_EMBEDDING_MODEL_PATH:-}
       CHIT_SESSION_TTL_DAYS: "30"
       OMP_NUM_THREADS: "4"          # CPU threads PyTorch uses; set to your core count
     volumes:
@@ -29,3 +33,4 @@ services:
       - ./data:/app/data:Z
       - ./checkpoints:/app/checkpoints:Z
       - ./configs:/app/configs:ro,Z
+      - ./models:/app/models:ro,Z
