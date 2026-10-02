@@ -919,12 +919,14 @@ curl -H "X-API-Key: $KEY" "$BASE/data?config=chit_strong"
 | `checks.train_repeated_lines` | Lines repeated inside train (informational; repeating is sometimes intentional). |
 | `warnings` | Plain-language problems: a missing file, eval under 1 KB (noisy loss), eval under 2% of train, or high overlap. |
 | `ready_to_train` | `true` when both files exist and are larger than `block_size`. |
+| `training_sources` | Present for source-aware configs; reports each configured stream's weight, file information, and readiness. Every source must fit the context. |
 | `sources` | Up to 100 `.txt` and `.md` files in the data folder that `POST /data/split` can read. |
 
 ### POST /data/split
 
 **Purpose.** Split one corpus file from the server's data folder into the config's train and eval files, with no
-line in both. **Access:** training.
+line in both. **Access:** training. This returns `422` for source-aware configs because writing
+`data.train_file` would not change their configured `data.sources` streams.
 
 **Request body**
 

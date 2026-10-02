@@ -54,6 +54,29 @@ and `min_lr_ratio` (the cosine floor as a fraction of `learning_rate`).
 To train on knowledge you have taught Chit, use `POST /knowledge/train`
 instead; see [KNOWLEDGE_API.md](KNOWLEDGE_API.md).
 
+Training presets may optionally use source-aware streams in `data.sources`:
+
+```json
+"data": {
+  "train_file": "data/train.txt",
+  "eval_file": "data/eval.txt",
+  "sources": [
+    {"path": "data/english_foundation/structural.txt", "weight": 0.3},
+    {"path": "data/english_foundation/conversation.txt", "weight": 0.3},
+    {"path": "data/english_foundation/project_facts.txt", "weight": 0.1}
+  ]
+}
+```
+
+Weights are relative and normalized. Each batch row chooses a source, then a random token window
+within that source; this prevents source proportions from being determined only by concatenated file
+length and prevents a window from crossing file boundaries. The legacy `data.train_file` path remains
+active when `sources` is omitted. Candidate checkpoint metadata records configured weights and sampled
+window counts. The local `chit_english_foundation` preset demonstrates the feature and uses the
+existing held-out `data/eval.txt` without overwriting corpus files.
+
+For candidate response generation and review of the English capability suite, see [EVALUATION.md](EVALUATION.md).
+
 Poll `GET /train/{id}` (the `Location` header) until `state` is `succeeded`,
 `failed` or `cancelled`. The response includes `step`, `progress` (0–1), `latest`
 and `history` (train/eval loss at each evaluation), `error`, `promoted` and

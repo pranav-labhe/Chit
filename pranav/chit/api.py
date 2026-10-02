@@ -52,7 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__, datasets
 from .bridge import Bridge, Context
-from .config import ChitConfig, ConfigError, ModelConfig, load_config
+from .config import ChitConfig, ConfigError, DataSourceConfig, ModelConfig, load_config
 from .embeddings import SentenceTransformerProvider
 from .jobs import JobConflict, JobFinished, JobNotFound, TrainingJobManager
 from .knowledge import KnowledgeError, KnowledgeStore, build_dataset
@@ -637,12 +637,15 @@ def validate_config(cfg: ChitConfig) -> None:
         problems.append(f"training.max_steps must be <= {MAX_TRAIN_STEPS}")
     if cfg.device == "cuda" and not torch.cuda.is_available():
         problems.append("device 'cuda' requested but CUDA is not available on this server")
-    for name in ("train_file", "eval_file"):
-        f = Path(getattr(cfg.data, name))
+    data_files = [(f"data.{name}", Path(getattr(cfg.data, name)))
+                  for name in ("train_file", "eval_file")]
+    data_files.extend((f"data.sources[{i}].path", Path(source.path))
+                      for i, source in enumerate(cfg.data.sources))
+    for name, f in data_files:
         if not f.is_file():
-            problems.append(f"data.{name} not found on server")
+            problems.append(f"{name} not found on server")
         elif f.stat().st_size <= cfg.model.block_size:
-            problems.append(f"data.{name} must be larger than model.block_size")
+            problems.append(f"{name} must be larger than model.block_size")
         elif tokenizer is not None and tokenizer.name != ByteTokenizer.name:
             try:
                 # Read a bounded prefix: validation only needs to establish that
@@ -650,9 +653,9 @@ def validate_config(cfg: ChitConfig) -> None:
                 with f.open("r", encoding="utf-8") as source:
                     sample = source.read(256 * 1024)
                 if len(tokenizer.encode(sample)) <= cfg.model.block_size:
-                    problems.append(f"data.{name} must contain more than model.block_size tokens")
+                    problems.append(f"{name} must contain more than model.block_size tokens")
             except (UnicodeError, OSError) as exc:
-                problems.append(f"data.{name} cannot be tokenized: {exc}")
+                problems.append(f"{name} cannot be tokenized: {exc}")
     if problems:
         raise HTTPException(status_code=422, detail=problems)
 
@@ -862,7 +865,13 @@ def train_on_knowledge(r: KnowledgeTrainRequest, response: Response):
                                max_bytes=MAX_DATASET_BYTES)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=[str(e)])
-        cfg = dataclasses.replace(cfg, data=dataclasses.replace(cfg.data, train_file=str(ds.train_file)))
+        # Preserve source-aware curricula while adding the knowledge dataset as
+        # its own stream. Without this, train() would prefer the configured
+        # sources and silently ignore the generated knowledge file.
+        sources = ([*cfg.data.sources, DataSourceConfig(path=str(ds.train_file), weight=1.0)]
+                   if cfg.data.sources else [])
+        cfg = dataclasses.replace(cfg, data=dataclasses.replace(
+            cfg.data, train_file=str(ds.train_file), sources=sources))
         validate_config(cfg)
 
         ids = ds.entry_ids
@@ -923,7 +932,22 @@ def data_status(config: str = Query("chit_cpu_learning", pattern=r"^[A-Za-z0-9_-
     """
     cfg, train_path, eval_path = _data_paths(config)
     report = datasets.analyze(train_path, eval_path, cfg.model.block_size, MAX_DATASET_BYTES)
+    training_sources = []
+    source_warnings = []
+    for i, source in enumerate(cfg.data.sources):
+        info = datasets.file_info(source.path)
+        ready = bool(info and info["bytes"] > cfg.model.block_size)
+        training_sources.append({"weight": source.weight, "file": info,
+                                 "ready": ready, "missing_path": source.path if info is None else None})
+        if not ready:
+            source_warnings.append(
+                f"data.sources[{i}] is missing or not larger than model.block_size ({cfg.model.block_size} bytes): "
+                f"{source.path}")
+    if source_warnings:
+        report["warnings"].extend(source_warnings)
+        report["ready_to_train"] = False
     return {"config": config, "block_size": cfg.model.block_size, **report,
+            "training_sources": training_sources,
             "sources": datasets.list_sources(DATA_DIR)}
 
 
@@ -931,6 +955,9 @@ def data_status(config: str = Query("chit_cpu_learning", pattern=r"^[A-Za-z0-9_-
 def split_data(r: SplitRequest):
     """Split a corpus file from the data folder into the config's train and eval files."""
     cfg, train_path, eval_path = _data_paths(r.config)
+    if cfg.data.sources:
+        raise HTTPException(status_code=422, detail=[
+            "this config trains from data.sources; split each configured source separately instead of writing train_file"])
     source = _resolve_source(r.source)
     _ensure_idle()
     try:

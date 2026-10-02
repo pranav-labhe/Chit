@@ -37,7 +37,49 @@ Markdown-formatted requests and realistic situations where Chit should clarify, 
 next step. It is not automatically included in training. Review the challenge prompts separately and
 record the same per-area ratings.
 
-The corpus/config tests check that held-out requests are not duplicated in training and that the seed
+## English linguistic capability suite
+
+`data/english_foundation/eval_suite.json` is the separate English capability suite. Its current
+`draft-0.4` version has 120 author-authored cases (30 per category) covering grammar, conversation,
+continuity, and lexical use. The suite has not yet completed independent linguistic review, so it is
+not a release result until reviewers approve the items and adjudicate candidate outputs. Keep all of
+its prompts out of training and tokenizer corpora.
+
+Generate a deterministic candidate response report with:
+
+```bash
+python -m pranav.chit.tools.english_eval \
+  --checkpoint checkpoints/jobs/<job-id>/latest.pt \
+  --suite data/english_foundation/eval_suite.json \
+  --output checkpoints/jobs/<job-id>/english-responses.json
+```
+
+The report uses the production chat prompt template, no memory, and only history explicitly supplied
+by the suite. It records full-prompt context fit and raw outputs. Human ratings are separate and must
+bind to the exact `suite_sha256` and `checkpoint_sha256` in that report. A rating file uses this form:
+
+```json
+{
+  "english_suite_sha256": "<suite hash from report>",
+  "checkpoint_sha256": "<checkpoint hash from report>",
+  "response_set_sha256": "<generated response hash from report>",
+  "ratings": [
+    {"id": "EN-GRA-001", "passed": true, "critical_failure": false,
+     "reviewers": ["reviewer-a", "reviewer-b"]}
+  ]
+}
+```
+
+After two reviewers independently assess every case and disagreements are adjudicated, rerun with
+`--ratings ratings.json`. The evaluator reports overall and category rates, separate explicit and
+ambiguous continuity rates, critical failures, and whether the draft/release thresholds are met. To
+open the gate, the suite itself must also be marked `reviewed` with `content_review.approved: true` and
+two reviewer IDs. The gate stays closed for suites below 120 cases or prompts that do not fit the
+checkpoint context. Passing this English gate does not replace the frozen Golden Set or current
+candidate-promotion workflow. The initial checkpoint baseline is recorded in
+[`benchmarks/english-foundation-baseline-2026-10-03.md`](benchmarks/english-foundation-baseline-2026-10-03.md).
+
+The corpus/config checks check that held-out requests are not duplicated in training and that the seed
 examples cover the intended languages and Markdown structures. They do not claim that an untrained or
-existing checkpoint passes this behavioral review. The repository does not include a reviewed
-model-output scorecard yet.
+existing checkpoint passes this behavioral review. Generated model-output scorecards require human
+review before being treated as behavioral evidence.

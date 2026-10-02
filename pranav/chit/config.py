@@ -6,6 +6,7 @@ being silently ignored, and every value is range-checked on construction.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
@@ -85,9 +86,27 @@ class TrainingConfig:
 
 
 @dataclass
+class DataSourceConfig:
+    """A named corpus stream used by source-aware mixed training."""
+    path: str
+    weight: float = 1.0
+
+    def __post_init__(self) -> None:
+        _require(isinstance(self.path, str) and bool(self.path.strip()),
+                 "data.sources[].path must be a non-empty string")
+        _require(isinstance(self.weight, (int, float)) and math.isfinite(self.weight) and self.weight > 0,
+                 "data.sources[].weight must be a finite number greater than 0")
+
+
+@dataclass
 class DataConfig:
     train_file: str = "data/train.txt"
     eval_file: str = "data/eval.txt"
+    sources: list[DataSourceConfig] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        paths = [source.path for source in self.sources]
+        _require(len(paths) == len(set(paths)), "data.sources must not contain duplicate paths")
 
 
 @dataclass
@@ -141,12 +160,20 @@ def config_from_dict(raw: dict[str, Any]) -> ChitConfig:
     _require(isinstance(raw, dict), "config must be a JSON object")
     unknown = set(raw) - {f.name for f in fields(ChitConfig)}
     _require(not unknown, f"unknown top-level key(s): {', '.join(sorted(unknown))}")
+    data_raw = raw.get("data")
+    if isinstance(data_raw, dict) and "sources" in data_raw:
+        data_raw = dict(data_raw)
+        source_rows = data_raw["sources"]
+        _require(isinstance(source_rows, list), "data.sources must be a list")
+        data_raw["sources"] = [
+            _section(DataSourceConfig, row, f"data.sources[{i}]") for i, row in enumerate(source_rows)
+        ]
     return ChitConfig(
         seed=raw.get("seed", 42),
         device=raw.get("device", "auto"),
         model=_section(ModelConfig, raw.get("model"), "model"),
         training=_section(TrainingConfig, raw.get("training"), "training"),
-        data=_section(DataConfig, raw.get("data"), "data"),
+        data=_section(DataConfig, data_raw, "data"),
         tokenizer=_section(TokenizerConfig, raw.get("tokenizer"), "tokenizer"),
     )
 

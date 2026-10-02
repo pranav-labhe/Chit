@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "dataset_version": "english-foundation-v1-starter",
+  "authorship": "project-authored",
+  "language": "en",
+  "sources": [
+    {
+      "path": "data/english_foundation/conversation.txt",
+      "sha256": "8b28d2e010ff04eaffa65adba2c5da4e08907efc5f650e61bb8f16e52ab73dfd",
+      "utf8_bytes": 10598,
+      "items": 80
+    },
+    {
+      "path": "data/english_foundation/lexical_prose.txt",
+      "sha256": "0505255b155d9bbb5d0f5bf2fe6759c97d428b24ced5cf712cac8578b0cab18e",
+      "utf8_bytes": 5611,
+      "items": 50
+    },
+    {
+      "path": "data/english_foundation/project_facts.txt",
+      "sha256": "6dc37e474fb3c2f3e3880e4488e3b8712445404e9634da793a0be28c63c91062",
+      "utf8_bytes": 1930,
+      "items": 10
+    },
+    {
+      "path": "data/english_foundation/structural.txt",
+      "sha256": "e8246c81159fc2273646eaf0ec5c2ed40d9ff4130273611403759c02b60c5a11",
+      "utf8_bytes": 11160,
+      "items": 83
+    }
+  ],
+  "evaluation_suite": {
+    "path": "data/english_foundation/eval_suite.json",
+    "version": "draft-0.4",
+    "status": "draft; requires independent review before release gating",
+    "sha256": "2e8981d9e4af309294839fcec1ae9015b2cc715e7261be85ddff98552b3cf6be",
+    "cases": 120,
+    "included_in_training": false
+  }
+}

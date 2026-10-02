@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 from . import __version__
 from .config import ChitConfig
-from .data import TextDataset, random_batch
+from .data import TextDataset, random_batch, random_mixed_batch
 from .model import ChitModel, load_model_state
 from .tokenizer import BpeTokenizer, ByteTokenizer, create_tokenizer
 
@@ -152,7 +152,11 @@ def train(
     tok = create_tokenizer(c.tokenizer.name, c.tokenizer.model_file)
     if c.model.vocab_size != tok.vocab_size:
         raise ValueError(f"model.vocab_size ({c.model.vocab_size}) must equal tokenizer vocab ({tok.vocab_size})")
-    tr = TextDataset(c.data.train_file, tok, c.model.block_size)
+    train_sources = c.data.sources
+    train_datasets = ([TextDataset(source.path, tok, c.model.block_size) for source in train_sources]
+                      if train_sources else [TextDataset(c.data.train_file, tok, c.model.block_size)])
+    train_weights = [source.weight for source in train_sources] if train_sources else [1.0]
+    source_window_counts = [0 for _ in train_datasets]
     ev = TextDataset(c.data.eval_file, tok, c.model.block_size)
 
     out = Path(output_dir)
@@ -190,7 +194,13 @@ def train(
             raise TrainingCancelled(f"cancelled at step {step - 1}")
         for g in opt.param_groups:
             g["lr"] = lr_at(step, c)
-        x, y = random_batch(tr, t.batch_size, dev, block_size=context_length_at(step, c))
+        if train_sources:
+            x, y = random_mixed_batch(train_datasets, train_weights, t.batch_size, dev,
+                                      block_size=context_length_at(step, c),
+                                      source_counts=source_window_counts)
+        else:
+            x, y = random_batch(train_datasets[0], t.batch_size, dev,
+                                block_size=context_length_at(step, c))
         _, l = m(x, y)
         if not torch.isfinite(l):
             raise FloatingPointError(f"loss became {l.item()} at step {step}; lower the learning rate")
@@ -202,7 +212,10 @@ def train(
             on_step(step)
 
         if step % t.eval_interval == 0 or step == 1 or step == t.max_steps:
-            tl = estimate_loss(m, tr, t.batch_size, t.eval_steps, dev)
+            source_losses = [estimate_loss(m, ds, t.batch_size, t.eval_steps, dev)
+                             for ds in train_datasets]
+            total_weight = sum(train_weights)
+            tl = sum(value * weight for value, weight in zip(source_losses, train_weights)) / total_weight
             el = estimate_loss(m, ev, t.batch_size, t.eval_steps, dev)
             best_eval = min(best_eval, el)
             last_eval = {"step": step, "train_loss": tl, "eval_loss": el}
@@ -227,7 +240,13 @@ def train(
                 "init_from": str(init_checkpoint) if init_checkpoint else None,
                 "last_eval": last_eval,
                 "best_eval_loss": None if math.isinf(best_eval) else best_eval,
-                "metadata": metadata or {},
+                "metadata": {
+                    **(metadata or {}),
+                    "training_sources": ([{"path": source.path, "weight": source.weight,
+                                           "sampled_windows": source_window_counts[i]}
+                                          for i, source in enumerate(train_sources)]
+                                         if train_sources else []),
+                },
             }
             if keep_step_checkpoints:
                 save_checkpoint(ck, out / f"step_{step:06d}.pt")

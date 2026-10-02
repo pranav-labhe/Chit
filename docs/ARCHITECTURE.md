@@ -116,6 +116,15 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | **`tokenizer.py`** | **Translator** | `ByteTokenizer`, `BpeTokenizer` | Converts text to byte IDs or versioned BPE IDs and back. |
 | **`ui.py`** | **Interface** | Admin Console | A single-page proxy UI to interact with the API without exposing keys. |
 
+### Source-aware language training
+Training configs may optionally provide `data.sources`, a list of `{path, weight}` streams. When
+present, each sequence in a training batch selects one stream by normalized weight and samples its
+window only from that file. This supports mixed capability curricula without windows crossing
+unrelated file boundaries. If `data.sources` is absent or empty, training retains the legacy
+`data.train_file` behavior. The candidate checkpoint records configured weights and observed sampled
+window counts in metadata. The English foundation preset uses separate grammar/prose, conversation,
+and project-fact files; it does not replace the shared train/eval files.
+
 ### 🛠️ Tools & Utils (`pranav/chit/tools/`)
 - **`train.py`**: CLI for triggering training.
 - **`teach.py`**: CLI for adding knowledge.

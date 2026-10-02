@@ -1048,7 +1048,8 @@ the server). These two endpoints let you check them and prepare them.
 | `checks.eval_lines_also_in_train` | How many exam lines are **also in the textbook**. This should be low. If the exam repeats the textbook, the scores look better than the model really is. (Lines like `I do not know.` repeating is fine.) |
 | `checks.train_repeated_lines` | Lines repeated inside the textbook. Just information. Repeating is sometimes on purpose. |
 | `warnings` | A list of problems in plain sentences: a missing file, an exam under 1 KB (scores will be noisy), an exam under 2% of the textbook, or too much overlap. |
-| `ready_to_train` | **`true` = go ahead.** Both files exist and are longer than `block_size`. |
+| `ready_to_train` | **`true` = go ahead.** Both files exist and are longer than `block_size`; configured source streams must also be ready. |
+| `training_sources` | For a source-aware preset, its configured streams with weights and file readiness. |
 | `sources` | Up to 100 `.txt` or `.md` files in the data folder that `POST /data/split` can use. |
 
 **Tip.** If you replace `train.txt` from outside the API, compare the `sha256` before and after to confirm the new
@@ -1058,6 +1059,7 @@ file really arrived.
 **What it does.** Takes **one big text file** that is already in the server's data folder and cuts it into a
 `train.txt` and an `eval.txt`. No line ends up in both.
 **Key needed:** yes (training).
+This operation is not available for source-aware presets; split or curate the configured source files directly.
 **When to use it.** You have one large collection of text and do not want to divide it by hand.
 
 **What you send**

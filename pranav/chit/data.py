@@ -61,3 +61,43 @@ def random_batch(ds: TextDataset, batch_size: int, device, generator: torch.Gene
     # the complete corpus stays packed in one byte per token in host memory.
     return (chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True),
             chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True))
+
+
+def random_mixed_batch(datasets: list[TextDataset], weights: list[float], batch_size: int, device,
+                       generator: torch.Generator | None = None, block_size: int | None = None,
+                       source_counts: list[int] | None = None):
+    """Sample each row from a weighted corpus source, then draw a random window there.
+
+    Source choice is per sequence, rather than per byte in a concatenated file. This
+    prevents a large corpus from silently monopolizing training and avoids windows
+    that cross unrelated source-file boundaries.
+    """
+    if not datasets or len(datasets) != len(weights):
+        raise ValueError("datasets and weights must be non-empty and have the same length")
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    width = datasets[0].block_size if block_size is None else block_size
+    if width < 1 or any(width > ds.block_size for ds in datasets):
+        raise ValueError("batch block_size must fit every dataset")
+    weight_tensor = torch.tensor(weights, dtype=torch.double, device="cpu")
+    if not torch.isfinite(weight_tensor).all() or (weight_tensor <= 0).any():
+        raise ValueError("weights must be finite and greater than zero")
+    choices = torch.multinomial(weight_tensor / weight_tensor.sum(), batch_size,
+                                replacement=True, generator=generator)
+    if source_counts is not None:
+        if len(source_counts) != len(datasets):
+            raise ValueError("source_counts must have one counter per dataset")
+        for source_id, count in enumerate(torch.bincount(choices, minlength=len(datasets)).tolist()):
+            source_counts[source_id] += count
+    x = torch.empty((batch_size, width), dtype=torch.long, device=device)
+    y = torch.empty_like(x)
+    for source_id, dataset in enumerate(datasets):
+        rows = torch.nonzero(choices == source_id, as_tuple=False).flatten()
+        if not rows.numel():
+            continue
+        starts = torch.randint(0, len(dataset.data) - width, (rows.numel(), 1), generator=generator)
+        indices = starts + torch.arange(width + 1)
+        chunk = dataset.data[indices]
+        x[rows.to(device)] = chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True)
+        y[rows.to(device)] = chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True)
+    return x, y
