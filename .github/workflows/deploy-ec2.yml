@@ -11,263 +11,239 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Deploy to EC2
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
-          CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-          EC2_HOST: ${{ vars.EC2_HOST }}
-          EC2_USER: ${{ vars.EC2_USER }}
-          TRAIN_SHA: ${{ hashFiles('data/train.txt') }}
-          EVAL_SHA: ${{ hashFiles('data/eval.txt') }}
-          PROMPTS_SHA: ${{ hashFiles('data/prompts.txt') }}
-
-        run: |
-          set -euo pipefail
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/chit-github-deploy
-          chmod 600 ~/.ssh/chit-github-deploy
-
-          SSH_OPTS=(
-            -F none
-            -o StrictHostKeyChecking=no
-            -i ~/.ssh/chit-github-deploy
-          )
-
-          echo "========================================"
-          echo "Preparing persistent Chit folders"
-          echo "========================================"
-
-          ssh "${SSH_OPTS[@]}" \
-            "${EC2_USER}@${EC2_HOST}" \
-            "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' CHIT_API_KEY='${CHIT_API_KEY}' bash -s -- prepare" << 'REMOTE'
-
-              set -euo pipefail
-
-              CHIT_HOME="${CHIT_HOME:-/opt/chit}"
-              IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
-              OWNER="$(id -u):$(id -g)"
-
-              in_image() {
-                docker run \
-                  --rm \
-                  --entrypoint "$1" \
-                  -v "${CHIT_HOME}:/chit" \
-                  "$IMAGE" \
-                  "${@:2}"
-              }
-
-              fix_access() {
-                in_image chown -R "$OWNER" /chit
-
-                chmod 750 \
-                  "$CHIT_HOME" \
-                  "$CHIT_HOME/configs"
-
-                chmod 700 \
-                  "$CHIT_HOME/data" \
-                  "$CHIT_HOME/checkpoints"
-              }
-
-              echo "Logging in to Amazon ECR..."
-
-              aws ecr get-login-password \
-                --region "${AWS_REGION}" \
-                | docker login \
-                    --username AWS \
-                    --password-stdin \
-                    "${ECR_REGISTRY}"
-
-              echo "Pulling latest Chit image..."
-
-              docker pull "${IMAGE}"
-
-              echo "Creating persistent folders..."
-
-              umask 027
-
-              mkdir -p \
-                "$CHIT_HOME/data" \
-                "$CHIT_HOME/configs" \
-                "$CHIT_HOME/checkpoints"
-
-              echo "Adding default files that are missing..."
-
-              in_image sh -c \
-                'cp -rn /app/data/. /chit/data/ && cp -rn /app/configs/. /chit/configs/'
-
-              fix_access
-
-              echo "Persistent folders ready under ${CHIT_HOME}"
-
-          REMOTE
-
-          echo
-          echo "========================================"
-          echo "Synchronizing training corpus"
-          echo "========================================"
-
-          ssh "${SSH_OPTS[@]}" \
-            "${EC2_USER}@${EC2_HOST}" \
-            "mkdir -p /tmp/chit-training-corpus"
-
-          scp "${SSH_OPTS[@]}" \
-            data/train.txt \
-            data/eval.txt \
-            data/prompts.txt \
-            "${EC2_USER}@${EC2_HOST}:/tmp/chit-training-corpus/"
-
-          ssh "${SSH_OPTS[@]}" \
-            "${EC2_USER}@${EC2_HOST}" \
-            "TRAIN_SHA='${TRAIN_SHA}' EVAL_SHA='${EVAL_SHA}' PROMPTS_SHA='${PROMPTS_SHA}' bash -s" << 'REMOTE'
-
-              set -euo pipefail
-
-              CHIT_HOME="${CHIT_HOME:-/opt/chit}"
-              SRC="/tmp/chit-training-corpus"
-
-              mkdir -p "$CHIT_HOME/data"
-
-              echo "Installing GitHub training files..."
-
-              install -m 640 \
-                "$SRC/train.txt" \
-                "$CHIT_HOME/data/train.txt"
-
-              install -m 640 \
-                "$SRC/eval.txt" \
-                "$CHIT_HOME/data/eval.txt"
-
-              install -m 640 \
-                "$SRC/prompts.txt" \
-                "$CHIT_HOME/data/prompts.txt"
-
-              rm -rf "$SRC"
-
-              echo
-              echo "Verifying SHA256..."
-
-              ACTUAL_TRAIN_SHA="$(
-                sha256sum "$CHIT_HOME/data/train.txt" |
-                awk '{print $1}'
-              )"
-
-              ACTUAL_EVAL_SHA="$(
-                sha256sum "$CHIT_HOME/data/eval.txt" |
-                awk '{print $1}'
-              )"
-
-              ACTUAL_PROMPTS_SHA="$(
-                sha256sum "$CHIT_HOME/data/prompts.txt" |
-                awk '{print $1}'
-              )"
-
-              echo
-              echo "train.txt"
-              echo "  GitHub : $TRAIN_SHA"
-              echo "  EC2    : $ACTUAL_TRAIN_SHA"
-
-              echo
-              echo "eval.txt"
-              echo "  GitHub : $EVAL_SHA"
-              echo "  EC2    : $ACTUAL_EVAL_SHA"
-
-              echo
-              echo "prompts.txt"
-              echo "  GitHub : $PROMPTS_SHA"
-              echo "  EC2    : $ACTUAL_PROMPTS_SHA"
-
-              test "$ACTUAL_TRAIN_SHA" = "$TRAIN_SHA"
-              test "$ACTUAL_EVAL_SHA" = "$EVAL_SHA"
-              test "$ACTUAL_PROMPTS_SHA" = "$PROMPTS_SHA"
-
-              echo
-              echo "Training corpus synchronization verified."
-
-          REMOTE
-
-          echo
-          echo "========================================"
-          echo "Replacing Chit container"
-          echo "========================================"
-
-          ssh "${SSH_OPTS[@]}" \
-            "${EC2_USER}@${EC2_HOST}" \
-            "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' CHIT_API_KEY='${CHIT_API_KEY}' bash -s -- deploy" << 'REMOTE'
-
-              set -euo pipefail
-
-              CHIT_HOME="${CHIT_HOME:-/opt/chit}"
-              IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
-
-              echo "Stopping existing Chit container..."
-
-              docker stop chit >/dev/null 2>&1 || true
-              docker rm chit >/dev/null 2>&1 || true
-
-              echo "Starting new Chit container..."
-
-              docker run -d \
-                --name chit \
-                -p 127.0.0.1:8000:8000 \
-                -p 127.0.0.1:8001:8001 \
-                --restart unless-stopped \
-                -v "$CHIT_HOME/data:/app/data" \
-                -v "$CHIT_HOME/configs:/app/configs:ro" \
-                -v "$CHIT_HOME/checkpoints:/app/checkpoints" \
-                -e CHIT_API_KEY \
-                -e CHIT_UI_BASE_PATH=/console \
-                "$IMAGE" >/dev/null
-
-              echo "Waiting for Chit..."
-
-              for _ in $(seq 1 30); do
-
-                if \
-                  curl -fsS \
-                    http://127.0.0.1:8000/health \
-                    >/dev/null 2>&1 \
-                  &&
-                  curl -fsS \
-                    http://127.0.0.1:8001/ \
-                    >/dev/null 2>&1
-                then
-
-                  echo "Chit API is healthy."
-                  echo "Chit UI is healthy."
-
-                  echo
-                  echo "Verifying training files inside container..."
-
-                  docker exec chit sha256sum \
-                    /app/data/train.txt \
-                    /app/data/eval.txt \
-                    /app/data/prompts.txt
-
-                  echo
-                  echo "Deployment successful."
-
-                  exit 0
-                fi
-
-                sleep 2
-
-              done
-
-              echo
-              echo "Chit did not become healthy within 60 seconds."
-              echo
-              echo "Last Chit log lines:"
-              docker logs --tail 60 chit >&2 || true
-
-              exit 1
-
-          REMOTE
+  
+    - name: Checkout repository
+      uses: actions/checkout@v4
+  
+    - name: Calculate training corpus SHA256
+      id: corpus_sha
+      run: |
+        set -euo pipefail
+  
+        echo "TRAIN_SHA=$(sha256sum data/train.txt | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+        echo "EVAL_SHA=$(sha256sum data/eval.txt | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+        echo "PROMPTS_SHA=$(sha256sum data/prompts.txt | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+  
+    - name: Prepare SSH
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
+      run: |
+        set -euo pipefail
+  
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+  
+        printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/chit-github-deploy
+        chmod 600 ~/.ssh/chit-github-deploy
+  
+    - name: Prepare EC2
+      env:
+        AWS_REGION: ${{ vars.AWS_REGION }}
+        ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+        ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        EC2_HOST: ${{ vars.EC2_HOST }}
+        EC2_USER: ${{ vars.EC2_USER }}
+      run: |
+        set -euo pipefail
+  
+        ssh \
+          -F none \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/chit-github-deploy \
+          "${EC2_USER}@${EC2_HOST}" \
+          "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' bash -s" << 'REMOTE'
+  
+            set -euo pipefail
+  
+            CHIT_HOME="/opt/chit"
+            IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+  
+            echo "Logging in to Amazon ECR..."
+  
+            aws ecr get-login-password \
+              --region "${AWS_REGION}" |
+              docker login \
+                --username AWS \
+                --password-stdin \
+                "${ECR_REGISTRY}"
+  
+            echo "Pulling latest Chit image..."
+  
+            docker pull "${IMAGE}"
+  
+            echo "Creating persistent folders..."
+  
+            mkdir -p \
+              "$CHIT_HOME/data" \
+              "$CHIT_HOME/configs" \
+              "$CHIT_HOME/checkpoints"
+  
+            echo "EC2 preparation complete."
+  
+        REMOTE
+  
+    - name: Sync training corpus
+      env:
+        EC2_HOST: ${{ vars.EC2_HOST }}
+        EC2_USER: ${{ vars.EC2_USER }}
+        TRAIN_SHA: ${{ steps.corpus_sha.outputs.TRAIN_SHA }}
+        EVAL_SHA: ${{ steps.corpus_sha.outputs.EVAL_SHA }}
+        PROMPTS_SHA: ${{ steps.corpus_sha.outputs.PROMPTS_SHA }}
+      run: |
+        set -euo pipefail
+  
+        ssh \
+          -F none \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/chit-github-deploy \
+          "${EC2_USER}@${EC2_HOST}" \
+          "mkdir -p /tmp/chit-training-corpus"
+  
+        scp \
+          -F none \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/chit-github-deploy \
+          data/train.txt \
+          data/eval.txt \
+          data/prompts.txt \
+          "${EC2_USER}@${EC2_HOST}:/tmp/chit-training-corpus/"
+  
+        ssh \
+          -F none \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/chit-github-deploy \
+          "${EC2_USER}@${EC2_HOST}" \
+          "TRAIN_SHA='${TRAIN_SHA}' EVAL_SHA='${EVAL_SHA}' PROMPTS_SHA='${PROMPTS_SHA}' bash -s" << 'REMOTE'
+  
+            set -euo pipefail
+  
+            CHIT_HOME="/opt/chit"
+  
+            install -m 640 \
+              /tmp/chit-training-corpus/train.txt \
+              "$CHIT_HOME/data/train.txt"
+  
+            install -m 640 \
+              /tmp/chit-training-corpus/eval.txt \
+              "$CHIT_HOME/data/eval.txt"
+  
+            install -m 640 \
+              /tmp/chit-training-corpus/prompts.txt \
+              "$CHIT_HOME/data/prompts.txt"
+  
+            rm -rf /tmp/chit-training-corpus
+  
+            ACTUAL_TRAIN_SHA="$(sha256sum "$CHIT_HOME/data/train.txt" | awk '{print $1}')"
+            ACTUAL_EVAL_SHA="$(sha256sum "$CHIT_HOME/data/eval.txt" | awk '{print $1}')"
+            ACTUAL_PROMPTS_SHA="$(sha256sum "$CHIT_HOME/data/prompts.txt" | awk '{print $1}')"
+  
+            echo "train.txt   : $ACTUAL_TRAIN_SHA"
+            echo "eval.txt    : $ACTUAL_EVAL_SHA"
+            echo "prompts.txt : $ACTUAL_PROMPTS_SHA"
+  
+            test "$ACTUAL_TRAIN_SHA" = "$TRAIN_SHA"
+            test "$ACTUAL_EVAL_SHA" = "$EVAL_SHA"
+            test "$ACTUAL_PROMPTS_SHA" = "$PROMPTS_SHA"
+  
+            echo "Training corpus synchronization verified."
+  
+        REMOTE
+  
+    - name: Deploy Chit container
+      env:
+        CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
+        AWS_REGION: ${{ vars.AWS_REGION }}
+        ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+        ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        EC2_HOST: ${{ vars.EC2_HOST }}
+        EC2_USER: ${{ vars.EC2_USER }}
+      run: |
+        set -euo pipefail
+  
+        ssh \
+          -F none \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/chit-github-deploy \
+          "${EC2_USER}@${EC2_HOST}" \
+          "ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' CHIT_API_KEY='${CHIT_API_KEY}' bash -s" << 'REMOTE'
+  
+            set -euo pipefail
+  
+            CHIT_HOME="/opt/chit"
+            IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+  
+            docker stop chit >/dev/null 2>&1 || true
+            docker rm chit >/dev/null 2>&1 || true
+  
+            docker run -d \
+              --name chit \
+              -p 127.0.0.1:8000:8000 \
+              -p 127.0.0.1:8001:8001 \
+              --restart unless-stopped \
+              -v "$CHIT_HOME/data:/app/data" \
+              -v "$CHIT_HOME/configs:/app/configs:ro" \
+              -v "$CHIT_HOME/checkpoints:/app/checkpoints" \
+              -e CHIT_API_KEY \
+              -e CHIT_UI_BASE_PATH=/console \
+              "$IMAGE"
+  
+            echo "Chit container started."
+  
+        REMOTE
+  
+    - name: Verify Chit deployment
+      env:
+        EC2_HOST: ${{ vars.EC2_HOST }}
+        EC2_USER: ${{ vars.EC2_USER }}
+      run: |
+        set -euo pipefail
+  
+        ssh \
+          -F none \
+          -o StrictHostKeyChecking=no \
+          -i ~/.ssh/chit-github-deploy \
+          "${EC2_USER}@${EC2_HOST}" \
+          "bash -s" << 'REMOTE'
+  
+            set -euo pipefail
+  
+            echo "Waiting for Chit..."
+  
+            for _ in $(seq 1 30); do
+  
+              if \
+                curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 &&
+                curl -fsS http://127.0.0.1:8001/ >/dev/null 2>&1
+              then
+  
+                echo "Chit API: healthy"
+                echo "Chit UI : healthy"
+  
+                echo
+                echo "Files inside container:"
+  
+                docker exec chit sha256sum \
+                  /app/data/train.txt \
+                  /app/data/eval.txt \
+                  /app/data/prompts.txt
+  
+                echo
+                echo "Deployment successful."
+  
+                exit 0
+              fi
+  
+              sleep 2
+  
+            done
+  
+            echo "Chit did not become healthy within 60 seconds."
+  
+            echo
+            echo "Last container logs:"
+  
+            docker logs --tail 60 chit || true
+  
+            exit 1
+  
+        REMOTE
