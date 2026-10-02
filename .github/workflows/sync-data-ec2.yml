@@ -1,0 +1,349 @@
+name: Sync Chit Data to EC2
+
+# Copies configs/ and the training text from git to the server's bind-mounted folders.
+# No Docker deploy happens here: the running container sees the files through its mounts.
+#   - configs/*.json are read by the API on every POST /train, so a config change is live at once.
+#   - training text is read when a training job starts.
+#
+# One-time setup (repository variables):
+#   EC2_HOST      host name or IP of the server
+#   EC2_USER      SSH user
+#   EC2_HOST_KEY  the server's host key, one line, checked by you once:  ssh-keyscan -t ed25519 <EC2_HOST>
+#   CHIT_HOME     optional, default /opt/chit
+# Secret: CHIT_EC2_SSH_PRIVATE_KEY
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "What to sync"
+        type: choice
+        options:
+          - configs-and-data
+          - configs-only
+          - data-only
+        default: configs-and-data
+      prune_configs:
+        description: "Also delete configs on the server that were removed from git (kept in the backup folder)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Show what would change and copy nothing"
+        type: boolean
+        default: false
+      allow_during_training:
+        description: "Allow replacing training text while a training job is running"
+        type: boolean
+        default: false
+  # A change to a config on main goes live by itself. Training text is never synced automatically.
+  push:
+    branches: [main]
+    paths:
+      - "configs/**"
+
+permissions:
+  contents: read
+
+# Shares one queue with the deploy workflow so the two never touch the server at the same time.
+concurrency:
+  group: chit-ec2
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync configs and data
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      CHIT_HOME: ${{ vars.CHIT_HOME || '/opt/chit' }}
+      # Files under data/ that are synced (shell patterns, matched at any depth).
+      # Never synced: databases, memory.json, *.bak, checkpoints.
+      DATA_PATTERNS: "*.txt *.jsonl memory_seed.json"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          IN_SCOPE: ${{ inputs.scope }}
+          IN_PRUNE: ${{ inputs.prune_configs }}
+          IN_DRY: ${{ inputs.dry_run }}
+          IN_ALLOW: ${{ inputs.allow_during_training }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            scope=configs-only; prune=false; dry=false; allow=false
+          else
+            scope="$IN_SCOPE"; prune="$IN_PRUNE"; dry="$IN_DRY"; allow="$IN_ALLOW"
+          fi
+
+          case "$scope" in
+            configs-and-data) c=true;  d=true  ;;
+            configs-only)     c=true;  d=false ;;
+            data-only)        c=false; d=true  ;;
+            *) echo "::error::unknown scope: $scope"; exit 1 ;;
+          esac
+
+          case "$CHIT_HOME" in
+            /*) ;;
+            *) echo "::error::CHIT_HOME must be an absolute path"; exit 1 ;;
+          esac
+          if ! printf '%s' "$CHIT_HOME" | grep -Eq '^/[A-Za-z0-9._/-]+$'; then
+            echo "::error::CHIT_HOME may only contain letters, digits, dot, dash, underscore and slash"; exit 1
+          fi
+
+          {
+            echo "SYNC_CONFIGS=$c"
+            echo "SYNC_DATA=$d"
+            echo "PRUNE_CONFIGS=$prune"
+            echo "DRY_RUN=$dry"
+            echo "ALLOW_DURING_TRAINING=$allow"
+            echo "SYNC_TS=$(date -u +%Y%m%dT%H%M%SZ)"
+          } >> "$GITHUB_ENV"
+
+          echo "Event: $EVENT_NAME | scope: $scope | prune: $prune | dry run: $dry | allow during training: $allow"
+
+      - name: Validate configs and data
+        run: |
+          set -euo pipefail
+          # Uses the project's own config checker (no install needed: it only needs Python).
+          PYTHONPATH=. python3 - <<'PY'
+          import os, re, sys
+          from pathlib import Path
+          from pranav.chit.config import ConfigError, load_config
+
+          errors = 0
+          def error(msg, file=None):
+              global errors; errors += 1
+              print(f"::error{' file=' + file if file else ''}::{msg}")
+          def warn(msg, file=None): print(f"::warning{' file=' + file if file else ''}::{msg}")
+
+          sync_configs = os.environ["SYNC_CONFIGS"] == "true"
+          sync_data = os.environ["SYNC_DATA"] == "true"
+          patterns = os.environ["DATA_PATTERNS"].split()
+
+          def synced(path: Path) -> bool:
+              return any(path.match(p) for p in patterns)
+
+          if sync_configs:
+              files = sorted(p for p in Path("configs").rglob("*") if p.is_file() and not p.name.endswith(("~", ".bak", ".swp")) and p.name != ".DS_Store")
+              if not files:
+                  error("configs/ has no files")
+              print(f"{'config':26} {'layers':>6} {'width':>5} {'block':>5} {'batch':>5} {'steps':>6} {'dropout':>7}  device")
+              for f in files:
+                  if f.suffix != ".json":
+                      warn("not a .json file: the server only reads *.json from configs/", str(f)); continue
+                  if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", f.stem):
+                      error("file name must be letters, digits, _ or - (up to 64): the API will refuse this config name", str(f)); continue
+                  try:
+                      cfg = load_config(f)
+                  except (ConfigError, OSError, UnicodeDecodeError) as e:
+                      error(str(e), str(f)); continue
+                  m, t = cfg.model, cfg.training
+                  print(f"{f.stem:26} {m.n_layer:>6} {m.n_embd:>5} {m.block_size:>5} {t.batch_size:>5} {t.max_steps:>6} {m.dropout:>7}  {cfg.device}")
+                  if m.dropout > 0 and cfg.device in ("cpu", "auto"):
+                      print(f"::notice file={f}::dropout {m.dropout} makes CPU training steps about 3x slower in a measured run; consider 0 for CPU-only servers")
+                  for label, name in (("train_file", cfg.data.train_file), ("eval_file", cfg.data.eval_file)):
+                      p = Path(name)
+                      if p.is_file():
+                          if p.stat().st_size <= m.block_size:
+                              error(f"data.{label} ({name}) is {p.stat().st_size} bytes; it must be larger than model.block_size ({m.block_size})", str(f))
+                          if not synced(p):
+                              warn(f"data.{label} ({name}) does not match DATA_PATTERNS, so it will not be synced", str(f))
+                      else:
+                          warn(f"data.{label} ({name}) is not in the repository; it must already exist on the server", str(f))
+
+          if sync_data:
+              total = 0
+              for p in sorted(Path("data").rglob("*")):
+                  if p.is_file() and synced(p) and not p.name.endswith((".bak", "~", ".swp")):
+                      total += p.stat().st_size
+                      try:
+                          p.read_text(encoding="utf-8")
+                      except UnicodeDecodeError:
+                          error("not valid UTF-8 text", str(p))
+                      if p.stat().st_size == 0:
+                          warn("file is empty", str(p))
+              print(f"data files to sync: {total / 1024:.1f} KB")
+              if total > 50 * 1024 * 1024:
+                  warn("more than 50 MB of data files; consider copying very large corpora by hand")
+
+          sys.exit(1 if errors else 0)
+          PY
+
+      - name: Prepare SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+          EC2_HOST_KEY: ${{ vars.EC2_HOST_KEY }}
+        run: |
+          set -euo pipefail
+
+          [ -n "${SSH_PRIVATE_KEY:-}" ] || { echo "::error::secret CHIT_EC2_SSH_PRIVATE_KEY is empty"; exit 1; }
+          [ -n "${EC2_HOST:-}" ] && [ -n "${EC2_USER:-}" ] || { echo "::error::repository variables EC2_HOST and EC2_USER are required"; exit 1; }
+          if [ -z "${EC2_HOST_KEY:-}" ]; then
+            echo "::error::repository variable EC2_HOST_KEY is empty. Run  ssh-keyscan -t ed25519 $EC2_HOST  once, check the key, and save the line as the variable."
+            exit 1
+          fi
+          printf '%s' "$EC2_HOST" | grep -Eq '^[A-Za-z0-9._:-]+$'       || { echo "::error::EC2_HOST has unexpected characters"; exit 1; }
+          printf '%s' "$EC2_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$'      || { echo "::error::EC2_USER has unexpected characters"; exit 1; }
+
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/chit_key"
+          printf '%s\n' "$EC2_HOST_KEY"    > "$HOME/.ssh/chit_known_hosts"
+
+          ssh-keygen -F "$EC2_HOST" -f "$HOME/.ssh/chit_known_hosts" > /dev/null \
+            || { echo "::error::EC2_HOST_KEY has no key for $EC2_HOST"; exit 1; }
+
+          cat > "$HOME/.ssh/chit_config" <<EOF
+          Host chit-ec2
+            HostName $EC2_HOST
+            User $EC2_USER
+            IdentityFile $HOME/.ssh/chit_key
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/chit_known_hosts
+            ConnectTimeout 20
+            ServerAliveInterval 15
+          EOF
+          echo "SSH_CFG=$HOME/.ssh/chit_config" >> "$GITHUB_ENV"
+
+      - name: Check the server
+        run: |
+          set -euo pipefail
+
+          out="$(ssh -F "$SSH_CFG" chit-ec2 "CHIT_HOME='$CHIT_HOME' bash -s" <<'REMOTE'
+          set -euo pipefail
+          command -v rsync >/dev/null || { echo "ERROR: rsync is not installed on the server" >&2; exit 1; }
+
+          # Create the folders; if the user cannot (for example /opt is root-owned), try sudo without a password.
+          for d in "$CHIT_HOME" "$CHIT_HOME/data" "$CHIT_HOME/configs" "$CHIT_HOME/backups"; do
+            [ -d "$d" ] || mkdir -p "$d" 2>/dev/null || sudo -n mkdir -p "$d"
+          done
+          for d in "$CHIT_HOME/data" "$CHIT_HOME/configs" "$CHIT_HOME/backups"; do
+            [ -w "$d" ] || sudo -n chown "$(id -u):$(id -g)" "$d" 2>/dev/null || true
+            [ -w "$d" ] || { echo "ERROR: $d is not writable by $(id -un). Run once on the server: sudo chown $(id -un): $d" >&2; exit 1; }
+          done
+
+          # Is a training job running? /health is public and names the active job.
+          if health="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health 2>/dev/null)"; then
+            if printf '%s' "$health" | grep -Eq '"training_job" *: *"'; then echo "TRAINING_ACTIVE=yes"; else echo "TRAINING_ACTIVE=no"; fi
+          else
+            echo "TRAINING_ACTIVE=unknown"
+          fi
+          REMOTE
+          )"
+          echo "$out"
+
+          if printf '%s\n' "$out" | grep -q '^TRAINING_ACTIVE=yes'; then
+            if [ "$SYNC_DATA" = "true" ] && [ "$ALLOW_DURING_TRAINING" != "true" ] && [ "$DRY_RUN" != "true" ]; then
+              echo "::error::A training job is running. Wait for it to finish, or run again with allow_during_training. (Configs alone can be synced at any time.)"
+              exit 1
+            fi
+            echo "::warning::A training job is running; the running job keeps the text it already loaded."
+          fi
+
+      - name: Sync configs
+        if: env.SYNC_CONFIGS == 'true'
+        run: |
+          set -euo pipefail
+
+          args=(-rltp --chmod=D755,F644 --checksum --itemize-changes
+                --exclude='*.bak' --exclude='*~' --exclude='.*.swp' --exclude='.DS_Store'
+                --backup --backup-dir="$CHIT_HOME/backups/sync-$SYNC_TS/configs")
+          [ "$PRUNE_CONFIGS" = "true" ] && args+=(--delete)
+          [ "$DRY_RUN" = "true" ]       && args+=(--dry-run)
+
+          rsync "${args[@]}" -e "ssh -F $SSH_CFG" configs/ "chit-ec2:$CHIT_HOME/configs/" | tee /tmp/rsync-configs.log
+
+      - name: Sync data files
+        if: env.SYNC_DATA == 'true'
+        run: |
+          set -euo pipefail
+
+          args=(-rltp --chmod=D755,F644 --checksum --itemize-changes --prune-empty-dirs
+                --exclude='*.bak' --exclude='*~' --exclude='.*.swp' --exclude='.DS_Store'
+                --include='*/')
+          for p in $DATA_PATTERNS; do args+=(--include="$p"); done
+          args+=(--exclude='*'
+                 --backup --backup-dir="$CHIT_HOME/backups/sync-$SYNC_TS/data")
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+
+          # No --delete here: text that exists only on the server (for example from POST /data/split) is never removed.
+          rsync "${args[@]}" -e "ssh -F $SSH_CFG" data/ "chit-ec2:$CHIT_HOME/data/" | tee /tmp/rsync-data.log
+
+      - name: Verify checksums on the server
+        if: env.DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+
+          skip=(! -name '*.bak' ! -name '*~' ! -name '.*.swp' ! -name '.DS_Store')
+          : > /tmp/manifest.txt
+
+          if [ "$SYNC_CONFIGS" = "true" ]; then
+            find configs -type f "${skip[@]}" -print0 | sort -z | xargs -0 -r sha256sum >> /tmp/manifest.txt
+          fi
+          if [ "$SYNC_DATA" = "true" ]; then
+            expr=(\( )
+            for p in $DATA_PATTERNS; do
+              [ "${#expr[@]}" -gt 1 ] && expr+=(-o)
+              expr+=(-name "$p")
+            done
+            expr+=(\))
+            find data -type f "${expr[@]}" "${skip[@]}" -print0 | sort -z | xargs -0 -r sha256sum >> /tmp/manifest.txt
+          fi
+
+          n="$(wc -l < /tmp/manifest.txt | tr -d ' ')"
+          if [ "$n" -eq 0 ]; then echo "Nothing to verify."; exit 0; fi
+
+          # One SSH call for all files (the checks run on the server, against the copies the container sees).
+          ssh -F "$SSH_CFG" chit-ec2 "cd '$CHIT_HOME' && sha256sum -c --quiet -" < /tmp/manifest.txt
+          echo "Verified $n file(s): server copies match git."
+
+      - name: Remove old backups and check the app
+        if: env.DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+          # Keep 30 days of replaced files, then clean up.
+          ssh -F "$SSH_CFG" chit-ec2 "find '$CHIT_HOME/backups' -mindepth 1 -maxdepth 1 -name 'sync-*' -mtime +30 -exec rm -rf {} +" || true
+          ssh -F "$SSH_CFG" chit-ec2 "curl -fsS --max-time 5 http://127.0.0.1:8000/health" || echo "::warning::Chit did not answer /health (is the container running?)"
+          echo
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Chit data sync"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Server folder | \`${CHIT_HOME:-?}\` |"
+            echo "| Configs synced | ${SYNC_CONFIGS:-?} (prune: ${PRUNE_CONFIGS:-?}) |"
+            echo "| Data synced | ${SYNC_DATA:-?} |"
+            echo "| Dry run | ${DRY_RUN:-?} |"
+            for part in configs data; do
+              log="/tmp/rsync-$part.log"
+              [ -f "$log" ] || continue
+              changed="$(grep -E '^(>|\*deleting|cd\+)' "$log" | grep -v '^cd' || true)"
+              echo
+              echo "### $part: changed files"
+              if [ -n "$changed" ]; then echo '```'; echo "$changed"; echo '```'; else echo "No file differed from git."; fi
+            done
+            if [ "${DRY_RUN:-}" != "true" ] && [ -n "${SYNC_TS:-}" ]; then
+              echo
+              echo "Replaced or deleted files were saved on the server under \`${CHIT_HOME:-?}/backups/sync-${SYNC_TS}/\` (kept 30 days)."
+            fi
+            echo
+            echo "Configs are read on every \`POST /train\`; training text is read when a job starts. No restart is needed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/chit_key" "$HOME/.ssh/chit_config" "$HOME/.ssh/chit_known_hosts"
