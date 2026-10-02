@@ -1,0 +1,144 @@
+name: Sync Chit Data to EC2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync Git Data
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate repository directories
+        run: |
+          set -euo pipefail
+
+          test -d data
+          test -d configs
+
+          echo "Data directory found."
+          echo "Configs directory found."
+
+          echo
+          echo "TXT files to sync:"
+          find data -type f -name '*.txt' -print
+
+          echo
+          echo "Config files to sync:"
+          find configs -type f -print
+
+      - name: Prepare SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/chit-github-deploy
+          chmod 600 ~/.ssh/chit-github-deploy
+
+      - name: Prepare EC2 directories
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          set -euo pipefail
+
+          ssh -F none \
+            -o StrictHostKeyChecking=no \
+            -i ~/.ssh/chit-github-deploy \
+            "${EC2_USER}@${EC2_HOST}" \
+            'mkdir -p /opt/chit/data /opt/chit/configs'
+
+      - name: Sync all TXT files
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          set -euo pipefail
+
+          rsync -av \
+            --include='*/' \
+            --include='*.txt' \
+            --exclude='*' \
+            -e "ssh -F none -o StrictHostKeyChecking=no -i ~/.ssh/chit-github-deploy" \
+            data/ \
+            "${EC2_USER}@${EC2_HOST}:/opt/chit/data/"
+
+      - name: Sync all config files
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          set -euo pipefail
+
+          rsync -av \
+            --include='*/' \
+            --include='*' \
+            --exclude='*' \
+            -e "ssh -F none -o StrictHostKeyChecking=no -i ~/.ssh/chit-github-deploy" \
+            configs/ \
+            "${EC2_USER}@${EC2_HOST}:/opt/chit/configs/"
+
+      - name: Verify synced files
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          set -euo pipefail
+
+          echo "Verifying TXT files..."
+
+          find data -type f -name '*.txt' -print0 |
+            while IFS= read -r -d '' file; do
+              relative="${file#data/}"
+
+              local_sha="$(sha256sum "$file" | awk '{print $1}')"
+
+              remote_sha="$(
+                ssh -F none \
+                  -o StrictHostKeyChecking=no \
+                  -i ~/.ssh/chit-github-deploy \
+                  "${EC2_USER}@${EC2_HOST}" \
+                  "sha256sum '/opt/chit/data/${relative}' | awk '{print \$1}'"
+              )"
+
+              test "$local_sha" = "$remote_sha"
+
+              echo "OK: data/${relative}"
+          done
+
+          echo
+          echo "Verifying config files..."
+
+          find configs -type f -print0 |
+            while IFS= read -r -d '' file; do
+              relative="${file#configs/}"
+
+              local_sha="$(sha256sum "$file" | awk '{print $1}')"
+
+              remote_sha="$(
+                ssh -F none \
+                  -o StrictHostKeyChecking=no \
+                  -i ~/.ssh/chit-github-deploy \
+                  "${EC2_USER}@${EC2_HOST}" \
+                  "sha256sum '/opt/chit/configs/${relative}' | awk '{print \$1}'"
+              )"
+
+              test "$local_sha" = "$remote_sha"
+
+              echo "OK: configs/${relative}"
+          done
+
+          echo
+          echo "Chit Git data synchronization verified."
+          echo "No Docker deployment was performed."
+          echo "The running container sees the synchronized files through its mounts."
