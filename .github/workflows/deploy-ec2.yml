@@ -1,103 +1,231 @@
 name: Deploy Chit to EC2
 
+# Pulls an image from ECR and replaces the running container on the server.
+# Data, configs and checkpoints live in bind mounts under CHIT_HOME, so a deploy never touches them.
+# Use sync-data-ec2.yml to change configs and training text; they need no deploy.
+#
+# Repository variables:  AWS_REGION  ECR_REGISTRY  ECR_REPOSITORY  EC2_HOST  EC2_USER
+#                        EC2_HOST_KEY (one line:  ssh-keyscan -t ed25519 <EC2_HOST>, checked by you once)
+#                        CHIT_HOME    (optional, default /opt/chit)
+# Repository secrets:    CHIT_API_KEY  CHIT_EC2_SSH_PRIVATE_KEY
+
 on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Immutable ECR image tag produced by build-and-push
-        required: true
+        description: "Image tag: 'latest', or a build number such as 42 to roll back to an older build"
         type: string
+        default: latest
+      allow_during_training:
+        description: "Deploy even if a training job is running (the job will be stopped and marked failed)"
+        type: boolean
+        default: false
 
 permissions: {}
+
+# Shares one queue with the sync workflow so the two never touch the server at the same time.
+concurrency:
+  group: chit-ec2
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy Chit
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      CHIT_HOME: ${{ vars.CHIT_HOME || '/opt/chit' }}
+
     steps:
-      - name: Deploy selected image with rollback
+      - name: Check settings
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
           CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
-          SSH_KNOWN_HOSTS: ${{ vars.CHIT_EC2_KNOWN_HOSTS }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-          EC2_HOST: ${{ vars.EC2_HOST }}
-          EC2_USER: ${{ vars.EC2_USER }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           set -euo pipefail
-          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]
-          test -n "$SSH_KNOWN_HOSTS"
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/chit-github-deploy
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/chit-github-deploy ~/.ssh/known_hosts
 
-          # Send the API key through encrypted stdin into a root-owned-by-user,
-          # mode-600 temporary env file. It is never interpolated into an SSH command.
-          printf 'CHIT_API_KEY=%s\n' "$CHIT_API_KEY" | ssh -F none \
-            -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -i ~/.ssh/chit-github-deploy "${EC2_USER}@${EC2_HOST}" \
-            'install -d -m 700 /opt/chit && umask 077 && cat > /opt/chit/deploy.env'
+          if [ -z "${CHIT_API_KEY:-}" ]; then
+            echo "::error::secret CHIT_API_KEY is empty. Without a key the API has no protection, so the deploy is refused."
+            exit 1
+          fi
+          if [ "${#CHIT_API_KEY}" -lt 16 ]; then
+            echo "::error::CHIT_API_KEY is shorter than 16 characters; use a long random value (for example: openssl rand -hex 24)"
+            exit 1
+          fi
+          printf '%s' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$' \
+            || { echo "::error::image_tag has unexpected characters"; exit 1; }
+          printf '%s' "$CHIT_HOME" | grep -Eq '^/[A-Za-z0-9._/-]+$' \
+            || { echo "::error::CHIT_HOME must be an absolute path with only letters, digits, dot, dash, underscore and slash"; exit 1; }
 
-          ssh -F none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -i ~/.ssh/chit-github-deploy "${EC2_USER}@${EC2_HOST}" \
-            "AWS_REGION='${AWS_REGION}' ECR_REGISTRY='${ECR_REGISTRY}' ECR_REPOSITORY='${ECR_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' bash -s" <<'REMOTE'
+      - name: Prepare SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CHIT_EC2_SSH_PRIVATE_KEY }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+          EC2_HOST_KEY: ${{ vars.EC2_HOST_KEY }}
+        run: |
           set -euo pipefail
-          CHIT_HOME=/opt/chit
-          ENV_FILE="$CHIT_HOME/deploy.env"
-          ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-          mkdir -p "$CHIT_HOME/data" "$CHIT_HOME/configs" "$CHIT_HOME/checkpoints" "$CHIT_HOME/models"
 
+          [ -n "${SSH_PRIVATE_KEY:-}" ] || { echo "::error::secret CHIT_EC2_SSH_PRIVATE_KEY is empty"; exit 1; }
+          [ -n "${EC2_HOST:-}" ] && [ -n "${EC2_USER:-}" ] || { echo "::error::repository variables EC2_HOST and EC2_USER are required"; exit 1; }
+          if [ -z "${EC2_HOST_KEY:-}" ]; then
+            echo "::error::repository variable EC2_HOST_KEY is empty. Run  ssh-keyscan -t ed25519 $EC2_HOST  once, check the key, and save the line as the variable."
+            exit 1
+          fi
+          printf '%s' "$EC2_HOST" | grep -Eq '^[A-Za-z0-9._:-]+$'       || { echo "::error::EC2_HOST has unexpected characters"; exit 1; }
+          printf '%s' "$EC2_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$'      || { echo "::error::EC2_USER has unexpected characters"; exit 1; }
+
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/chit_key"
+          printf '%s\n' "$EC2_HOST_KEY"    > "$HOME/.ssh/chit_known_hosts"
+
+          ssh-keygen -F "$EC2_HOST" -f "$HOME/.ssh/chit_known_hosts" > /dev/null \
+            || { echo "::error::EC2_HOST_KEY has no key for $EC2_HOST"; exit 1; }
+
+          cat > "$HOME/.ssh/chit_config" <<EOF
+          Host chit-ec2
+            HostName $EC2_HOST
+            User $EC2_USER
+            IdentityFile $HOME/.ssh/chit_key
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/chit_known_hosts
+            ConnectTimeout 20
+            ServerAliveInterval 15
+          EOF
+          echo "SSH_CFG=$HOME/.ssh/chit_config" >> "$GITHUB_ENV"
+
+      - name: Deploy
+        env:
+          CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ALLOW_DURING_TRAINING: ${{ inputs.allow_during_training }}
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/remote-deploy.sh <<'REMOTE'
+          set -euo pipefail
+
+          : "${AWS_REGION:?}" "${ECR_REGISTRY:?}" "${ECR_REPOSITORY:?}" "${IMAGE_TAG:?}" "${CHIT_HOME:?}"
+          [ -n "${CHIT_API_KEY:-}" ] || { echo "CHIT_API_KEY is empty: refusing to start the API without a key" >&2; exit 1; }
+
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          OWNER="$(id -u):$(id -g)"
+
+          # Run a command as root inside the image, with the host folder visible at /chit.
+          in_image() { docker run --rm --entrypoint "$1" -v "${CHIT_HOME}:/chit" "$IMAGE" "${@:2}"; }
+
+          echo "Logging in to Amazon ECR..."
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-          docker pull "$ECR_IMAGE"
-          OLD_IMAGE="$(docker inspect --format '{{.Image}}' chit 2>/dev/null || true)"
-          docker rm -f chit >/dev/null 2>&1 || true
+          echo "Pulling $IMAGE ..."
+          docker pull "$IMAGE"
 
-          run_chit() {
-            local image="$1"
+          # Is a training job running? /health is public and names the active job.
+          if health="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health 2>/dev/null)" \
+             && printf '%s' "$health" | grep -Eq '"training_job" *: *"'; then
+            if [ "${ALLOW_DURING_TRAINING:-false}" != "true" ]; then
+              echo "A training job is running. A deploy would stop it. Wait for it to finish, or run again with allow_during_training." >&2
+              exit 1
+            fi
+            echo "Warning: stopping a running training job."
+          fi
+
+          # Folders on the host (created by the SSH user; sudo without a password is only a fallback).
+          for d in "$CHIT_HOME" "$CHIT_HOME/data" "$CHIT_HOME/configs" "$CHIT_HOME/checkpoints"; do
+            [ -d "$d" ] || mkdir -p "$d" 2>/dev/null || sudo -n mkdir -p "$d"
+          done
+
+          fix_access() {
+            # The container runs as root, so files it writes belong to root on the host.
+            # Give them back to the SSH user (so the sync workflow can update them), and keep private data private.
+            in_image chown -R "$OWNER" /chit
+            chmod 750 "$CHIT_HOME" "$CHIT_HOME/configs"
+            chmod 700 "$CHIT_HOME/data" "$CHIT_HOME/checkpoints"
+          }
+          fix_access
+
+          # First deploy only: add the image's default files that are missing. Existing files are never overwritten,
+          # and databases and memory.json are never copied out of the image.
+          in_image sh -c '
+            cd /app/data && tar cf - --exclude="*.db" --exclude="*.db-*" --exclude="memory.json" . | tar xf - --skip-old-files -C /chit/data
+            cd /app/configs && tar cf - . | tar xf - --skip-old-files -C /chit/configs
+          '
+          fix_access
+
+          PREV_ID="$(docker inspect -f '{{.Image}}' chit 2>/dev/null || true)"
+
+          start_container() {
+            docker rm -f chit >/dev/null 2>&1 || true
+            # "-e CHIT_API_KEY" (no value) takes the key from this script's environment,
+            # so it never appears in a command line or in the process list.
             docker run -d --name chit \
               -p 127.0.0.1:8000:8000 -p 127.0.0.1:8001:8001 \
-              --restart unless-stopped --env-file "$ENV_FILE" \
-              -e CHIT_UI_BASE_PATH=/console -e CHIT_CHECKPOINT=checkpoints/latest.pt \
-              -e CHIT_JOBS_DIR=checkpoints/jobs -e CHIT_MEMORY_PATH=data/memory.json \
-              -e CHIT_KNOWLEDGE_DB=data/knowledge.db -e CHIT_SESSIONS_DB=data/sessions.db \
-              -e CHIT_MEMORY_ANN=auto -e CHIT_EMBEDDING_MODEL_PATH=/app/models/sentence-transformer \
+              --restart unless-stopped \
+              --log-opt max-size=10m --log-opt max-file=3 \
               -v "$CHIT_HOME/data:/app/data" \
               -v "$CHIT_HOME/configs:/app/configs:ro" \
               -v "$CHIT_HOME/checkpoints:/app/checkpoints" \
-              -v "$CHIT_HOME/models:/app/models:ro" "$image" >/dev/null
+              -e CHIT_API_KEY -e CHIT_UI_BASE_PATH=/console \
+              "$1" >/dev/null
           }
 
-          if run_chit "$ECR_IMAGE"; then
+          wait_healthy() {
             for _ in $(seq 1 30); do
-              if docker exec chit python -c 'import os,urllib.request; r=urllib.request.Request("http://127.0.0.1:8000/ready",headers={"X-API-Key":os.environ["CHIT_API_KEY"]}); urllib.request.urlopen(r,timeout=4)' \
-                && curl -fsS http://127.0.0.1:8001/ >/dev/null 2>&1; then
-                rm -f "$ENV_FILE"
-                echo "Deployment of $ECR_IMAGE passed readiness checks."
-                exit 0
+              if curl -fsS --max-time 4 http://127.0.0.1:8000/health >/dev/null 2>&1 \
+                 && curl -fsS --max-time 4 http://127.0.0.1:8001/ >/dev/null 2>&1; then
+                return 0
               fi
               sleep 2
             done
+            return 1
+          }
+
+          echo "Stopping the current container (up to 40 s, so a running job can save its state)..."
+          docker stop -t 40 chit >/dev/null 2>&1 || true
+
+          echo "Starting $IMAGE ..."
+          start_container "$IMAGE"
+
+          if wait_healthy; then
+            echo "Deployment successful: $IMAGE"
+            curl -fsS --max-time 5 http://127.0.0.1:8000/health || true
+            echo
+            docker image prune -f --filter "until=72h" >/dev/null 2>&1 || true
+            exit 0
           fi
 
-          echo "New image failed readiness; restoring the previous image." >&2
-          docker logs --tail 60 chit || true
-          docker rm -f chit >/dev/null 2>&1 || true
-          if [[ -n "$OLD_IMAGE" ]]; then
-            run_chit "$OLD_IMAGE"
-            for _ in $(seq 1 30); do
-              if docker exec chit python -c 'import os,urllib.request; r=urllib.request.Request("http://127.0.0.1:8000/ready",headers={"X-API-Key":os.environ["CHIT_API_KEY"]}); urllib.request.urlopen(r,timeout=4)'; then
-                rm -f "$ENV_FILE"
-                echo "Previous image restored and ready." >&2
-                exit 1
-              fi
-              sleep 2
-            done
-            echo "Previous image did not recover; inspect container logs immediately." >&2
+          echo "The new container did not become healthy within 60 seconds. Last log lines:" >&2
+          docker logs --tail 80 chit >&2 || true
+
+          if [ -n "$PREV_ID" ]; then
+            echo "Rolling back to the previous image ($PREV_ID)..." >&2
+            docker stop -t 10 chit >/dev/null 2>&1 || true
+            start_container "$PREV_ID"
+            if wait_healthy; then
+              echo "Rolled back: the service is running the PREVIOUS version. This deployment still failed." >&2
+            else
+              echo "The rollback did not become healthy either. Check the server." >&2
+            fi
+          else
+            echo "No previous container to roll back to." >&2
           fi
           exit 1
           REMOTE
+
+          # The variables travel on stdin together with the script (not on the command line),
+          # so the API key never shows up in a process list.
+          {
+            printf 'export AWS_REGION=%q ECR_REGISTRY=%q ECR_REPOSITORY=%q IMAGE_TAG=%q CHIT_HOME=%q ALLOW_DURING_TRAINING=%q CHIT_API_KEY=%q\n' \
+              "$AWS_REGION" "$ECR_REGISTRY" "$ECR_REPOSITORY" "$IMAGE_TAG" "$CHIT_HOME" "$ALLOW_DURING_TRAINING" "$CHIT_API_KEY"
+            cat /tmp/remote-deploy.sh
+          } | ssh -F "$SSH_CFG" chit-ec2 bash -s
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/chit_key" "$HOME/.ssh/chit_config" "$HOME/.ssh/chit_known_hosts" /tmp/remote-deploy.sh
