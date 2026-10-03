@@ -6,42 +6,6 @@
     <meta name="color-scheme" content="dark light">
     <title>Chit Console</title>
     <link rel="stylesheet" href="{{ base_path }}/static/css/style.css">
-    <style>
-        .tooltip-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--line);
-            color: var(--muted);
-            font-size: 10px;
-            font-weight: bold;
-            cursor: help;
-            margin-left: 6px;
-            vertical-align: middle;
-            transition: background 0.2s;
-        }
-        .tooltip-icon:hover {
-            background: var(--accent);
-            color: #000;
-        }
-        .tooltip-text {
-            position: absolute;
-            background: #1a2535;
-            color: #e9edf5;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            line-height: 1.4;
-            max-width: 250px;
-            z-index: 100;
-            border: 1px solid var(--line);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            pointer-events: none;
-        }
-    </style>
 </head>
 <body>
     <div class="shell">
@@ -59,12 +23,15 @@
         <div class="layout">
             <nav class="nav" aria-label="Console sections">
                 <small>Workspace</small>
-                <button class="active" data-view="chat">Chat</button>
+                <button class="active" data-view="chat" aria-current="page" aria-controls="view-chat">Chat</button>
+                <button data-view="conversations">Conversations</button>
                 <button data-view="generate">Generate</button>
                 <button data-view="brain">Brain</button>
+                <button data-view="teach">Teach Chit</button>
                 <button data-view="studio">Studio</button>
-                <small>API tools</small>
-                <button data-view="explorer">All API routes</button>
+                <button data-view="data">Training library</button>
+                <button data-view="diagnostics">Troubleshooting</button>
+                <details class="advanced-nav"><summary>Advanced tools</summary><button data-view="explorer">API reference</button></details>
                 <button id="logout" class="hidden">Lock console</button>
             </nav>
 
@@ -72,7 +39,7 @@
                 <section class="view" id="view-chat">
                     <div class="card">
                         <h2>Talk with Chit</h2>
-                        <p class="sub">A continuing conversation uses the API’s saved session and memory context. Replies are shown as plain text.</p>
+                        <p class="sub">A continuing conversation keeps its own context and may use relevant saved memories. Use Shift+Enter for a new line.</p>
                         <div class="field smallarea">
                         <label for="chatInput">Your message</label>
                             <textarea id="chatInput" placeholder="What would you like to work through?"></textarea>
@@ -96,29 +63,25 @@
                         </div>
                         <div class="grid">
                             <div class="field">
-                                <label for="genMode">Mode <span class="tooltip-icon" title="Decides if Chit acts as a helpful assistant with memory or just continues a raw string of text.">i</span></label>
+                                <label for="genMode">How should Chit respond?</label>
                                 <select id="genMode">
-                                    <option value="assistant">Assistant request (uses memory)</option>
-                                    <option value="continue">Raw text continuation</option>
+                                    <option value="assistant">Answer my request</option>
+                                    <option value="continue">Continue my text</option>
                                 </select>
                             </div>
                             <div class="field">
-                                <label for="genTokens">Maximum new tokens (1–500) <span class="tooltip-icon" title="The length of the response. For byte models, 1 token = 1 UTF-8 byte.">i</span></label>
-                                <input type="number" id="genTokens" min="1" max="500" value="160">
-                            </div>
-                            <div class="field">
-                                <label for="genTemp">Temperature (0–2) <span class="tooltip-icon" title="Controls randomness. 0 is deterministic; higher values are more creative/random.">i</span></label>
-                                <input type="number" id="genTemp" min="0" max="2" step="0.1" value="0.4">
-                            </div>
-                            <div class="field">
-                                <label for="genTopK">Top K (1–256) <span class="tooltip-icon" title="Limits the model to only consider the top K most likely next tokens.">i</span></label>
-                                <input type="number" id="genTopK" min="1" max="256" value="50">
+                                <label for="genTokens">Response length</label>
+                                <select id="genTokens"><option value="80">Concise</option><option value="160" selected>Detailed</option><option value="320">More detail</option><option value="500">As much as possible</option></select>
                             </div>
                         </div>
-                        <div class="field smallarea">
-                            <label for="genStop">Optional stop strings (JSON array)</label>
-                            <textarea id="genStop">[]</textarea>
-                        </div>
+                        <details class="guided-panel"><summary>Advanced response settings</summary><div class="grid"><div class="field">
+                                <label for="genTemp">Creativity</label>
+                                <input type="range" id="genTemp" min="0" max="2" step="0.1" value="0.4">
+                            </div><div class="field">
+                                <label for="genTopK">Response variety</label>
+                                <input type="range" id="genTopK" min="1" max="256" value="50">
+                            </div></div>
+                        </details>
                         <div class="actions">
                             <button class="primary" id="runGenerate">Generate</button>
                             <span class="status" id="genStatus"></span>
@@ -128,10 +91,38 @@
                     </div>
                 </section>
 
+                <section class="view hidden" id="view-conversations"><div class="card"><h2>Your conversations</h2><p class="sub">Reopen a past conversation or remove one you no longer need. Chit keeps each conversation’s context separate.</p><div class="actions"><button class="secondary" id="refreshSessions">Refresh conversations</button><span class="status" id="sessionStatus"></span></div><div id="sessionList" class="memory-grid"><p class="status">Sign in to load conversations.</p></div></div></section>
+
+                <section class="view hidden" id="view-teach"><div class="card"><h2>Teach Chit something</h2><p class="sub">Save a fact for future learning. Memory helps Chit recall something now; a lesson becomes training material when you choose to train.</p><div class="grid"><div class="field"><label for="lessonKind">How would you like to teach it?</label><select id="lessonKind"><option value="text">A fact or short passage</option><option value="qa">A question and its answer</option></select></div><div class="field"><label for="lessonSource">Where did this come from? (optional)</label><input id="lessonSource" maxlength="200" placeholder="Personal note, book, website…"></div></div><div class="field" id="lessonTextField"><label for="lessonText">What should Chit learn?</label><textarea id="lessonText" maxlength="20000" placeholder="Write one clear fact or a short passage"></textarea></div><div id="lessonQaFields" class="hidden"><div class="field"><label for="lessonQuestion">Question</label><textarea id="lessonQuestion" maxlength="2000" placeholder="What question should Chit be able to answer?"></textarea></div><div class="field"><label for="lessonAnswer">Answer</label><textarea id="lessonAnswer" maxlength="5000" placeholder="Write the answer in clear language"></textarea></div></div><label class="check-row"><input type="checkbox" id="rememberLesson"> Also save this as a memory so Chit can use it right away</label><div class="actions"><button class="primary" id="saveLesson">Save lesson</button><span id="lessonStatus" class="status" aria-live="polite"></span></div></div><div class="card"><h2>Saved lessons</h2><p class="sub">Pending lessons are ready to be included in training. Training changes the model and can take time.</p><div class="actions"><button class="secondary" id="refreshKnowledge">Refresh lessons</button><label>Show <select id="knowledgeFilter"><option value="pending">Ready to learn</option><option value="trained">Already learned</option><option value="all">All lessons</option></select></label><span id="knowledgeStatus" class="status"></span></div><div id="knowledgeList" class="memory-grid"></div></div></section>
+
+                <section class="view hidden" id="view-data"><div class="card"><h2>Training library</h2><p class="sub">See what training material is available for a learning recipe, and preview how a text file would be divided before making changes.</p><div class="grid"><div class="field"><label for="dataConfig">Learning recipe</label><select id="dataConfig"></select></div><div class="field"><label for="dataSource">Text file to inspect</label><input id="dataSource" maxlength="100" placeholder="For example: lessons.txt"></div></div><label class="check-row"><input type="checkbox" id="overwriteSplit"> Replace existing training files (a backup is kept)</label><div class="actions"><button class="primary" id="inspectData">Inspect training material</button><button class="secondary" id="previewSplit">Preview a file split</button><button class="danger" id="applySplit">Create train and review files</button><span id="dataStatus" class="status"></span></div><pre id="dataResult" class="result">Choose a recipe to see its training material.</pre><p class="notice">Files are read from the server’s configured data folder. Creating a split changes the training files for the selected recipe.</p></div><div class="card"><h2>Chit’s current state</h2><p class="sub">A simple view of the model and services available to this browser.</p><button class="secondary" id="refreshModel">Refresh status</button><div id="modelStatus" class="model-summary"></div></div></section>
+
+                <section class="view hidden" id="view-diagnostics">
+                    <div class="card">
+                        <h2>Why did that answer look wrong?</h2>
+                        <p class="sub">Check whether the server, active model, training files, or tokenizer settings could explain unreadable or unexpected answers. These checks do not change Chit.</p>
+                        <div class="actions"><label for="diagnosticConfig">Learning plan to inspect</label><select id="diagnosticConfig"></select><button class="primary" id="runDiagnostics">Check Chit</button><span id="diagnosticStatus" class="status" aria-live="polite"></span></div>
+                        <div id="diagnosticResults" class="diagnostic-grid"><p class="status">Run a check to see what might be affecting responses.</p></div>
+                        <div id="diagnosticAdvice" class="diagnostic-advice hidden"></div>
+                        <details class="diagnostic-evidence"><summary>Technical evidence and limits</summary><p class="sub">This section uses details the server reports. It does not guess when the server has no evidence.</p><div id="diagnosticEvidence" class="diagnostic-evidence-grid"><p class="status">Run a check to see available evidence.</p></div></details>
+                    </div>
+                    <div class="card">
+                        <h2>Try a simple response</h2>
+                        <p class="sub">This sends one prompt to the currently loaded model using its normal assistant mode. It creates no saved conversation.</p>
+                        <div class="field"><label for="diagnosticPrompt">Test prompt</label><input id="diagnosticPrompt" value="Reply with one clear sentence: What is a library?" maxlength="2000"></div>
+                        <button class="secondary" id="runDiagnosticPrompt">Generate a sample response</button>
+                        <div id="diagnosticResponse" class="diagnostic-response" aria-live="polite">The response will appear here.</div>
+                        <div class="actions"><span>How does it read?</span><button class="secondary" id="responseReadable">Readable</button><button class="secondary" id="responseGarbled">Garbled or off-topic</button></div>
+                        <div id="responseFeedback" class="notice hidden" aria-live="polite"></div>
+                    </div>
+                    <div class="card"><h2>What these checks can tell you</h2><p class="sub">A working server only means Chit can answer requests. A small or newly trained model may still produce weak text. Training data, tokenizer compatibility, context length, and training progress can all affect quality. The sample is useful evidence, not a complete measure of model quality.</p><button class="secondary" id="openTrainingLibrary">Review training material</button><button class="secondary" id="openStudio">Open learning plans</button></div>
+                </section>
+
                 <section class="view hidden" id="view-brain">
                     <div class="card">
-                        <h2>My Memory Garden</h2>
+                        <h2>Saved memories</h2>
                         <p class="sub">Explore and manage the facts Chit remembers about you and the world.</p>
+                        <details class="guided-panel"><summary>Save a memory for Chit</summary><div class="field"><label for="newMemory">What should Chit remember?</label><textarea id="newMemory" maxlength="2000" placeholder="A preference, useful fact, or detail you want Chit to recall"></textarea></div><div class="grid"><div class="field"><label for="memoryType">Type of memory</label><select id="memoryType"><option value="experience">Personal experience or preference</option><option value="fact">A useful fact</option></select></div><div class="field"><label for="memoryImportance">How important is it?</label><select id="memoryImportance"><option value="0.3">Helpful</option><option value="0.5" selected>Important</option><option value="0.8">Very important</option></select></div></div><button class="primary" id="saveMemory">Save memory</button><span class="status" id="memorySaveStatus"></span></details>
                         <div class="field">
                             <label for="memSearch">Search memories</label>
                             <div class="actions">
@@ -161,7 +152,7 @@
                                 <div class="stage-icon">🔥</div>
                                 <div class="stage-info">
                                     <span class="stage-label">Study in Progress</span>
-                                    <span class="stage-desc">Actively baking weights into the brain</span>
+                                    <span class="stage-desc">Training a candidate model on selected lessons</span>
                                 </div>
                                 <div class="stage-count" id="count-training">0</div>
                             </div>
@@ -169,8 +160,8 @@
                             <div class="pipeline-stage">
                                 <div class="stage-icon">🧠</div>
                                 <div class="stage-info">
-                                    <span class="stage-label">Baked into Brain</span>
-                                    <span class="stage-desc">Permanent universal knowledge</span>
+                                    <span class="stage-label">Included in a promoted model</span>
+                                    <span class="stage-desc">Available through the model; training does not guarantee perfect recall</span>
                                 </div>
                                 <div class="stage-count" id="count-trained">0</div>
                             </div>
@@ -181,9 +172,11 @@
 
                 <section class="view hidden" id="view-explorer">
                     <div class="card">
-                        <h2>Documented API routes</h2>
-                        <p class="sub">Choose a route to load its example. Replace path IDs and request values as needed. Changes such as delete, training, cancellation, and file splitting ask for confirmation.</p>
+                        <h2>API reference</h2>
+                        <p class="sub">A plain-language guide to what each capability does, when to use it, what information it needs, and what changes. The guided screens handle routine tasks; the technical request editor is for advanced users.</p>
                         <div class="endpoint-list" id="endpointList"></div>
+                        <article id="apiGuide" class="api-guide" aria-live="polite"><h3>Choose a capability</h3><p>Each guide explains its purpose, the information needed, and whether it reads or changes your Chit data.</p></article>
+                        <details class="advanced-request"><summary>Open the technical request editor</summary>
                         <div class="grid">
                             <div class="field">
                                 <label for="apiMethod">Method</label>
@@ -212,22 +205,26 @@
                         </div>
                         <h3>API response</h3>
                         <pre class="result" id="apiResult">Choose a route above.</pre>
+                        </details>
                     </div>
                 </section>
 
                 <section class="view hidden" id="view-studio">
                     <div class="card">
-                        <h2>The Neural Forge</h2>
-                        <p class="sub">Evolve the brain by training on new data. Pick a recipe and begin the absorption process.</p>
+                        <h2>Training plans and progress</h2>
+                        <p class="sub">Choose a plan to see its model settings and training material. Review those details before starting a training run.</p>
                         <div class="forge-grid">
-                            <div class="recipe-list" id="recipeList">
-                                <div class="status">Loading recipes...</div>
+                            <div class="recipe-picker">
+                                <div class="field"><label for="trainConfig">Choose a learning plan</label><select id="trainConfig" aria-describedby="configHelp"><option value="">Loading available configurations…</option></select></div>
+                                <article id="configHelp" class="config-explanation" aria-live="polite"><h3>Select a learning plan</h3><p>Chit will explain what the selected plan changes, how long it is set to learn, and which material it uses.</p></article>
                             </div>
                             <div class="job-monitor">
-                                <div class="actions">
-                                    <button class="primary" id="startTrain">Start Evolution</button>
+                        <div class="actions">
+                            <button class="primary" id="startTrain">Start learning with this plan</button>
                                     <span class="status" id="trainStatus"></span>
                                 </div>
+                        <div class="field"><label for="lessonScope">Lessons to include</label><select id="lessonScope"><option value="all">All lessons (recommended)</option><option value="pending">Only lessons not yet learned</option></select></div>
+                        <button class="secondary" id="trainKnowledge">Learn saved lessons</button>
                                 <div id="jobList" class="job-list">
                                     <div class="status" style="text-align: center; padding: 20px;">No recent jobs.</div>
                                 </div>
@@ -247,7 +244,7 @@
         <form class="login" id="loginForm">
             <div class="mark">चित् </div>
             <h2>Unlock Chit Console</h2>
-            <p>Enter the Chit API key. The server will retain it for this browser session and use it for API calls.</p>
+            <p>Enter the Chit API key. The server holds it for this browser session and uses it for API calls. If the UI server restarts or this session expires, sign in again.</p>
             <div class="field">
                 <label for="apiKey">API key</label>
                 <input type="password" id="apiKey" autocomplete="current-password" required>
@@ -259,6 +256,11 @@
             <p class="footer">Use this page over HTTPS when accessing it outside your own computer.</p>
         </form>
     </div>
+
+    <aside id="contextHelpPanel" class="context-help-panel hidden" role="dialog" aria-modal="false" aria-labelledby="contextHelpTitle">
+        <div class="context-help-heading"><h2 id="contextHelpTitle">Help</h2><button type="button" id="closeContextHelp" class="help-panel-close" aria-label="Close help">Close</button></div>
+        <div id="contextHelpContent" class="context-help-content"></div>
+    </aside>
 
     <script>
         // These will be injected by the server

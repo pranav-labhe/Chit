@@ -18,6 +18,7 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -58,6 +59,7 @@ _key_sessions_lock = threading.Lock()
 # `pattern` is the only variable part accepted by the server-side proxy.
 ROUTES: list[dict[str, Any]] = [
     {"category": "Health & model", "name": "Server health", "method": "GET", "path": "/health", "pattern": r"^/health$", "query": {}, "body": None},
+    {"category": "Health & model", "name": "Service readiness", "method": "GET", "path": "/ready", "pattern": r"^/ready$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Live model details", "method": "GET", "path": "/model", "pattern": r"^/model$", "query": {}, "body": None},
     {"category": "Generate & chat", "name": "Generate a response", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}},
     {"category": "Generate & chat", "name": "Continue raw text", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Chit is the", "mode": "continue", "tokens": 60, "temperature": 0}},
@@ -104,11 +106,24 @@ class ProxyRequest(BaseModel):
     body: Any = None
 
 
-app = FastAPI(title="Chit Browser Console", docs_url=None, redoc_url=None, openapi_url=None)
+@contextlib.asynccontextmanager
+async def _ui_lifespan(_: FastAPI):
+    """Reuse one connection pool for UI-to-API requests."""
+    app.state.api_client = httpx.AsyncClient(
+        timeout=UPSTREAM_TIMEOUT_SECONDS, follow_redirects=False
+    )
+    try:
+        yield
+    finally:
+        await app.state.api_client.aclose()
+
+
+app = FastAPI(title="Chit Browser Console", docs_url=None, redoc_url=None, openapi_url=None, lifespan=_ui_lifespan)
 
 # Asset serving
-app.mount("/static", StaticFiles(directory="pranav/chit/ui/static"), name="static")
-templates = Jinja2Templates(directory="pranav/chit/ui/templates")
+_UI_DIR = Path(__file__).resolve().parent / "ui"
+app.mount("/static", StaticFiles(directory=str(_UI_DIR / "static")), name="static")
+templates = Jinja2Templates(directory=str(_UI_DIR / "templates"))
 
 
 
@@ -190,9 +205,14 @@ async def get_session_title(request: Request, session_id: str):
                 title = (first_msg[:50] + "...") if len(first_msg) > 50 else first_msg
             
             return {"title": title or "New Conversation"}
-    except Exception as e:
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
         log.error(f"Error generating session title: {e}")
-        raise HTTPException(status_code=500, detail="Could not generate title")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
 
 @app.get("/_ui/memories")
 async def get_ui_memories(request: Request, q: str = ""):
@@ -208,9 +228,157 @@ async def get_ui_memories(request: Request, q: str = ""):
                 raise HTTPException(status_code=response.status_code, detail="Memory store unreachable")
             
             return response.json()
-    except Exception as e:
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
         log.error(f"Error fetching memories: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve memories")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
+
+@app.get("/_ui/knowledge/stats")
+async def get_ui_knowledge_stats(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
+            return response.json()
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
+        log.error(f"Error fetching knowledge stats: {e}")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
+
+@app.get("/_ui/train/status")
+async def get_ui_train_status(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            # Check /health first to see if a job is running
+            health = await client.get(f"{API_BASE}/health")
+            health_data = health.json()
+            job_id = health_data.get("training_job")
+            
+            if not job_id:
+                return {"state": "idle", "progress": 0, "job_id": None}
+            
+            # Get detailed job status
+            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
+            if job_res.status_code != 200:
+                return {"state": "unknown", "progress": 0, "job_id": job_id}
+            
+            job_data = job_res.json()
+            return {
+                "state": job_data.get("state"),
+                "progress": job_data.get("progress", 0),
+                "job_id": job_id,
+                "step": job_data.get("step"),
+                "max_steps": job_data.get("max_steps")
+            }
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
+        log.error(f"Error fetching train status: {e}")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
+
+@app.get("/_ui/train/configs")
+async def get_ui_train_configs(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/train/configs", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Config store unreachable")
+            return response.json()
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
+        log.error(f"Error fetching configs: {e}")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
+
+
+@app.get("/_ui/train/configs/{config_name}")
+async def get_ui_train_config_details(config_name: str, request: Request):
+    """Read one allowlisted training preset so the console can explain its settings."""
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", config_name):
+        raise HTTPException(status_code=404, detail="Learning plan not found")
+    config_root = Path(chit_api.CONFIG_DIR).resolve()
+    config_path = (config_root / f"{config_name}.json").resolve()
+    if config_path.parent != config_root or not config_path.is_file():
+        raise HTTPException(status_code=404, detail="Learning plan not found")
+    try:
+        with config_path.open("r", encoding="utf-8") as source:
+            config = json.load(source)
+    except (OSError, json.JSONDecodeError) as error:
+        log.warning("Could not read learning plan %s: %s", config_name, error)
+        raise HTTPException(status_code=500, detail="Could not read this learning plan")
+    return {"name": config_name, "config": config}
+
+@app.post("/_ui/train")
+async def post_ui_train(request: Request, payload: dict):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.post(f"{API_BASE}/train", json=payload, headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 202:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+            return response.json()
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
+        log.error(f"Error starting training: {e}")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
+
+@app.get("/_ui/train/jobs")
+async def get_ui_train_jobs(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/train", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Jobs store unreachable")
+            return response.json()
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as e:
+        log.error("UI helper request timed out: %s", e)
+        raise HTTPException(status_code=504, detail="The Chit API did not respond before the UI timeout.")
+    except httpx.HTTPError as e:
+        log.error(f"Error fetching jobs: {e}")
+        raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
 
 @app.get("/_ui/knowledge/stats")
 async def get_ui_knowledge_stats(request: Request):
@@ -358,103 +526,25 @@ async def get_ui_train_status(request: Request):
         log.error(f"Error fetching train status: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve training status")
 
-@app.get("/_ui/train/configs")
-async def get_ui_train_configs(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/train/configs", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Config store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching configs: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve configs")
 
-@app.post("/_ui/train")
-async def post_ui_train(request: Request, payload: dict):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.post(f"{API_BASE}/train", json=payload, headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 202:
-                raise HTTPException(status_code=response.status_code, detail=response.text)
-            return response.json()
-    except Exception as e:
-        log.error(f"Error starting training: {e}")
-        raise HTTPException(status_code=500, detail="Could not start training")
 
-@app.get("/_ui/train/jobs")
-async def get_ui_train_jobs(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/train", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Jobs store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching jobs: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve jobs")
+def _remove_duplicate_ui_routes() -> None:
+    """Keep the first explicit handler for each UI path and method."""
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    unique_routes = []
+    for route in app.router.routes:
+        path = getattr(route, "path", "")
+        methods = tuple(sorted(getattr(route, "methods", ()) or ()))
+        key = (path, methods)
+        if path.startswith("/_ui/") and key in seen:
+            continue
+        if path.startswith("/_ui/"):
+            seen.add(key)
+        unique_routes.append(route)
+    app.router.routes[:] = unique_routes
 
-@app.get("/_ui/knowledge/stats")
-async def get_ui_knowledge_stats(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching knowledge stats: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve stats")
 
-@app.get("/_ui/train/status")
-async def get_ui_train_status(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            # Check /health first to see if a job is running
-            health = await client.get(f"{API_BASE}/health")
-            health_data = health.json()
-            job_id = health_data.get("training_job")
-            
-            if not job_id:
-                return {"state": "idle", "progress": 0, "job_id": None}
-            
-            # Get detailed job status
-            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
-            if job_res.status_code != 200:
-                return {"state": "unknown", "progress": 0, "job_id": job_id}
-            
-            job_data = job_res.json()
-            return {
-                "state": job_data.get("state"),
-                "progress": job_data.get("progress", 0),
-                "job_id": job_id,
-                "step": job_data.get("step"),
-                "max_steps": job_data.get("max_steps")
-            }
-    except Exception as e:
-        log.error(f"Error fetching train status: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve training status")
-
+_remove_duplicate_ui_routes()
 
 
 @app.post("/_ui/login")
@@ -551,8 +641,10 @@ async def proxy(payload: ProxyRequest, request: Request):
     return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
 
 
-def _new_http_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS, follow_redirects=False)
+@contextlib.asynccontextmanager
+async def _new_http_client():
+    """Borrow the app's pooled client without closing it after one request."""
+    yield app.state.api_client
 
 
 _HTML = r'''<!doctype html>

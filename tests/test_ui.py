@@ -27,9 +27,9 @@ def test_ui_is_single_page_and_lists_every_documented_api_route():
     assert response.status_code == 200
     assert "Unlock Chit Console" in response.text
     assert "__ROUTES__" not in response.text
-    assert len(ui.ROUTES) == 25  # two examples for the single /generate route
+    assert len(ui.ROUTES) == 26  # two examples for the single /generate route
     expected = {
-        ("GET", "/health"), ("GET", "/model"),
+        ("GET", "/health"), ("GET", "/ready"), ("GET", "/model"),
         ("POST", "/generate"), ("POST", "/chat"),
         ("POST", "/sessions"), ("GET", "/sessions"),
         ("GET", "/sessions/{session_id}"), ("DELETE", "/sessions/{session_id}"),
@@ -41,7 +41,7 @@ def test_ui_is_single_page_and_lists_every_documented_api_route():
         ("POST", "/knowledge/train"), ("GET", "/data"), ("POST", "/data/split"),
     }
     assert {(r["method"], r["path"]) for r in ui.ROUTES} == expected
-    assert len(expected) == 24
+    assert len(expected) == 25
 
 
 def test_login_is_required_key_is_server_side_and_sessions_are_isolated():
