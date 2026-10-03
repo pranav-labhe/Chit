@@ -1,32 +1,32 @@
 {
   "schema_version": 1,
-  "dataset_version": "english-foundation-v1-starter",
-  "authorship": "project-authored",
+  "dataset_version": "english-foundation-v1-data2-expanded",
+  "authorship": "project-authored-and-synthetic-from-data2-pools",
   "language": "en",
   "sources": [
     {
       "path": "data/english_foundation/conversation.txt",
-      "sha256": "8b28d2e010ff04eaffa65adba2c5da4e08907efc5f650e61bb8f16e52ab73dfd",
-      "utf8_bytes": 10598,
-      "items": 80
+      "sha256": "1f142a6ad3530cb6ac50dcfd0aff59d667ab4dd93ac0a0cb4c19846c431f6051",
+      "utf8_bytes": 1048766,
+      "items": 4189
     },
     {
       "path": "data/english_foundation/lexical_prose.txt",
-      "sha256": "0505255b155d9bbb5d0f5bf2fe6759c97d428b24ced5cf712cac8578b0cab18e",
-      "utf8_bytes": 5611,
-      "items": 50
+      "sha256": "04a0831f65ca5937af2078d4606f27e697ebdd04dbfc93c8207e1e6493bb2397",
+      "utf8_bytes": 1048737,
+      "items": 5492
     },
     {
       "path": "data/english_foundation/project_facts.txt",
-      "sha256": "6dc37e474fb3c2f3e3880e4488e3b8712445404e9634da793a0be28c63c91062",
-      "utf8_bytes": 1930,
+      "sha256": "7441d49a826cadd8e2b79058da7af9de2697c36096df2e5fc846437cbeaa6c8d",
+      "utf8_bytes": 1969,
       "items": 10
     },
     {
       "path": "data/english_foundation/structural.txt",
-      "sha256": "e8246c81159fc2273646eaf0ec5c2ed40d9ff4130273611403759c02b60c5a11",
-      "utf8_bytes": 11160,
-      "items": 83
+      "sha256": "85453c4a3660e624cdb34cc01c869247bbe471b739593fe69259da80c2efeb80",
+      "utf8_bytes": 1048623,
+      "items": 7691
     }
   ],
   "evaluation_suite": {

@@ -1,6 +1,6 @@
 # English foundation curriculum
 
-Version 1 is a project-authored starter curriculum for English structural fluency, assistant turn format, simple conversational intent, explicit and ambiguous reference, and English lexical use in context.
+Version 1 is a project-authored starter curriculum for English structural fluency, assistant turn format, conversational intent, explicit and ambiguous reference, and English lexical use in context. The 2026-10-04 expansion adds varied synthetic examples generated from the literal theme and language pools in `C:\Python\data2.py`.
 
 ## Sources
 
@@ -13,7 +13,9 @@ Version 1 is a project-authored starter curriculum for English structural fluenc
 
 Weights are normalized over the configured source list. The language sources share the aggregate 0.6 target (split equally here); the configured values are relative sampling weights, not percentages of bytes.
 
-All 223 examples in this initial tranche are written for the project. The files use `Task: chat`, `User:`, and `Chit:` markers where they represent assistant interaction, matching the existing production prompt conventions. Prose-only entries are complete standalone passages. `manifest.json` records file hashes, UTF-8 sizes, and item counts. Keep later external material out until source, license, attribution, and privacy review are recorded.
+The expanded corpus sizes and item counts are recorded in `manifest.json`. `conversation.txt` contains 4,189 examples (1,048,766 bytes), `lexical_prose.txt` contains 5,492 passages (1,048,737 bytes), and `structural.txt` contains 7,691 examples (1,048,623 bytes). The original examples are preserved; expanded entries are synthetic combinations of varied themes and patterns from `data2.py`. These additions have not received independent linguistic review. The generator reads Python literal pools safely without importing `data2.py` (which depends on the unavailable base `data` module and has no output entry point).
+
+Assistant examples use `Task: chat`, `User:`, and `Chit:` markers, matching the production prompt conventions. Prose-only entries are complete standalone passages. `manifest.json` records file hashes, UTF-8 sizes, and item counts. Baseline copies from immediately before this expansion are in `docs/benchmarks/dataset-baselines/` with the `*-pre-data2-expansion-2026-10-04.txt` names. Keep external material out until source, license, attribution, and privacy review are recorded.
 
 ## Use
 

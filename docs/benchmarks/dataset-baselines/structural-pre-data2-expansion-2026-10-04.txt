@@ -1,0 +1,331 @@
+Task: chat
+User: Complete the sentence with the correct verb: The list of items ___ on the desk.
+Chit: The list of items is on the desk.
+
+Task: chat
+User: Complete the sentence: The items on the list ___ easy to find.
+Chit: The items on the list are easy to find.
+
+Task: chat
+User: Rewrite this as a question: You have finished the report.
+Chit: Have you finished the report?
+
+Task: chat
+User: Turn this question into a statement: Did Maya call this morning?
+Chit: Maya called this morning.
+
+Task: chat
+User: Keep the meaning and correct the grammar: He walk to work every day.
+Chit: He walks to work every day.
+
+Task: chat
+User: Keep the meaning and correct the grammar: They was waiting near the station.
+Chit: They were waiting near the station.
+
+Task: chat
+User: Rewrite in the past tense: I open the window and look outside.
+Chit: I opened the window and looked outside.
+
+Task: chat
+User: Make the tense consistent: We arrived early and wait by the entrance.
+Chit: We arrived early and waited by the entrance.
+
+Task: chat
+User: Join these ideas with “because”: The path was wet. It had rained overnight.
+Chit: The path was wet because it had rained overnight.
+
+Task: chat
+User: Write one sentence using “although” to connect these ideas: The bus was late. We reached the meeting on time.
+Chit: Although the bus was late, we reached the meeting on time.
+
+Task: chat
+User: Make this a polite request: Send me the notes.
+Chit: Could you please send me the notes?
+
+Task: chat
+User: Correct the punctuation: where did you put the blue folder
+Chit: Where did you put the blue folder?
+
+Task: chat
+User: Fix the agreement: Each of the rooms have a window.
+Chit: Each of the rooms has a window.
+
+Task: chat
+User: Correct the sentence without changing its meaning: The children played outside, and then they eats dinner.
+Chit: The children played outside, and then they ate dinner.
+
+Task: chat
+User: Make this sentence negative: She understands the directions.
+Chit: She does not understand the directions.
+
+Task: chat
+User: Ask a question about the time the shop closes.
+Chit: What time does the shop close?
+
+Task: chat
+User: Combine these into one clear sentence: The lamp was broken. We replaced it yesterday.
+Chit: We replaced the broken lamp yesterday.
+
+Task: chat
+User: Rewrite this sentence in the future tense: The team meets on Monday.
+Chit: The team will meet on Monday.
+
+Task: chat
+User: Correct the article: She borrowed an book from the library.
+Chit: She borrowed a book from the library.
+
+Task: chat
+User: Complete the sentence: Neither the manager nor the assistants ___ available today.
+Chit: Neither the manager nor the assistants are available today.
+
+Task: chat
+User: Turn this command into a question: Please close the door.
+Chit: Could you please close the door?
+
+Task: chat
+User: Correct the preposition: The keys are laying on the counter.
+Chit: The keys are lying on the counter.
+
+Task: chat
+User: Rewrite this comparison clearly: This route is more shorter than the old one.
+Chit: This route is shorter than the old one.
+
+Task: chat
+User: Make the sentence clearer without changing its meaning: After reading the email, the mistake was obvious.
+Chit: After reading the email, I noticed the mistake.
+
+Task: chat
+User: Complete the sentence with a consistent past tense: While Lina cooked, her brother ___ the table.
+Chit: While Lina cooked, her brother set the table.
+
+Task: chat
+User: Change this statement into a question: The guests can enter through the side door.
+Chit: Can the guests enter through the side door?
+
+Task: chat
+User: Correct the sentence: There is several reasons to check the schedule.
+Chit: There are several reasons to check the schedule.
+
+Task: chat
+User: Combine the ideas using “when”: The lights went out. We were eating dinner.
+Chit: The lights went out when we were eating dinner.
+
+Task: chat
+User: Correct the verb and keep the meaning: My sister and I enjoys gardening.
+Chit: My sister and I enjoy gardening.
+
+Task: chat
+User: Make this sentence a question: They will be ready by noon.
+Chit: Will they be ready by noon?
+
+Task: chat
+User: Correct the tense: I have saw that film twice.
+Chit: I have seen that film twice.
+
+Task: chat
+User: Rewrite as one sentence with “if”: Take an umbrella. It may rain.
+Chit: Take an umbrella if it might rain.
+
+Task: chat
+User: Correct the pronoun agreement: A student should bring their notebook to class.
+Chit: A student should bring a notebook to class.
+
+Task: chat
+User: Make this sentence more concise while keeping the meaning: At this point in time, we need to make a decision.
+Chit: We need to decide now.
+
+Task: chat
+User: Turn the sentence into a command: You should save a copy of the file.
+Chit: Save a copy of the file.
+
+Task: chat
+User: Correct the sentence: The recipe includes flour, eggs and it needs milk.
+Chit: The recipe includes flour, eggs, and milk.
+
+Task: chat
+User: Use “before” to combine these: Check the address. Leave the house.
+Chit: Check the address before you leave the house.
+
+Task: chat
+User: Fix the subject–verb agreement: A pair of gloves are in the drawer.
+Chit: A pair of gloves is in the drawer.
+
+Task: chat
+User: Rewrite the sentence as a question: Your package has arrived.
+Chit: Has your package arrived?
+
+Task: chat
+User: Correct the sentence and preserve the meaning: She did not went to the event.
+Chit: She did not go to the event.
+
+Task: chat
+User: Complete the sentence with a suitable conjunction: I brought a jacket ___ the evening might be cool.
+Chit: I brought a jacket because the evening might be cool.
+
+Task: chat
+User: Correct the capitalization and punctuation: on tuesday, we visited the museum
+Chit: On Tuesday, we visited the museum.
+
+Task: chat
+User: Change this sentence to the present tense: The gardener planted three trees.
+Chit: The gardener plants three trees.
+
+Task: chat
+User: Make the request friendly and brief: Give me a minute to check.
+Chit: Please give me a minute to check.
+
+Task: chat
+User: Correct the sentence: The information in these files are confidential.
+Chit: The information in these files is confidential.
+
+Task: chat
+User: Join the clauses with “but”: The room is small. It gets plenty of sunlight.
+Chit: The room is small, but it gets plenty of sunlight.
+
+Task: chat
+User: Make this a yes-or-no question: The library is open today.
+Chit: Is the library open today?
+
+Task: chat
+User: Correct the sentence: We discussed about the new schedule.
+Chit: We discussed the new schedule.
+
+Task: chat
+User: Write a sentence in the past tense about a train arriving late.
+Chit: The train arrived late because of heavy rain.
+
+Task: chat
+User: Rewrite this as a clear instruction: It would be good if the form is signed on page two.
+Chit: Please sign the form on page two.
+
+Task: chat
+User: Correct the sentence: If I will have time, I will call you.
+Chit: If I have time, I will call you.
+
+Task: chat
+User: Make this statement negative: The package arrived before noon.
+Chit: The package did not arrive before noon.
+
+Task: chat
+User: Correct the sentence: She speaks English fluent.
+Chit: She speaks English fluently.
+
+Task: chat
+User: Use “after” to combine these ideas: We ate lunch. We finished the walk.
+Chit: We ate lunch after we finished the walk.
+
+Task: chat
+User: Correct the agreement: The quality of these apples are excellent.
+Chit: The quality of these apples is excellent.
+
+Task: chat
+User: Turn this into a question beginning with “Why”: The printer stopped because the paper tray was empty.
+Chit: Why did the printer stop?
+
+Task: chat
+User: Rewrite without changing the meaning: The meeting was postponed due to the fact that the speaker was ill.
+Chit: The meeting was postponed because the speaker was ill.
+
+Task: chat
+User: Complete the sentence: By the time we reached the platform, the train ___ already left.
+Chit: By the time we reached the platform, the train had already left.
+
+Task: chat
+User: Correct the sentence: There were less people at the market today.
+Chit: There were fewer people at the market today.
+
+Task: chat
+User: Make a question using “how long” about the trip.
+Chit: How long will the trip take?
+
+Task: chat
+User: Rewrite in the future tense: The flowers bloom in April.
+Chit: The flowers will bloom in April.
+
+Task: chat
+User: Correct the sentence: Please explain me the final step.
+Chit: Please explain the final step to me.
+
+Task: chat
+User: Combine these with “so”: The road was closed. We took another route.
+Chit: The road was closed, so we took another route.
+
+Task: chat
+User: Correct the sentence: One of my friends live nearby.
+Chit: One of my friends lives nearby.
+
+Task: chat
+User: Change this into a polite question: You can review my draft.
+Chit: Could you please review my draft?
+
+Task: chat
+User: Correct the sentence: I look forward to meet your team.
+Chit: I look forward to meeting your team.
+
+Task: chat
+User: Write one sentence with a clear subject about a child learning to ride a bicycle.
+Chit: The child learned to ride a bicycle in the park.
+
+Task: chat
+User: Correct the sentence: Either the blue folder or the green folders belongs in this cabinet.
+Chit: Either the blue folder or the green folders belong in this cabinet.
+
+Task: chat
+User: Change this question to a statement: Have they booked a table?
+Chit: They have booked a table.
+
+Task: chat
+User: Make the sentence more direct: I am writing to let you know that the office will be closed.
+Chit: The office will be closed.
+
+Task: chat
+User: Correct the sentence: The dog wagged it's tail.
+Chit: The dog wagged its tail.
+
+Task: chat
+User: Join these with “unless”: We should leave now. You want to miss the opening.
+Chit: We should leave now unless you want to miss the opening.
+
+Task: chat
+User: Correct the sentence: The report, along with its charts, need revision.
+Chit: The report, along with its charts, needs revision.
+
+Task: chat
+User: Ask a question about where the visitors should wait.
+Chit: Where should the visitors wait?
+
+Task: chat
+User: Change to the present perfect: I finish the assignment.
+Chit: I have finished the assignment.
+
+Task: chat
+User: Correct the sentence: She is interested on learning pottery.
+Chit: She is interested in learning pottery.
+
+Task: chat
+User: Make the sentence a clear warning: Do not touch the wet paint.
+Chit: Do not touch the wet paint; it has not dried yet.
+
+Task: chat
+User: Correct the sentence: The staff are meeting in the conference room, and the manager is joining later.
+Chit: The staff are meeting in the conference room, and the manager is joining later.
+
+Task: chat
+User: Rewrite the sentence as a question beginning with “When”: The workshop starts at ten.
+Chit: When does the workshop start?
+
+Task: chat
+User: Correct the sentence: I have lived here since five years.
+Chit: I have lived here for five years.
+
+Task: chat
+User: Join these clauses with “while”: I washed the dishes. Arjun dried them.
+Chit: I washed the dishes while Arjun dried them.
+
+Task: chat
+User: Correct the sentence: The news are encouraging.
+Chit: The news is encouraging.
+
+Task: chat
+User: Change this command to a polite request: Wait outside.
+Chit: Could you please wait outside?
