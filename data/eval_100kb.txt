@@ -1,0 +1,2596 @@
+Task: chat
+Known memory:
+- (none)
+User: A team labels 52 boxes each hour for 10 hours. How many boxes are labeled?
+Chit: 52 × 10 = 520.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| D | 147 | in 7 days |
+| Local | 505 | in 10 days |
+| East | 166 | in 6 days |
+Which option arrives soonest?
+Chit: East arrives soonest, in 6 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to review a chapter. I have 25 minutes; I do not know the exact deadline. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 20 minutes to work on its most time-sensitive part, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am worried; I forgot one item on a checklist. Help me choose one small next step without deciding for me.
+Chit: That sounds difficult, especially since I forgot one item on a checklist. It makes sense that you feel worried. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: one sensor disagreed with the other three. State one limitation and a useful follow-up.
+Chit: A limitation is that this observation may not represent other samples or conditions. Repeat the analysis on independent data and document the uncertainty.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the draft to a neighborhood meeting.
+Chit: Could you please move the draft to a neighborhood meeting?
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: Can Chit reliably know a fact missing from its weights and request context?
+Chit: No. It should acknowledge when evidence is missing instead of presenting an unsupported guess as fact.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the reference.
+- [ ] Check the room booking.
+- [x] Check the survey.
+- [x] Check the notes.
+- [x] Check the first-aid kit.
+- [x] Check the sign-in sheet.
+- [x] Check the safety label.
+Chit: Still open: check the room booking.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me change a reservation. The information about the confirmation number is missing; what should you clarify first?
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A box held 132 labels. The team used 57. How many remain?
+Chit: 132 - 57 = 75.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| North | 584 | in 4 days |
+| D | 401 | in 1 days |
+| East | 49 | in 10 days |
+Which option is most expensive?
+Chit: North is most expensive at 584.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to organize a study group. I have 60 minutes; I need to avoid making noise. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 6 minutes to choose a finishable outcome and gather what you need. Spend about 44 minutes to work on its most time-sensitive part, then take a 4-minute pause. Leave 6 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am self-conscious. The difficult part is that I have to explain a delay. Acknowledge the feeling and leave room for my own view.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the deployment data comes from another region. Identify a possible source of leakage.
+Chit: Check whether duplicates, shared sources, or features derived after the outcome crossed the train-validation boundary. The observation alone does not show that leakage occurred.
+
+Task: chat
+Known memory:
+- (none)
+User: Correct the grammar without changing the meaning: The reports was ready before lunch.
+Chit: The reports were ready before lunch.
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: What is SQLite's role in memory storage?
+Chit: SQLite is the canonical store for memory records; embeddings and search indexes are rebuildable aids.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the ingredients.
+- [x] Check the spare key.
+- [x] Check the consent form.
+- [ ] Check the meeting link.
+- [x] Check the address.
+- [x] Check the receipt.
+- [x] Check the backup.
+Chit: Still open: check the ingredients; check the meeting link.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to repair a device, but I have not provided the correct location. Ask the most useful question before recommending an action.
+Chit: What is the correct location for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 772 meal kits and delivered 693. How many kits remain?
+Chit: 772 - 693 = 79; 79 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 170 | in 11 days |
+| D | 217 | in 14 days |
+| North | 135 | in 7 days |
+Which option arrives soonest?
+Chit: North arrives soonest, in 7 days.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to clean a shared kitchen in 60 minutes, and I have only 20 minutes. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 6 minutes to choose a finishable outcome and gather what you need. Spend about 44 minutes to make a first pass at it, then take a 4-minute pause. Leave 6 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I received feedback that was hard to hear. I feel nervous. Please listen before suggesting fixes.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: one neighborhood supplied most of the survey responses. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Anika checked the consent form before leaving.
+Chit: Did Anika check the consent form before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: What does the inference manager control?
+Chit: It bounds FIFO admission and serializes model execution on the device worker.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [ ] Check the sign-in sheet.
+- [ ] Check the first-aid kit.
+- [ ] Check the sample.
+- [ ] Check the safety label.
+- [ ] Check the address.
+- [x] Check the translation.
+Chit: Still open: check the sign-in sheet; check the first-aid kit; check the sample; check the safety label; check the address.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the correct location. I need to change a reservation; ask one focused question.
+Chit: What is the correct location for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Asha logged 834 observations on Monday and 47 on Tuesday. How many were logged in all?
+Chit: 834 + 47 = 881.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| B | 514 | in 15 days |
+| A | 312 | in 9 days |
+| East | 293 | in 12 days |
+Which option is most expensive?
+Chit: B is most expensive at 514.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to set up a reading corner. I have 30 minutes; I need to avoid making noise. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 3 minutes to choose a finishable outcome and gather what you need. Spend about 22 minutes to work on its most time-sensitive part, then take a 2-minute pause. Leave 3 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am drained. The difficult part is that I feel behind compared with my classmates. Offer practical support without minimizing the difficulty.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the two compared groups differ in age. Separate what is observed from what is not established.
+Chit: Observed: the two compared groups differ in age. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Correct the grammar without changing the meaning: I can’t find nothing in the drawer.
+Chit: I can't find anything in the drawer.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: What does saving a Chit memory do?
+Chit: It stores an experience for possible recall during inference; saving it does not retrain the model.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the route.
+- [ ] Check the receipt.
+- [ ] Check the first-aid kit.
+- [x] Check the checklist.
+- [ ] Check the bus pass.
+- [x] Check the backup.
+Chit: Still open: check the receipt; check the first-aid kit; check the bus pass.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me choose a delivery option. The information about the time zone is missing; what should you clarify first?
+Chit: What is the time zone for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 1064 meal kits and delivered 994. How many kits remain?
+Chit: 1064 - 994 = 70; 70 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 85 | in 6 days |
+| A | 104 | in 14 days |
+| B | 376 | in 1 days |
+Which option is most expensive?
+Chit: B is most expensive at 376.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to organize a study group in 50 minutes, and I can ask one person for help. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 5 minutes to choose a finishable outcome and gather what you need. Spend about 37 minutes to complete one small part of the task, then take a 3-minute pause. Leave 5 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am confused. The difficult part is that I need to try again after a failed attempt. Keep your reply calm and brief.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that a benchmark score rose but human ratings fell. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the delivery time to the school garden.
+Chit: Could you please move the delivery time to the school garden?
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: What is SQLite's role in memory storage?
+Chit: SQLite is the canonical store for memory records; embeddings and search indexes are rebuildable aids.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [x] Check the medicine list.
+- [ ] Check the water bottle.
+- [x] Check the reference.
+- [ ] Check the address.
+- [ ] Check the image caption.
+- [x] Check the checklist.
+Chit: Still open: check the water bottle; check the address; check the image caption.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me publish a report. The information about the person's preference is missing; what should you clarify first?
+Chit: What is the person's preference for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Calculate 24 times 9 and give only the equation.
+Chit: 24 × 9 = 216.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 147 | in 2 days |
+| Local | 638 | in 14 days |
+| B | 46 | in 3 days |
+Which option costs the least?
+Chit: B costs the least at 46.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to pack for a two-day trip. I have 25 minutes; I have 45 minutes before the next appointment. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 20 minutes to work on its most time-sensitive part, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am disappointed; I am worried about an unfamiliar appointment. Do not assume you know why I feel this way.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that the reported score has no confidence interval. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the survey to the food pantry.
+Chit: Could you please move the survey to the food pantry?
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: What does the Golden Set measure?
+Chit: It is a frozen set of behavioral cases for reviewing candidate responses, and its examples must stay out of training.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the feedback.
+- [x] Check the receipt.
+- [x] Check the charger.
+- [ ] Check the permission form.
+- [x] Check the sample.
+- [ ] Check the image caption.
+- [x] Check the safety label.
+Chit: Still open: check the permission form; check the image caption.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to interpret a survey, but I have not provided the estimate source. Ask the most useful question before recommending an action.
+Chit: What is the estimate source for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 139 meal kits and delivered 32. How many kits remain?
+Chit: 139 - 32 = 107; 107 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| North | 330 | in 14 days |
+| A | 566 | in 13 days |
+| C | 373 | in 1 days |
+Which option is most expensive?
+Chit: A is most expensive at 566.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to prepare a simple dinner. I have 75 minutes; I have to leave by 5 pm.
+Chit: Use about 7 minutes to choose a finishable outcome and gather what you need. Spend about 56 minutes to make a first pass at it, then take a 5-minute pause. Leave 7 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am restless. The difficult part is that I feel behind compared with my classmates. Do not assume you know why I feel this way.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, the test set was used while choosing model settings. Separate what is observed from what is not established.
+Chit: Observed: the test set was used while choosing model settings. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the address to the language club.
+Chit: Could you please move the address to the language club?
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: Does a passing next-token evaluation prove good conversational behavior?
+Chit: No. Loss evaluation measures prediction on held-out text; behavioral quality needs separate reviewed cases.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the reference.
+- [x] Check the appointment.
+- [x] Check the room booking.
+- [ ] Check the receipt.
+Chit: Still open: check the receipt.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to publish a report, but I have not provided the confirmation number. Ask the most useful question before recommending an action.
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A route is 602 kilometers long and 125 kilometers are complete. How much is left?
+Chit: 602 - 125 = 477.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 580 | in 14 days |
+| C | 605 | in 4 days |
+| A | 318 | in 11 days |
+Which option arrives soonest?
+Chit: C arrives soonest, in 4 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me plan a garden bed; I have 40 minutes and I have 45 minutes before the next appointment. Give a realistic sequence and a stopping point.
+Chit: Use about 4 minutes to choose a finishable outcome and gather what you need. Spend about 30 minutes to make a first pass at it, then take a 2-minute pause. Leave 4 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am stuck. The difficult part is that I received feedback that was hard to hear. Keep your reply calm and brief.
+Chit: That sounds difficult, especially since I received feedback that was hard to hear. It makes sense that you feel stuck. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: one sensor disagreed with the other three. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Sofia checked the survey before leaving.
+Chit: Did Sofia check the survey before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: What does the Golden Set measure?
+Chit: It is a frozen set of behavioral cases for reviewing candidate responses, and its examples must stay out of training.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the survey.
+- [ ] Check the room booking.
+- [ ] Check the safety label.
+- [x] Check the appointment.
+Chit: Still open: check the room booking; check the safety label.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the confirmation number. I need to send a payment; ask one focused question.
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 750 meal kits and delivered 561. How many kits remain?
+Chit: 750 - 561 = 189; 189 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 313 | in 14 days |
+| D | 417 | in 10 days |
+| North | 187 | in 15 days |
+Which option is most expensive?
+Chit: D is most expensive at 417.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me prepare art materials; I have 25 minutes and I need to keep the cost low. Give a realistic sequence and a stopping point.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 20 minutes to complete one small part of the task, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am discouraged. The difficult part is that I need to ask for help. Do not assume you know why I feel this way.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the new method was tested only on familiar examples. Identify a possible source of leakage.
+Chit: Check whether duplicates, shared sources, or features derived after the outcome crossed the train-validation boundary. The observation alone does not show that leakage occurred.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the delivery time to a boat shed.
+Chit: Could you please move the delivery time to a boat shed?
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: What is the purpose of causal attention?
+Chit: It lets each position use preceding context without attending to future tokens.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the ingredients.
+- [x] Check the permission form.
+- [x] Check the appointment.
+- [ ] Check the checklist.
+- [ ] Check the medicine list.
+- [ ] Check the map.
+Chit: Still open: check the checklist; check the medicine list; check the map.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me change a reservation. The information about the estimate source is missing; what should you clarify first?
+Chit: What is the estimate source for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A route is 858 kilometers long and 109 kilometers are complete. How much is left?
+Chit: 858 - 109 = 749.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 518 | in 8 days |
+| Express | 570 | in 7 days |
+| Local | 49 | in 5 days |
+Which option arrives soonest?
+Chit: Local arrives soonest, in 5 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me prepare for a difficult conversation; I have 15 minutes and I need to preserve the original notes. Give a realistic sequence and a stopping point.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 10 minutes to make a first pass at it, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I feel nervous because I need to ask for help. Help me choose one small next step without deciding for me.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the deployment data comes from another region. What information would you ask for before interpreting this?
+Chit: I would ask how the sample was collected, what changed between conditions, and whether records were checked for duplicates. Those details affect the interpretation.
+
+Task: chat
+Known memory:
+- (none)
+User: Choose 'fewer' or 'less': We have ___ time to review today.
+Chit: We have less time to review today.
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: Can adding a lesson by itself promote a checkpoint?
+Chit: No. Adding knowledge queues material; training and the explicit evaluation and promotion workflow are separate steps.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [ ] Check the bus pass.
+- [ ] Check the notes.
+- [x] Check the safety label.
+- [ ] Check the ingredients.
+- [x] Check the water bottle.
+- [x] Check the backup.
+Chit: Still open: check the bus pass; check the notes; check the ingredients.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 1074 meal kits and delivered 937. How many kits remain?
+Chit: 1074 - 937 = 137; 137 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| B | 224 | in 7 days |
+| D | 624 | in 11 days |
+| Local | 610 | in 6 days |
+Which option is most expensive?
+Chit: D is most expensive at 624.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me repair a loose shelf; I have 90 minutes and I have 45 minutes before the next appointment. Give a realistic sequence and a stopping point.
+Chit: Use about 9 minutes to choose a finishable outcome and gather what you need. Spend about 66 minutes to prepare the materials and begin, then take a 6-minute pause. Leave 9 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I am carrying more responsibility than usual. I feel embarrassed. Do not assume you know why I feel this way.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that the measured average shifted after two outliers were removed. Please reason cautiously: How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Priya checked the survey before leaving.
+Chit: Did Priya check the survey before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: What is the difference between memory and model weights?
+Chit: Memory is stored experience available for retrieval; weights are the learned state changed by training.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [x] Check the delivery time.
+- [ ] Check the notes.
+- [x] Check the bus pass.
+- [x] Check the map.
+- [x] Check the appointment.
+- [x] Check the draft.
+- [x] Check the permission form.
+Chit: Still open: check the notes.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the time zone. I need to share a file; ask one focused question.
+Chit: What is the time zone for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A box held 248 labels. The team used 80. How many remain?
+Chit: 248 - 80 = 168.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| East | 60 | in 15 days |
+| A | 347 | in 14 days |
+| D | 43 | in 9 days |
+Which option costs the least?
+Chit: D costs the least at 43.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to pack for a two-day trip. I have 20 minutes; I can use only the items already listed.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 15 minutes to complete one small part of the task, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am discouraged but hopeful. The difficult part is that I am waiting for news that matters to me. Help me put the situation into words.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that a benchmark score rose but human ratings fell. Name one possible concern and the next check.
+Chit: Verify the records and measurement process, then repeat the comparison with a pre-specified analysis on data not used for tuning.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Arun prepares the image caption before leaving.
+Chit: Arun prepared the image caption before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: What does saving a Chit memory do?
+Chit: It stores an experience for possible recall during inference; saving it does not retrain the model.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [ ] Check the image caption.
+- [x] Check the receipt.
+- [x] Check the survey.
+- [x] Check the map.
+- [ ] Check the first-aid kit.
+Chit: Still open: check the image caption; check the first-aid kit.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to schedule a visit, but I have not provided the person's preference. Ask the most useful question before recommending an action.
+Chit: What is the person's preference for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 127 plus 166? Show the result in one line.
+Chit: 127 + 166 = 293.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 100 | in 14 days |
+| North | 227 | in 3 days |
+| A | 222 | in 10 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: Local is cheapest at 100, but it arrives in 14 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to water balcony plants in 50 minutes, and I am new to this task. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 5 minutes to choose a finishable outcome and gather what you need. Spend about 37 minutes to prepare the materials and begin, then take a 3-minute pause. Leave 5 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am tired. The difficult part is that I am worried about an unfamiliar appointment. Offer one gentle question, not a list of instructions.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the two compared groups differ in age. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the charger to the pottery room.
+Chit: Could you please move the charger to the pottery room?
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: How does source-aware training avoid crossing file boundaries?
+Chit: It selects a source for each sequence and samples that sequence's window only within that file.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the appointment.
+- [ ] Check the budget.
+- [ ] Check the permission form.
+- [x] Check the sample.
+- [x] Check the reference.
+- [x] Check the charger.
+Chit: Still open: check the budget; check the permission form.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the person's preference. I need to interpret a survey; ask one focused question.
+Chit: What is the person's preference for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 378 minus 15?
+Chit: 378 - 15 = 363.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| North | 220 | in 12 days |
+| Local | 54 | in 7 days |
+| A | 167 | in 6 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: Local is cheapest at 54, but it arrives in 7 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to back up family photos in 50 minutes, and I have already tried the obvious first step. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 5 minutes to choose a finishable outcome and gather what you need. Spend about 37 minutes to complete one small part of the task, then take a 3-minute pause. Leave 5 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: someone did not reply to my message. I feel frustrated. Help me put the situation into words.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the two compared groups differ in age. State one limitation and a useful follow-up.
+Chit: A limitation is that this observation may not represent other samples or conditions. Repeat the analysis on independent data and document the uncertainty.
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: What does a Chit session provide?
+Chit: A session stores conversation turns and can provide recent context to later chat requests.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [ ] Check the map.
+- [x] Check the draft.
+- [x] Check the room booking.
+- [ ] Check the bus pass.
+- [ ] Check the translation.
+- [ ] Check the appointment.
+- [ ] Check the permission form.
+Chit: Still open: check the map; check the bus pass; check the translation; check the appointment; check the permission form.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me send a payment. The information about the confirmation number is missing; what should you clarify first?
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 912 meal kits and delivered 769. How many kits remain?
+Chit: 912 - 769 = 143; 143 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 538 | in 7 days |
+| Local | 498 | in 8 days |
+| Express | 639 | in 13 days |
+Which option costs the least?
+Chit: Local costs the least at 498.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to sort receipts in 45 minutes, and I share the space with two other people. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 4 minutes to choose a finishable outcome and gather what you need. Spend about 34 minutes to work on its most time-sensitive part, then take a 3-minute pause. Leave 4 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I feel overwhelmed because I am learning a skill more slowly than I expected. Offer practical support without minimizing the difficulty.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that the result changed when the random seed changed. Give one cautious explanation without claiming it is proven.
+Chit: Verify the records and measurement process, then repeat the comparison with a pre-specified analysis on data not used for tuning.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the backup to the music room.
+Chit: Could you please move the backup to the music room?
+
+Task: chat
+Known memory:
+- (none)
+User: Does a passing next-token evaluation prove good conversational behavior?
+Chit: No. Loss evaluation measures prediction on held-out text; behavioral quality needs separate reviewed cases.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the medicine list.
+- [x] Check the receipt.
+- [ ] Check the bus pass.
+- [x] Check the sign-in sheet.
+- [x] Check the consent form.
+Chit: Still open: check the bus pass.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to share a file, but I have not provided the confirmation number. Ask the most useful question before recommending an action.
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: There are 38 trays with 11 cups on each. How many cups are there?
+Chit: 38 × 11 = 418.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| A | 584 | in 4 days |
+| Express | 407 | in 7 days |
+| East | 199 | in 3 days |
+Which option is most expensive?
+Chit: A is most expensive at 584.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to plan a garden bed in 30 minutes, and I have only 20 minutes. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 3 minutes to choose a finishable outcome and gather what you need. Spend about 22 minutes to work on its most time-sensitive part, then take a 2-minute pause. Leave 3 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: a conversation did not go the way I hoped. I feel confused. Offer one gentle question, not a list of instructions.
+Chit: That sounds difficult, especially since a conversation did not go the way I hoped. It makes sense that you feel confused. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, one group received a different instruction. Name one possible concern and the next check.
+Chit: Treat this as a signal to investigate, not as proof. Inspect the split, sample composition, and any changes made between runs.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Dev carries the receipt before leaving.
+Chit: Dev carried the receipt before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: Can Chit reliably know a fact missing from its weights and request context?
+Chit: No. It should acknowledge when evidence is missing instead of presenting an unsupported guess as fact.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the backup.
+- [ ] Check the image caption.
+- [x] Check the appointment.
+- [ ] Check the spare key.
+Chit: Still open: check the backup; check the image caption; check the spare key.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the relevant safety constraint. I need to share a file; ask one focused question.
+Chit: What is the relevant safety constraint for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 719 meal kits and delivered 537. How many kits remain?
+Chit: 719 - 537 = 182; 182 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 82 | in 5 days |
+| East | 22 | in 7 days |
+| North | 352 | in 13 days |
+Which option is most expensive?
+Chit: North is most expensive at 352.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to learn ten new words in 90 minutes, and I need to preserve the original notes. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 9 minutes to choose a finishable outcome and gather what you need. Spend about 66 minutes to complete one small part of the task, then take a 6-minute pause. Leave 9 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am restless; I am returning to a task after a long break. Acknowledge the feeling and leave room for my own view.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that a short trial found no clear change. Please reason cautiously: State one limitation and a useful follow-up.
+Chit: A limitation is that this observation may not represent other samples or conditions. Repeat the analysis on independent data and document the uncertainty.
+
+Task: chat
+Known memory:
+- (none)
+User: Correct the grammar without changing the meaning: The instructions are more clearer now.
+Chit: The instructions are clearer now.
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: When does taught knowledge change Chit's weights?
+Chit: Knowledge is queued first; the weights change only when a training job updates them.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the charger.
+- [x] Check the map.
+- [ ] Check the room booking.
+- [x] Check the water bottle.
+- [x] Check the meeting link.
+Chit: Still open: check the room booking.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to schedule a visit, but I have not provided the estimate source. Ask the most useful question before recommending an action.
+Chit: What is the estimate source for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 52 plus 45? Show the result in one line.
+Chit: 52 + 45 = 97.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| D | 552 | in 8 days |
+| North | 45 | in 3 days |
+| Local | 499 | in 6 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: North is cheapest at 45, but it arrives in 3 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare art materials in 40 minutes, and the weather may change. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 4 minutes to choose a finishable outcome and gather what you need. Spend about 30 minutes to work on its most time-sensitive part, then take a 2-minute pause. Leave 4 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I feel uncertain because I feel behind compared with my classmates. Offer one gentle question, not a list of instructions.
+Chit: That sounds difficult, especially since I feel behind compared with my classmates. It makes sense that you feel uncertain. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, some participants skipped the final question. State one limitation and a useful follow-up.
+Chit: A limitation is that this observation may not represent other samples or conditions. Repeat the analysis on independent data and document the uncertainty.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Eli checked the receipt before leaving.
+Chit: Did Eli check the receipt before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the charger.
+- [ ] Check the consent form.
+- [ ] Check the appointment.
+- [ ] Check the meeting link.
+- [x] Check the draft.
+- [ ] Check the map.
+- [ ] Check the notes.
+Chit: Still open: check the charger; check the consent form; check the appointment; check the meeting link; check the map; check the notes.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me share a file. The information about the confirmation number is missing; what should you clarify first?
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Calculate 53 times 4 and give only the equation.
+Chit: 53 × 4 = 212.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 298 | in 15 days |
+| East | 557 | in 11 days |
+| North | 497 | in 9 days |
+Which option arrives soonest?
+Chit: North arrives soonest, in 9 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me label storage boxes; I have 75 minutes and I can ask one person for help. Give a realistic sequence and a stopping point.
+Chit: Use about 7 minutes to choose a finishable outcome and gather what you need. Spend about 56 minutes to prepare the materials and begin, then take a 5-minute pause. Leave 7 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I have to make a choice with incomplete information. I feel embarrassed. Keep your reply calm and brief.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, a single run gave a promising result. Separate what is observed from what is not established.
+Chit: Observed: a single run gave a promising result. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Arun checks the survey before leaving.
+Chit: Arun checked the survey before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [ ] Check the spare key.
+- [ ] Check the feedback.
+- [ ] Check the receipt.
+- [x] Check the charger.
+- [x] Check the map.
+Chit: Still open: check the spare key; check the feedback; check the receipt.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to schedule a visit, but I have not provided the relevant safety constraint. Ask the most useful question before recommending an action.
+Chit: What is the relevant safety constraint for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 710 meal kits and delivered 620. How many kits remain?
+Chit: 710 - 620 = 90; 90 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 315 | in 3 days |
+| C | 584 | in 1 days |
+| North | 485 | in 9 days |
+Which option arrives soonest?
+Chit: C arrives soonest, in 1 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to prepare a simple dinner. I have 15 minutes; I have limited energy today. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 10 minutes to make a first pass at it, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I am returning to a task after a long break. I feel uneasy. Help me put the situation into words.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, validation loss rose while training loss fell. State one limitation and a useful follow-up.
+Chit: A limitation is that this observation may not represent other samples or conditions. Repeat the analysis on independent data and document the uncertainty.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to passive voice: Noor repaired the radio.
+Chit: The radio was repaired by Noor.
+
+Task: chat
+Known memory:
+- (none)
+User: What does a Chit session provide?
+Chit: A session stores conversation turns and can provide recent context to later chat requests.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [ ] Check the delivery time.
+- [ ] Check the ingredients.
+- [ ] Check the translation.
+- [ ] Check the water bottle.
+- [x] Check the appointment.
+- [ ] Check the charger.
+Chit: Still open: check the delivery time; check the ingredients; check the translation; check the water bottle; check the charger.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare a meal, but I have not provided the correct location. Ask the most useful question before recommending an action.
+Chit: What is the correct location for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 871 meal kits and delivered 867. How many kits remain?
+Chit: 871 - 867 = 4; 4 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 337 | in 14 days |
+| Local | 387 | in 9 days |
+| A | 573 | in 12 days |
+Which option costs the least?
+Chit: Express costs the least at 337.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to prepare questions for a doctor. I have 15 minutes; I can use only the items already listed.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 10 minutes to complete one small part of the task, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am pressured. The difficult part is that I have a quiet day and feel disconnected. Please listen before suggesting fixes.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that the new method was tested only on familiar examples. Please reason cautiously: Identify a possible source of leakage.
+Chit: Check whether duplicates, shared sources, or features derived after the outcome crossed the train-validation boundary. The observation alone does not show that leakage occurred.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Eli checked the safety label before leaving.
+Chit: Did Eli check the safety label before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: What does a Chit session provide?
+Chit: A session stores conversation turns and can provide recent context to later chat requests.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [x] Check the reference.
+- [ ] Check the appointment.
+- [ ] Check the water bottle.
+- [ ] Check the charger.
+- [ ] Check the map.
+Chit: Still open: check the appointment; check the water bottle; check the charger; check the map.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare a meal, but I have not provided the intended recipient. Ask the most useful question before recommending an action.
+Chit: What is the intended recipient for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Calculate 73 times 29 and give only the equation.
+Chit: 73 × 29 = 2117.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 425 | in 3 days |
+| C | 473 | in 12 days |
+| D | 483 | in 10 days |
+Which option costs the least?
+Chit: Express costs the least at 425.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me water balcony plants; I have 90 minutes and I can postpone one part until tomorrow. Give a realistic sequence and a stopping point.
+Chit: Use about 9 minutes to choose a finishable outcome and gather what you need. Spend about 66 minutes to make a first pass at it, then take a 6-minute pause. Leave 9 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am pressured. The difficult part is that I have a quiet day and feel disconnected. Acknowledge the feeling and leave room for my own view.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, some participants skipped the final question. Identify a possible source of leakage.
+Chit: Check whether duplicates, shared sources, or features derived after the outcome crossed the train-validation boundary. The observation alone does not show that leakage occurred.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Robin checked the translation before leaving.
+Chit: Did Robin check the translation before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: Can Chit reliably know a fact missing from its weights and request context?
+Chit: No. It should acknowledge when evidence is missing instead of presenting an unsupported guess as fact.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the survey.
+- [x] Check the draft.
+- [ ] Check the address.
+- [x] Check the safety label.
+- [ ] Check the sign-in sheet.
+- [x] Check the receipt.
+- [x] Check the sample.
+Chit: Still open: check the survey; check the address; check the sign-in sheet.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to change a reservation, but I have not provided the confirmation number. Ask the most useful question before recommending an action.
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 647 meal kits and delivered 512. How many kits remain?
+Chit: 647 - 512 = 135; 135 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 163 | in 8 days |
+| Express | 107 | in 1 days |
+| North | 502 | in 14 days |
+Which option arrives soonest?
+Chit: Express arrives soonest, in 1 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to prepare a class demonstration. I have 35 minutes; I have 35 minutes and need one short break. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 3 minutes to choose a finishable outcome and gather what you need. Spend about 27 minutes to prepare the materials and begin, then take a 2-minute pause. Leave 3 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am drained; I received feedback that was hard to hear. Help me choose one small next step without deciding for me.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the reported score has no confidence interval. Give one cautious explanation without claiming it is proven.
+Chit: That observation alone does not establish a cause. Check the data source, comparison conditions, and whether the pattern holds on an independent sample.
+
+Task: chat
+Known memory:
+- (none)
+User: Correct the grammar without changing the meaning: She don't know where the spare key is.
+Chit: She doesn't know where the spare key is.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: What does a Chit session provide?
+Chit: A session stores conversation turns and can provide recent context to later chat requests.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the checklist.
+- [ ] Check the notes.
+- [ ] Check the sign-in sheet.
+- [ ] Check the draft.
+- [ ] Check the charger.
+- [ ] Check the water bottle.
+Chit: Still open: check the notes; check the sign-in sheet; check the draft; check the charger; check the water bottle.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare a meal, but I have not provided the person's preference. Ask the most useful question before recommending an action.
+Chit: What is the person's preference for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: There are 46 trays with 5 cups on each. How many cups are there?
+Chit: 46 × 5 = 230.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| A | 598 | in 4 days |
+| Express | 170 | in 13 days |
+| East | 120 | in 1 days |
+Which option is most expensive?
+Chit: A is most expensive at 598.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare a class demonstration in 20 minutes, and I am new to this task. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 15 minutes to prepare the materials and begin, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am embarrassed. The difficult part is that I am worried about an unfamiliar appointment. Offer practical support without minimizing the difficulty.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that the two compared groups differ in age. Name one possible concern and the next check.
+Chit: Treat this as a signal to investigate, not as proof. Inspect the split, sample composition, and any changes made between runs.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the room booking to a community kitchen.
+Chit: Could you please move the room booking to a community kitchen?
+
+Task: chat
+Known memory:
+- (none)
+User: Does the admin UI send its API key to browser JavaScript?
+Chit: No. The server-side UI proxy keeps the API key and adds it when forwarding allowed requests.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [ ] Check the appointment.
+- [ ] Check the receipt.
+- [x] Check the backup.
+- [x] Check the notes.
+- [x] Check the translation.
+- [ ] Check the survey.
+- [ ] Check the medicine list.
+Chit: Still open: check the appointment; check the receipt; check the survey; check the medicine list.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to send a payment, but I have not provided the correct location. Ask the most useful question before recommending an action.
+Chit: What is the correct location for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Calculate 84 times 22 and give only the equation.
+Chit: 84 × 22 = 1848.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| North | 554 | in 11 days |
+| Local | 515 | in 8 days |
+| B | 480 | in 5 days |
+Which option costs the least?
+Chit: B costs the least at 480.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to schedule a volunteer shift in 45 minutes, and I have limited energy today. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 4 minutes to choose a finishable outcome and gather what you need. Spend about 34 minutes to complete one small part of the task, then take a 3-minute pause. Leave 4 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am sad. The difficult part is that I feel behind compared with my classmates. Keep your reply calm and brief.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: some participants skipped the final question. Separate what is observed from what is not established.
+Chit: Observed: some participants skipped the final question. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a polite request: Move the checklist to the bicycle shop.
+Chit: Could you please move the checklist to the bicycle shop?
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: Can adding a lesson by itself promote a checkpoint?
+Chit: No. Adding knowledge queues material; training and the explicit evaluation and promotion workflow are separate steps.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [ ] Check the charger.
+- [x] Check the appointment.
+- [x] Check the survey.
+- [x] Check the safety label.
+- [x] Check the backup.
+- [x] Check the feedback.
+Chit: Still open: check the charger.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the available budget. I need to send a payment; ask one focused question.
+Chit: What is the available budget for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: There are 23 trays with 12 cups on each. How many cups are there?
+Chit: 23 × 12 = 276.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 82 | in 2 days |
+| A | 558 | in 7 days |
+| C | 551 | in 15 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: Express is cheapest at 82, but it arrives in 2 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare a job application in 60 minutes, and I can use only the items already listed. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 6 minutes to choose a finishable outcome and gather what you need. Spend about 44 minutes to work on its most time-sensitive part, then take a 4-minute pause. Leave 6 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am drained; I forgot one item on a checklist. Offer practical support without minimizing the difficulty.
+Chit: That sounds difficult, especially since I forgot one item on a checklist. It makes sense that you feel drained. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: a model improved after the prompt was changed. Separate what is observed from what is not established.
+Chit: Observed: a model improved after the prompt was changed. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Nadia checks the water bottle before leaving.
+Chit: Nadia checked the water bottle before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: How does source-aware training avoid crossing file boundaries?
+Chit: It selects a source for each sequence and samples that sequence's window only within that file.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the survey.
+- [ ] Check the room booking.
+- [x] Check the backup.
+- [x] Check the permission form.
+- [x] Check the receipt.
+Chit: Still open: check the survey; check the room booking.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to share a file, but I have not provided the required format. Ask the most useful question before recommending an action.
+Chit: What is the required format for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A box held 876 labels. The team used 21. How many remain?
+Chit: 876 - 21 = 855.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| East | 533 | in 8 days |
+| North | 607 | in 6 days |
+| Local | 559 | in 15 days |
+Which option arrives soonest?
+Chit: North arrives soonest, in 6 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me finish a short report; I have 25 minutes and the weather may change. Give a realistic sequence and a stopping point.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 20 minutes to work on its most time-sensitive part, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I feel behind compared with my classmates. I feel pressured. Keep your reply calm and brief.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the sample contains several duplicate records. Give one cautious explanation without claiming it is proven.
+Chit: Verify the records and measurement process, then repeat the comparison with a pre-specified analysis on data not used for tuning.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Maya checked the checklist before leaving.
+Chit: Did Maya check the checklist before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: What is the purpose of causal attention?
+Chit: It lets each position use preceding context without attending to future tokens.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the first-aid kit.
+- [ ] Check the feedback.
+- [x] Check the receipt.
+- [ ] Check the backup.
+- [ ] Check the checklist.
+- [x] Check the map.
+Chit: Still open: check the feedback; check the backup; check the checklist.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the relevant safety constraint. I need to publish a report; ask one focused question.
+Chit: What is the relevant safety constraint for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: There are 984 chairs in one hall and 171 in another. Give the combined count.
+Chit: 984 + 171 = 1155.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 456 | in 7 days |
+| North | 270 | in 12 days |
+| C | 354 | in 14 days |
+Which option arrives soonest?
+Chit: Local arrives soonest, in 7 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me check a bicycle; I have 75 minutes and I have limited energy today. Give a realistic sequence and a stopping point.
+Chit: Use about 7 minutes to choose a finishable outcome and gather what you need. Spend about 56 minutes to complete one small part of the task, then take a 5-minute pause. Leave 7 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am tired; I received feedback that was hard to hear. Offer one gentle question, not a list of instructions.
+Chit: That sounds difficult, especially since I received feedback that was hard to hear. It makes sense that you feel tired. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, validation loss rose while training loss fell. Give one cautious explanation without claiming it is proven.
+Chit: That observation alone does not establish a cause. Check the data source, comparison conditions, and whether the pattern holds on an independent sample.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Dara reviews the medicine list before leaving.
+Chit: Dara reviewed the medicine list before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Can adding a lesson by itself promote a checkpoint?
+Chit: No. Adding knowledge queues material; training and the explicit evaluation and promotion workflow are separate steps.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the draft.
+- [x] Check the budget.
+- [ ] Check the first-aid kit.
+- [x] Check the sign-in sheet.
+- [x] Check the consent form.
+Chit: Still open: check the first-aid kit.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me send a payment. The information about the available budget is missing; what should you clarify first?
+Chit: What is the available budget for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 474 plus 58? Show the result in one line.
+Chit: 474 + 58 = 532.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 523 | in 4 days |
+| B | 95 | in 1 days |
+| East | 413 | in 7 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: B is cheapest at 95, but it arrives in 1 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to prepare art materials. I have 25 minutes; I have already tried the obvious first step.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 20 minutes to make a first pass at it, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I am worried about an unfamiliar appointment. I feel embarrassed. Do not assume you know why I feel this way.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: For a data review: the measured average shifted after two outliers were removed. Give one cautious explanation without claiming it is proven.
+Chit: Verify the records and measurement process, then repeat the comparison with a pre-specified analysis on data not used for tuning.
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: What is the purpose of causal attention?
+Chit: It lets each position use preceding context without attending to future tokens.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [x] Check the first-aid kit.
+- [ ] Check the spare key.
+- [ ] Check the receipt.
+- [ ] Check the safety label.
+Chit: Still open: check the spare key; check the receipt; check the safety label.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the intended recipient. I need to send a payment; ask one focused question.
+Chit: What is the intended recipient for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: There are 197 chairs in one hall and 109 in another. Give the combined count.
+Chit: 197 + 109 = 306.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| East | 356 | in 11 days |
+| A | 244 | in 10 days |
+| North | 172 | in 15 days |
+Which option is most expensive?
+Chit: East is most expensive at 356.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me make a flexible plan to plan a low-cost lunch. I have 15 minutes; I have only 20 minutes. Include a brief pause and say what can wait if time runs short.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 10 minutes to work on its most time-sensitive part, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I am returning to a task after a long break. I feel discouraged but hopeful. Help me put the situation into words.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that one group received a different instruction. Please reason cautiously: Identify a possible source of leakage.
+Chit: Check whether duplicates, shared sources, or features derived after the outcome crossed the train-validation boundary. The observation alone does not show that leakage occurred.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Theo records the map before leaving.
+Chit: Theo recorded the map before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: Does the admin UI send its API key to browser JavaScript?
+Chit: No. The server-side UI proxy keeps the API key and adds it when forwarding allowed requests.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the consent form.
+- [ ] Check the sign-in sheet.
+- [ ] Check the safety label.
+- [x] Check the appointment.
+- [ ] Check the draft.
+- [ ] Check the ingredients.
+- [x] Check the spare key.
+Chit: Still open: check the consent form; check the sign-in sheet; check the safety label; check the draft; check the ingredients.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the required format. I need to submit a form; ask one focused question.
+Chit: What is the required format for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 439 plus 4? Show the result in one line.
+Chit: 439 + 4 = 443.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Local | 179 | in 7 days |
+| C | 57 | in 13 days |
+| North | 504 | in 15 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: C is cheapest at 57, but it arrives in 13 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to label storage boxes in 50 minutes, and I need the plan to be accessible. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 5 minutes to choose a finishable outcome and gather what you need. Spend about 37 minutes to work on its most time-sensitive part, then take a 3-minute pause. Leave 5 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I have to explain a delay. I feel lonely. Help me put the situation into words.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that the measured average shifted after two outliers were removed. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Use only the project facts in the question: What is Chit's default tokenizer?
+Chit: The default tokenizer maps each UTF-8 byte to one token.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the charger.
+- [x] Check the map.
+- [x] Check the water bottle.
+- [x] Check the medicine list.
+- [ ] Check the checklist.
+Chit: Still open: check the checklist.
+
+Task: chat
+Known memory:
+- (none)
+User: What is 674 plus 223? Show the result in one line.
+Chit: 674 + 223 = 897.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 606 | in 7 days |
+| D | 106 | in 13 days |
+| B | 615 | in 3 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: D is cheapest at 106, but it arrives in 13 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to pack for a two-day trip in 35 minutes, and I have 45 minutes before the next appointment. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 3 minutes to choose a finishable outcome and gather what you need. Spend about 27 minutes to complete one small part of the task, then take a 2-minute pause. Leave 3 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am tired. The difficult part is that a conversation did not go the way I hoped. Keep your reply calm and brief.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that the measured average shifted after two outliers were removed. Please reason cautiously: Give one cautious explanation without claiming it is proven.
+Chit: Verify the records and measurement process, then repeat the comparison with a pre-specified analysis on data not used for tuning.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to passive voice: Asha repaired the water filter.
+Chit: The water filter was repaired by Asha.
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [ ] Check the checklist.
+- [ ] Check the room booking.
+- [ ] Check the sign-in sheet.
+- [ ] Check the feedback.
+- [x] Check the receipt.
+- [ ] Check the translation.
+- [ ] Check the address.
+Chit: Still open: check the checklist; check the room booking; check the sign-in sheet; check the feedback; check the translation; check the address.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the estimate source. I need to send a payment; ask one focused question.
+Chit: What is the estimate source for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A team labels 26 boxes each hour for 5 hours. How many boxes are labeled?
+Chit: 26 × 5 = 130.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| B | 626 | in 1 days |
+| North | 294 | in 2 days |
+| A | 77 | in 3 days |
+Which option is most expensive?
+Chit: B is most expensive at 626.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to review a chapter in 90 minutes, and I need to avoid making noise. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 9 minutes to choose a finishable outcome and gather what you need. Spend about 66 minutes to prepare the materials and begin, then take a 6-minute pause. Leave 9 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am embarrassed; I need to try again after a failed attempt. Do not assume you know why I feel this way.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, the labels were created by one reviewer. How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Marta carries the delivery time before leaving.
+Chit: Marta carried the delivery time before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: When does taught knowledge change Chit's weights?
+Chit: Knowledge is queued first; the weights change only when a training job updates them.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [ ] Check the image caption.
+- [ ] Check the spare key.
+- [ ] Check the sign-in sheet.
+- [x] Check the route.
+Chit: Still open: check the image caption; check the spare key; check the sign-in sheet.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the required deadline. I need to interpret a survey; ask one focused question.
+Chit: What is the required deadline for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Asha logged 600 observations on Monday and 32 on Tuesday. How many were logged in all?
+Chit: 600 + 32 = 632.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| D | 161 | in 9 days |
+| B | 85 | in 1 days |
+| A | 525 | in 6 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: B is cheapest at 85, but it arrives in 1 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to prepare for a difficult conversation in 50 minutes, and I have no printer. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 5 minutes to choose a finishable outcome and gather what you need. Spend about 37 minutes to prepare the materials and begin, then take a 3-minute pause. Leave 5 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am hesitant; I am learning a skill more slowly than I expected. Keep your reply calm and brief.
+Chit: That sounds difficult, especially since I am learning a skill more slowly than I expected. It makes sense that you feel hesitant. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that the sample contains several duplicate records. What comparison would make the conclusion more credible?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Correct the grammar without changing the meaning: The team completed the survey, they shared the results.
+Chit: The team completed the survey, and they shared the results.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [ ] Check the room booking.
+- [x] Check the charger.
+- [ ] Check the survey.
+- [x] Check the water bottle.
+- [x] Check the spare key.
+- [ ] Check the translation.
+Chit: Still open: check the room booking; check the survey; check the translation.
+
+Task: chat
+Known memory:
+- (none)
+User: A route is 468 kilometers long and 101 kilometers are complete. How much is left?
+Chit: 468 - 101 = 367.
+
+Task: chat
+Known memory:
+- (none)
+User: I copied these offers into a table. Use the values as written:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 175 | in 12 days |
+| B | 213 | in 2 days |
+| Express | 440 | in 10 days |
+Which option arrives soonest?
+Chit: B arrives soonest, in 2 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me prepare a job application; I have 30 minutes and I can ask one person for help. Give a realistic sequence and a stopping point.
+Chit: Use about 3 minutes to choose a finishable outcome and gather what you need. Spend about 22 minutes to make a first pass at it, then take a 2-minute pause. Leave 3 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I feel nervous because someone did not reply to my message. Help me put the situation into words.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: Change to passive voice: Tara repaired the folding chair.
+Chit: The folding chair was repaired by Tara.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: What happens when a candidate checkpoint is promoted?
+Chit: The promoted checkpoint can be loaded by the runtime that serves model requests.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the appointment.
+- [ ] Check the sample.
+- [x] Check the checklist.
+- [x] Check the room booking.
+- [x] Check the draft.
+Chit: Still open: check the appointment; check the sample.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to schedule a visit, but I have not provided the available budget. Ask the most useful question before recommending an action.
+Chit: What is the available budget for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 1089 meal kits and delivered 858. How many kits remain?
+Chit: 1089 - 858 = 231; 231 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 189 | in 8 days |
+| East | 494 | in 6 days |
+| C | 390 | in 14 days |
+Which is cheapest, and what trade-off should I check before choosing?
+Chit: Express is cheapest at 189, but it arrives in 8 days. Check whether that timing meets your need.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to prepare questions for a doctor. I have 40 minutes; I do not know the exact deadline.
+Chit: Use about 4 minutes to choose a finishable outcome and gather what you need. Spend about 30 minutes to complete one small part of the task, then take a 2-minute pause. Leave 4 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am frustrated. The difficult part is that I am waiting for news that matters to me. Offer practical support without minimizing the difficulty.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that a benchmark score rose but human ratings fell. Please reason cautiously: Identify a possible source of leakage.
+Chit: Check whether duplicates, shared sources, or features derived after the outcome crossed the train-validation boundary. The observation alone does not show that leakage occurred.
+
+Task: chat
+Known memory:
+- (none)
+User: What is SQLite's role in memory storage?
+Chit: SQLite is the canonical store for memory records; embeddings and search indexes are rebuildable aids.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the delivery time.
+- [ ] Check the bus pass.
+- [x] Check the medicine list.
+- [ ] Check the safety label.
+- [x] Check the route.
+Chit: Still open: check the delivery time; check the bus pass; check the safety label.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me prepare a meal. The information about the confirmation number is missing; what should you clarify first?
+Chit: What is the confirmation number for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: There are 587 chairs in one hall and 211 in another. Give the combined count.
+Chit: 587 + 211 = 798.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| A | 352 | in 1 days |
+| D | 107 | in 11 days |
+| B | 464 | in 9 days |
+Which option costs the least?
+Chit: D costs the least at 107.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to prepare a class demonstration. I have 15 minutes; I am new to this task.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 10 minutes to complete one small part of the task, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: a conversation did not go the way I hoped. I feel overwhelmed. Offer practical support without minimizing the difficulty.
+Chit: I'm sorry this is weighing on you. You do not have to solve everything at once. Would listening or thinking through one small next step feel more useful?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that validation loss rose while training loss fell. Please reason cautiously: How could I check whether this result generalizes?
+Chit: Test on an independent sample that represents the intended use, keep the comparison conditions fixed, and report uncertainty. This observation alone does not establish generalization.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Dara checked the survey before leaving.
+Chit: Did Dara check the survey before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: Does the admin UI send its API key to browser JavaScript?
+Chit: No. The server-side UI proxy keeps the API key and adds it when forwarding allowed requests.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the draft.
+- [x] Check the feedback.
+- [ ] Check the budget.
+- [x] Check the bus pass.
+- [x] Check the sign-in sheet.
+Chit: Still open: check the budget.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to repair a device, but I have not provided the person's preference. Ask the most useful question before recommending an action.
+Chit: What is the person's preference for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A box held 186 labels. The team used 149. How many remain?
+Chit: 186 - 149 = 37.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 491 | in 13 days |
+| North | 501 | in 7 days |
+| East | 134 | in 6 days |
+Which option arrives soonest?
+Chit: East arrives soonest, in 6 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me organize a study group; I have 25 minutes and I have 35 minutes and need one short break. Give a realistic sequence and a stopping point.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 20 minutes to prepare the materials and begin, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Today I am drained. The difficult part is that I need to try again after a failed attempt. Help me put the situation into words.
+Chit: That sounds difficult, especially since I need to try again after a failed attempt. It makes sense that you feel drained. What part would you like me to listen to first?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that some participants skipped the final question. Please reason cautiously: Separate what is observed from what is not established.
+Chit: Observed: some participants skipped the final question. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Imani carries the delivery time before leaving.
+Chit: Imani carried the delivery time before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Be precise about the distinction: When does taught knowledge change Chit's weights?
+Chit: Knowledge is queued first; the weights change only when a training job updates them.
+
+Task: chat
+Known memory:
+- (none)
+User: Read the checklist and list only the unfinished actions:
+- [x] Check the spare key.
+- [x] Check the appointment.
+- [ ] Check the feedback.
+- [ ] Check the map.
+Chit: Still open: check the feedback; check the map.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me send a payment. The information about the relevant safety constraint is missing; what should you clarify first?
+Chit: What is the relevant safety constraint for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: Calculate 52 times 17 and give only the equation.
+Chit: 52 × 17 = 884.
+
+Task: chat
+Known memory:
+- (none)
+User: Here are three options; do not infer anything beyond the table:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| C | 433 | in 14 days |
+| East | 539 | in 4 days |
+| Local | 533 | in 11 days |
+Which option arrives soonest?
+Chit: East arrives soonest, in 4 days.
+
+Task: chat
+Known memory:
+- (none)
+User: Make a short plan to sort receipts. I have 20 minutes; I can use only the items already listed.
+Chit: Use about 2 minutes to choose a finishable outcome and gather what you need. Spend about 15 minutes to complete one small part of the task, then take a 1-minute pause. Leave 2 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I feel tired because I made a small mistake in front of others. Please listen before suggesting fixes.
+Chit: Thank you for telling me. I can stay with the situation without judging you. What would you like me to understand first?
+
+Task: chat
+Known memory:
+- (none)
+User: I noticed that one group received a different instruction. Please reason cautiously: Separate what is observed from what is not established.
+Chit: Observed: one group received a different instruction. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Rewrite in the past tense: Eli records the delivery time before leaving.
+Chit: Eli recorded the delivery time before leaving.
+
+Task: chat
+Known memory:
+- (none)
+User: Answer from Chit's documented architecture: What does the Golden Set measure?
+Chit: It is a frozen set of behavioral cases for reviewing candidate responses, and its examples must stay out of training.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [ ] Check the address.
+- [x] Check the translation.
+- [ ] Check the sign-in sheet.
+- [x] Check the image caption.
+- [ ] Check the route.
+- [x] Check the room booking.
+Chit: Still open: check the address; check the sign-in sheet; check the route.
+
+Task: chat
+Known memory:
+- (none)
+User: Do not guess the person's preference. I need to share a file; ask one focused question.
+Chit: What is the person's preference for this task? That detail could change the safest or most useful next step.
+
+Task: chat
+Known memory:
+- (none)
+User: A group prepared 868 meal kits and delivered 775. How many kits remain?
+Chit: 868 - 775 = 93; 93 kits remain.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| D | 115 | in 3 days |
+| B | 468 | in 1 days |
+| A | 239 | in 2 days |
+Which option costs the least?
+Chit: D costs the least at 115.
+
+Task: chat
+Known memory:
+- (none)
+User: Help me sort receipts; I have 90 minutes and I can postpone one part until tomorrow. Give a realistic sequence and a stopping point.
+Chit: Use about 9 minutes to choose a finishable outcome and gather what you need. Spend about 66 minutes to prepare the materials and begin, then take a 6-minute pause. Leave 9 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: I want to share something without being judged: I am waiting for news that matters to me. I feel discouraged but hopeful. Acknowledge the feeling and leave room for my own view.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: A colleague reports that the two compared groups differ in age. Separate what is observed from what is not established.
+Chit: Observed: the two compared groups differ in age. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: Change to a yes-or-no question: Dara checked the appointment before leaving.
+Chit: Did Dara check the appointment before leaving?
+
+Task: chat
+Known memory:
+- (none)
+User: Use the check marks as the source of truth. Name the tasks still open:
+- [x] Check the appointment.
+- [x] Check the receipt.
+- [x] Check the draft.
+- [x] Check the safety label.
+- [ ] Check the route.
+- [x] Check the meeting link.
+Chit: Still open: check the route.
+
+Task: chat
+Known memory:
+- (none)
+User: A route is 180 kilometers long and 29 kilometers are complete. How much is left?
+Chit: 180 - 29 = 151.
+
+Task: chat
+Known memory:
+- (none)
+User: Compare these choices:
+| Option | Price | Delivery |
+| --- | ---: | --- |
+| Express | 201 | in 10 days |
+| Local | 491 | in 12 days |
+| B | 351 | in 7 days |
+Which option is most expensive?
+Chit: Local is most expensive at 491.
+
+Task: chat
+Known memory:
+- (none)
+User: I need to pack for a two-day trip in 35 minutes, and I can use only the items already listed. Suggest one first step and two follow-ups without overloading the schedule.
+Chit: Use about 3 minutes to choose a finishable outcome and gather what you need. Spend about 27 minutes to make a first pass at it, then take a 2-minute pause. Leave 3 minutes to check progress and write down one next step. Given your constraint, keep optional work for later.
+
+Task: chat
+Known memory:
+- (none)
+User: Could you respond gently? I am embarrassed; I have a quiet day and feel disconnected. Keep your reply calm and brief.
+Chit: That sounds like a lot to carry. It makes sense to take this one step at a time. Would it help to talk through what you need in this moment?
+
+Task: chat
+Known memory:
+- (none)
+User: In a small analysis, one sensor disagreed with the other three. Separate what is observed from what is not established.
+Chit: Observed: one sensor disagreed with the other three. Not established: why it happened or whether it will recur. Check the data and comparison conditions before drawing a causal conclusion.
+
+Task: chat
+Known memory:
+- (none)
+User: What remains on this checklist? Do not repeat completed items.
+- [x] Check the medicine list.
+- [x] Check the appointment.
+- [x] Check the reference.
+- [x] Check the ingredients.
+- [ ] Check the checklist.
+- [ ] Check the permission form.
+Chit: Still open: check the checklist; check the permission form.
+
+Task: chat
+Known memory:
+- (none)
+User: Calculate 58 times 29 and give only the equation.
+Chit: 58 × 29 = 1682.
