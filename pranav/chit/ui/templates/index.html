@@ -173,10 +173,14 @@
                 <section class="view hidden" id="view-explorer">
                     <div class="card">
                         <h2>API reference</h2>
-                        <p class="sub">A plain-language guide to what each capability does, when to use it, what information it needs, and what changes. The guided screens handle routine tasks; the technical request editor is for advanced users.</p>
-                        <div class="endpoint-list" id="endpointList"></div>
-                        <article id="apiGuide" class="api-guide" aria-live="polite"><h3>Choose a capability</h3><p>Each guide explains its purpose, the information needed, and whether it reads or changes your Chit data.</p></article>
-                        <details class="advanced-request"><summary>Open the technical request editor</summary>
+                        <p class="sub">Choose what you want to do. Chit will explain the request fields, show the JSON being built, and translate the response into simple language.</p>
+                        <div class="endpoint-list" id="endpointList" aria-label="API operations"></div>
+                        <article id="apiGuide" class="api-guide" aria-live="polite"><h3>Choose an operation</h3><p>Start by choosing an operation above. You will get a field-by-field guide and an editable request.</p></article>
+                        <section id="apiBuilder" class="api-builder hidden" aria-live="polite"></section>
+                        <div class="api-actions"><button class="primary" id="runGuidedApi" type="button" disabled>Send this request</button><span class="status" id="guidedApiStatus" aria-live="polite">Choose an operation to begin.</span></div>
+                        <section id="apiResponseExplainer" class="api-response hidden" aria-live="polite"></section>
+                        <details class="advanced-request"><summary>Advanced: edit the raw JSON request</summary>
+                        <p class="sub">Use this when you already understand the route and JSON. The guided builder above is safer for learning. The server checks the route, but field rules still come from the API.</p>
                         <div class="grid">
                             <div class="field">
                                 <label for="apiMethod">Method</label>
@@ -203,8 +207,13 @@
                             <button class="primary" id="runApi">Send API request</button>
                             <span class="status" id="apiStatus"></span>
                         </div>
-                        <h3>API response</h3>
-                        <pre class="result" id="apiResult">Choose a route above.</pre>
+                        <h3>Raw API response</h3>
+                        <pre class="result" id="apiResult">Choose an operation above.</pre>
+                        </details>
+                        <details class="full-guide-disclosure"><summary>Read the complete Chit API guide</summary>
+                            <p class="sub">This is the full maintained guide, including setup recipes and troubleshooting.</p>
+                            <div class="actions api-guide-tools"><label for="apiGuideSearch">Find a topic</label><input id="apiGuideSearch" type="search" placeholder="For example: temperature, sessions, training"><button class="secondary" id="clearApiGuideSearch" type="button">Clear search</button><span class="status" id="apiGuideStatus" aria-live="polite">Loading guide…</span></div>
+                            <article id="fullApiGuide" class="full-api-guide" aria-live="polite"><p class="status">Loading ChitAPIGuide.md…</p></article>
                         </details>
                     </div>
                 </section>

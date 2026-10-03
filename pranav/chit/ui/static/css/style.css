@@ -372,6 +372,53 @@ button:disabled { cursor: wait; opacity: .65; }
 .api-guide h4 { margin: 0; color: #9cddc4; }
 .api-guide p { margin-bottom: 0; font-size: 13px; }
 .api-guide .api-example { grid-column: 1 / -1; font-size: 12px; }
+.api-builder { display: grid; gap: 14px; margin-top: 16px; }
+.api-builder > h3 { margin: 0; }
+.api-field-group, .request-preview, .api-response { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: #101927; }
+.api-field-group > h4, .request-preview > h4 { margin: 0 0 12px; color: #9cddc4; }
+.api-field { display: grid; gap: 6px; margin: 12px 0; min-width: 0; }
+.api-field label { color: #eff6f4; font-weight: 650; }
+.api-field-help, .api-field small { margin: 0; color: #b6c3d3; font-size: 12px; line-height: 1.5; }
+.api-field input, .api-field select, .api-field textarea { width: 100%; min-width: 0; }
+.api-field textarea { font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.api-nested-fields { min-width: 0; margin: 12px 0; padding: 12px; border: 1px solid #34445a; border-radius: 10px; }
+.api-nested-fields legend, .api-item-fields legend { padding: 0 6px; color: #b6d9ca; font-size: 13px; font-weight: 700; }
+.api-item-fields { margin: 10px 0; padding: 10px; border: 1px dashed #34445a; border-radius: 8px; }
+.request-preview pre, .api-response pre { max-height: 420px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.invalid-json { border-color: #e38d88 !important; box-shadow: 0 0 0 1px #e38d88; }
+.api-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+.api-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.api-response { margin-top: 16px; }
+.api-response h3 { margin-top: 0; }
+.api-response section { margin: 10px 0; padding: 12px; border-radius: 9px; background: #172232; }
+.api-response h4 { margin: 0 0 5px; color: #9cddc4; overflow-wrap: anywhere; }
+.api-response p { color: #c5d0df; }
+.api-response .response-good { color: #9cddc4; }
+.api-response .response-bad { color: #ffb4ad; }
+.api-response details { margin-top: 12px; }
+.api-response summary { cursor: pointer; color: var(--muted); }
+.full-guide-disclosure { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.full-guide-disclosure summary { color: var(--muted); cursor: pointer; }
+.full-api-guide { max-height: 72vh; overflow: auto; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #101927; color: #e4eaf2; line-height: 1.65; }
+.full-api-guide h1, .full-api-guide h2, .full-api-guide h3, .full-api-guide h4 { color: #eff6f4; line-height: 1.3; }
+.full-api-guide h1 { font-size: 25px; }
+.full-api-guide h2 { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 21px; }
+.full-api-guide h3 { margin-top: 24px; font-size: 17px; }
+.full-api-guide p, .full-api-guide li { color: #c5d0df; }
+.full-api-guide a { color: #9cddc4; }
+.full-api-guide code, .full-api-guide pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.full-api-guide code { padding: 2px 5px; border-radius: 5px; background: #202d3d; color: #d9e9ff; }
+.full-api-guide pre { overflow: auto; padding: 14px; border: 1px solid #263247; border-radius: 10px; background: #0a1019; white-space: pre; }
+.full-api-guide pre code { padding: 0; background: transparent; }
+.guide-table-wrap { overflow-x: auto; margin: 14px 0; }
+.full-api-guide table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.full-api-guide th, .full-api-guide td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.full-api-guide th { background: #1c2a3a; color: #eff6f4; }
+.full-api-guide td { color: #c5d0df; }
+.full-api-guide [hidden] { display: none !important; }
+.api-guide-tools input { min-width: 220px; flex: 1; }
+.route-lookup { margin-top: 18px; }
+.route-lookup summary { color: var(--muted); cursor: pointer; }
 .endpoint[aria-pressed="true"] { border-color: var(--accent); background: #1b2d32; }
 .advanced-request { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
 .advanced-request summary { color: var(--muted); cursor: pointer; font-size: 13px; }

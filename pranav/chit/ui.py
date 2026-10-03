@@ -27,7 +27,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -161,6 +161,18 @@ def _page(templates: Jinja2Templates, request: Request) -> HTMLResponse:
 @app.get("/")
 async def index(request: Request):
     return _page(templates, request)
+
+
+@app.get("/_ui/api-guide", response_class=PlainTextResponse)
+async def api_guide():
+    """Serve the maintained plain-English API guide inside the console."""
+    repository_root = Path(__file__).resolve().parents[2]
+    guide_path = repository_root / "ChitAPIGuide.md"
+    if not guide_path.is_file():
+        guide_path = repository_root / "docs" / "ChitAPIGuide.md"
+    if not guide_path.is_file():
+        raise HTTPException(status_code=404, detail="The plain-English API guide is not installed.")
+    return PlainTextResponse(guide_path.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
 
 async def _get_key_session(request: Request) -> tuple[str, KeySession] | None:
