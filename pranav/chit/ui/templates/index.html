@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="dark light">
     <title>Chit Console</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="{{ base_path }}/static/css/style.css">
     <style>
         .tooltip-icon {
             display: inline-flex;
@@ -73,9 +72,9 @@
                 <section class="view" id="view-chat">
                     <div class="card">
                         <h2>Talk with Chit</h2>
-                        <p class="sub">A continuing conversation uses the API’s saved session and memory context.</p>
+                        <p class="sub">A continuing conversation uses the API’s saved session and memory context. Replies are shown as plain text.</p>
                         <div class="field smallarea">
-                            <label for="chatInput">Your message (Markdown is supported)</label>
+                        <label for="chatInput">Your message</label>
                             <textarea id="chatInput" placeholder="What would you like to work through?"></textarea>
                         </div>
                         <div class="actions">
@@ -236,29 +235,6 @@
                         </div>
                     </div>
                     
-                    <div class="card" style="margin-top: 24px;">
-                        <h2>Fair Fight: Model Comparison</h2>
-                        <p class="sub">Compare two versions of the model side-by-side to see which one performs better.</p>
-                        <div class="field">
-                            <label for="fightPrompt">Test Prompt</label>
-                            <div class="actions">
-                                <textarea id="fightPrompt" placeholder="Enter a prompt to test both models..." style="flex:1"></textarea>
-                                <button class="primary" id="runFight">Fight!</button>
-                            </div>
-                        </div>
-                        <div class="fair-fight" id="fightGrid">
-                            <div class="fight-panel">
-                                <div class="fight-header"><b>Model A (Champion)</b></div>
-                                <div class="fight-result" id="result-a">Waiting for fight...</div>
-                                <button class="promote-btn" id="promote-a">Promote this model</button>
-                            </div>
-                            <div class="fight-panel">
-                                <div class="fight-header"><b>Model B (Candidate)</b></div>
-                                <div class="fight-result" id="result-b">Waiting for fight...</div>
-                                <button class="promote-btn" id="promote-b">Promote this model</button>
-                            </div>
-                        </div>
-                    </div>
                 </section>
 
 
@@ -286,9 +262,9 @@
 
     <script>
         // These will be injected by the server
-        const BASE = "{{ base_path }}";
-        const ROUTES = {{ routes | safe }};
+        const BASE = {{ base_path | tojson }};
+        const ROUTES = {{ routes | tojson }};
     </script>
-    <script src="/static/js/app.js"></script>
+    <script src="{{ base_path }}/static/js/app.js"></script>
 </body>
 </html>

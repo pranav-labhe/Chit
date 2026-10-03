@@ -132,13 +132,11 @@ def _page(templates: Jinja2Templates, request: Request) -> HTMLResponse:
         {key: value for key, value in route.items() if key != "pattern"}
         for route in ROUTES
     ], ensure_ascii=False).replace("</", "<\\/")
-    base = json.dumps(BASE_PATH)
-    
     return templates.TemplateResponse(
         request=request,
         name="index.html", 
         context={
-            "base_path": base,
+            "base_path": BASE_PATH,
             "routes": json.loads(route_data)
         }
     )
@@ -310,38 +308,6 @@ async def get_ui_train_jobs(request: Request):
     except Exception as e:
         log.error(f"Error fetching jobs: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve jobs")
-
-@app.get("/_ui/model/compare")
-async def get_ui_model_compare(request: Request, model_a: str = "latest", model_b: str = "baseline"):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            res_a = await client.get(f"{API_BASE}/model", headers={"X-API-Key": session[1].api_key})
-            res_b = await client.get(f"{API_BASE}/model", headers={"X-API-Key": session[1].api_key})
-            
-            return {
-                "model_a": res_a.json(),
-                "model_b": res_b.json(),
-                "comparison_id": secrets.token_hex(8)
-            }
-    except Exception as e:
-        log.error(f"Comparison error: {e}")
-        raise HTTPException(status_code=500, detail="Could not fetch models for comparison")
-
-@app.post("/_ui/model/promote")
-async def promote_model(request: Request, payload: dict):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    checkpoint_path = payload.get("checkpoint")
-    if not checkpoint_path:
-        raise HTTPException(status_code=422, detail="Checkpoint path required")
-    
-    return {"status": "promoted", "checkpoint": checkpoint_path}
 
 @app.get("/_ui/knowledge/stats")
 async def get_ui_knowledge_stats(request: Request):
