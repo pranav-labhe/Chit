@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>Chit Console</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--line);
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: bold;
+            cursor: help;
+            margin-left: 6px;
+            vertical-align: middle;
+            transition: background 0.2s;
+        }
+        .tooltip-icon:hover {
+            background: var(--accent);
+            color: #000;
+        }
+        .tooltip-text {
+            position: absolute;
+            background: #1a2535;
+            color: #e9edf5;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.4;
+            max-width: 250px;
+            z-index: 100;
+            border: 1px solid var(--line);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="top">
+            <div class="brand">
+                <div class="mark" id="neuralOrb">चित् </div>
+                <div>
+                    <h1>चित्त · Chit Console</h1>
+                    <p>Browser console for the Chit API</p>
+                </div>
+            </div>
+            <div class="badge" id="connection">Checking server…</div>
+        </header>
+
+        <div class="layout">
+            <nav class="nav" aria-label="Console sections">
+                <small>Workspace</small>
+                <button class="active" data-view="chat">Chat</button>
+                <button data-view="generate">Generate</button>
+                <button data-view="brain">Brain</button>
+                <button data-view="studio">Studio</button>
+                <small>API tools</small>
+                <button data-view="explorer">All API routes</button>
+                <button id="logout" class="hidden">Lock console</button>
+            </nav>
+
+            <main class="main">
+                <section class="view" id="view-chat">
+                    <div class="card">
+                        <h2>Talk with Chit</h2>
+                        <p class="sub">A continuing conversation uses the API’s saved session and memory context.</p>
+                        <div class="field smallarea">
+                            <label for="chatInput">Your message (Markdown is supported)</label>
+                            <textarea id="chatInput" placeholder="What would you like to work through?"></textarea>
+                        </div>
+                        <div class="actions">
+                            <button class="primary" id="sendChat">Send message</button>
+                            <button class="secondary" id="newChat">New conversation</button>
+                            <span class="status" id="chatSession"></span>
+                        </div>
+                        <div class="chatlog" id="chatlog" aria-live="polite"></div>
+                    </div>
+                </section>
+
+                <section class="view hidden" id="view-generate">
+                    <div class="card">
+                        <h2>Generate</h2>
+                        <p class="sub">Ask Chit for a one-shot response or continue a raw text prefix.</p>
+                        <div class="field">
+                            <label for="genPrompt">Prompt / request</label>
+                            <textarea id="genPrompt" placeholder="Write an explanation, solve a problem, or create something…"></textarea>
+                        </div>
+                        <div class="grid">
+                            <div class="field">
+                                <label for="genMode">Mode <span class="tooltip-icon" title="Decides if Chit acts as a helpful assistant with memory or just continues a raw string of text.">i</span></label>
+                                <select id="genMode">
+                                    <option value="assistant">Assistant request (uses memory)</option>
+                                    <option value="continue">Raw text continuation</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="genTokens">Maximum new tokens (1–500) <span class="tooltip-icon" title="The length of the response. For byte models, 1 token = 1 UTF-8 byte.">i</span></label>
+                                <input type="number" id="genTokens" min="1" max="500" value="160">
+                            </div>
+                            <div class="field">
+                                <label for="genTemp">Temperature (0–2) <span class="tooltip-icon" title="Controls randomness. 0 is deterministic; higher values are more creative/random.">i</span></label>
+                                <input type="number" id="genTemp" min="0" max="2" step="0.1" value="0.4">
+                            </div>
+                            <div class="field">
+                                <label for="genTopK">Top K (1–256) <span class="tooltip-icon" title="Limits the model to only consider the top K most likely next tokens.">i</span></label>
+                                <input type="number" id="genTopK" min="1" max="256" value="50">
+                            </div>
+                        </div>
+                        <div class="field smallarea">
+                            <label for="genStop">Optional stop strings (JSON array)</label>
+                            <textarea id="genStop">[]</textarea>
+                        </div>
+                        <div class="actions">
+                            <button class="primary" id="runGenerate">Generate</button>
+                            <span class="status" id="genStatus"></span>
+                        </div>
+                        <h3>Response</h3>
+                        <pre class="result" id="genResult">Your response will appear here.</pre>
+                    </div>
+                </section>
+
+                <section class="view hidden" id="view-brain">
+                    <div class="card">
+                        <h2>My Memory Garden</h2>
+                        <p class="sub">Explore and manage the facts Chit remembers about you and the world.</p>
+                        <div class="field">
+                            <label for="memSearch">Search memories</label>
+                            <div class="actions">
+                                <input id="memSearch" placeholder="Search for a fact..." style="flex:1">
+                                <button class="primary" id="doMemSearch">Search</button>
+                            </div>
+                        </div>
+                        <div class="memory-grid" id="memoryGrid">
+                            <div class="status" style="grid-column: 1/-1; text-align: center; padding: 40px;">Enter a search term to find memories.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="margin-top: 24px;">
+                        <h2>Learning Pipeline</h2>
+                        <p class="sub">Track how new knowledge is being absorbed into Chit's brain.</p>
+                        <div class="pipeline-container" id="knowledgePipeline">
+                            <div class="pipeline-stage">
+                                <div class="stage-icon">📝</div>
+                                <div class="stage-info">
+                                    <span class="stage-label">Pending Lessons</span>
+                                    <span class="stage-desc">New facts queued for training</span>
+                                </div>
+                                <div class="stage-count" id="count-pending">0</div>
+                            </div>
+                            <div class="pipeline-arrow">↓</div>
+                            <div class="pipeline-stage">
+                                <div class="stage-icon">🔥</div>
+                                <div class="stage-info">
+                                    <span class="stage-label">Study in Progress</span>
+                                    <span class="stage-desc">Actively baking weights into the brain</span>
+                                </div>
+                                <div class="stage-count" id="count-training">0</div>
+                            </div>
+                            <div class="pipeline-arrow">↓</div>
+                            <div class="pipeline-stage">
+                                <div class="stage-icon">🧠</div>
+                                <div class="stage-info">
+                                    <span class="stage-label">Baked into Brain</span>
+                                    <span class="stage-desc">Permanent universal knowledge</span>
+                                </div>
+                                <div class="stage-count" id="count-trained">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
+                <section class="view hidden" id="view-explorer">
+                    <div class="card">
+                        <h2>Documented API routes</h2>
+                        <p class="sub">Choose a route to load its example. Replace path IDs and request values as needed. Changes such as delete, training, cancellation, and file splitting ask for confirmation.</p>
+                        <div class="endpoint-list" id="endpointList"></div>
+                        <div class="grid">
+                            <div class="field">
+                                <label for="apiMethod">Method</label>
+                                <select id="apiMethod">
+                                    <option>GET</option>
+                                    <option>POST</option>
+                                    <option>DELETE</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="apiPath">API path</label>
+                                <input id="apiPath" spellcheck="false">
+                            </div>
+                        </div>
+                        <div class="field smallarea">
+                            <label for="apiQuery">Query parameters (JSON object)</label>
+                            <textarea id="apiQuery">{}</textarea>
+                        </div>
+                        <div class="field">
+                            <label for="apiBody">Request body (JSON; ignored for GET)</label>
+                            <textarea id="apiBody">null</textarea>
+                        </div>
+                        <div class="actions">
+                            <button class="primary" id="runApi">Send API request</button>
+                            <span class="status" id="apiStatus"></span>
+                        </div>
+                        <h3>API response</h3>
+                        <pre class="result" id="apiResult">Choose a route above.</pre>
+                    </div>
+                </section>
+
+                <section class="view hidden" id="view-studio">
+                    <div class="card">
+                        <h2>The Neural Forge</h2>
+                        <p class="sub">Evolve the brain by training on new data. Pick a recipe and begin the absorption process.</p>
+                        <div class="forge-grid">
+                            <div class="recipe-list" id="recipeList">
+                                <div class="status">Loading recipes...</div>
+                            </div>
+                            <div class="job-monitor">
+                                <div class="actions">
+                                    <button class="primary" id="startTrain">Start Evolution</button>
+                                    <span class="status" id="trainStatus"></span>
+                                </div>
+                                <div id="jobList" class="job-list">
+                                    <div class="status" style="text-align: center; padding: 20px;">No recent jobs.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="margin-top: 24px;">
+                        <h2>Fair Fight: Model Comparison</h2>
+                        <p class="sub">Compare two versions of the model side-by-side to see which one performs better.</p>
+                        <div class="field">
+                            <label for="fightPrompt">Test Prompt</label>
+                            <div class="actions">
+                                <textarea id="fightPrompt" placeholder="Enter a prompt to test both models..." style="flex:1"></textarea>
+                                <button class="primary" id="runFight">Fight!</button>
+                            </div>
+                        </div>
+                        <div class="fair-fight" id="fightGrid">
+                            <div class="fight-panel">
+                                <div class="fight-header"><b>Model A (Champion)</b></div>
+                                <div class="fight-result" id="result-a">Waiting for fight...</div>
+                                <button class="promote-btn" id="promote-a">Promote this model</button>
+                            </div>
+                            <div class="fight-panel">
+                                <div class="fight-header"><b>Model B (Candidate)</b></div>
+                                <div class="fight-result" id="result-b">Waiting for fight...</div>
+                                <button class="promote-btn" id="promote-b">Promote this model</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
+            </main>
+        </div>
+        <p class="footer">The API key stays on the server after sign-in. This browser receives only a short-lived HttpOnly session cookie.</p>
+    </div>
+
+    <div class="overlay" id="loginOverlay">
+        <form class="login" id="loginForm">
+            <div class="mark">चित् </div>
+            <h2>Unlock Chit Console</h2>
+            <p>Enter the Chit API key. The server will retain it for this browser session and use it for API calls.</p>
+            <div class="field">
+                <label for="apiKey">API key</label>
+                <input type="password" id="apiKey" autocomplete="current-password" required>
+            </div>
+            <div class="actions">
+                <button class="primary" type="submit">Continue</button>
+                <span class="status" id="loginStatus"></span>
+            </div>
+            <p class="footer">Use this page over HTTPS when accessing it outside your own computer.</p>
+        </form>
+    </div>
+
+    <script>
+        // These will be injected by the server
+        const BASE = "{{ base_path }}";
+        const ROUTES = {{ routes | safe }};
+    </script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

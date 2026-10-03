@@ -24,7 +24,11 @@ from urllib.parse import urlsplit
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
+
 
 from . import api as chit_api
 
@@ -102,6 +106,11 @@ class ProxyRequest(BaseModel):
 
 app = FastAPI(title="Chit Browser Console", docs_url=None, redoc_url=None, openapi_url=None)
 
+# Asset serving
+app.mount("/static", StaticFiles(directory="pranav/chit/ui/static"), name="static")
+templates = Jinja2Templates(directory="pranav/chit/ui/templates")
+
+
 
 @app.middleware("http")
 async def accept_console_prefix(request: Request, call_next):
@@ -118,24 +127,27 @@ async def accept_console_prefix(request: Request, call_next):
     return await call_next(request)
 
 
-def _page() -> str:
+def _page(templates: Jinja2Templates, request: Request) -> HTMLResponse:
     route_data = json.dumps([
         {key: value for key, value in route.items() if key != "pattern"}
         for route in ROUTES
     ], ensure_ascii=False).replace("</", "<\\/")
     base = json.dumps(BASE_PATH)
-    return _HTML.replace("__ROUTES__", route_data).replace("__BASE_PATH__", base)
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html", 
+        context={
+            "base_path": base,
+            "routes": json.loads(route_data)
+        }
+    )
+
 
 
 @app.get("/")
-async def index():
-    return Response(_page(), media_type="text/html; charset=utf-8", headers={
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-                                  "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-        "X-Content-Type-Options": "nosniff",
-        "Referrer-Policy": "no-referrer",
-    })
+async def index(request: Request):
+    return _page(templates, request)
 
 
 async def _get_key_session(request: Request) -> tuple[str, KeySession] | None:
@@ -157,6 +169,326 @@ async def _get_key_session(request: Request) -> tuple[str, KeySession] | None:
 async def session_status(request: Request):
     session = await _get_key_session(request)
     return {"authenticated": session is not None}
+
+@app.get("/_ui/session/title")
+async def get_session_title(request: Request, session_id: str):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        # Use the proxy logic to call the actual /sessions/{id} endpoint
+        async with _new_http_client() as client:
+            headers = {"X-API-Key": session[1].api_key}
+            response = await client.get(f"{API_BASE}/sessions/{session_id}", headers=headers)
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Session not found")
+            
+            data = response.json()
+            # Use the existing summary if available, otherwise the first message
+            title = data.get("summary")
+            if not title and data.get("messages"):
+                first_msg = data["messages"][0]["content"]
+                title = (first_msg[:50] + "...") if len(first_msg) > 50 else first_msg
+            
+            return {"title": title or "New Conversation"}
+    except Exception as e:
+        log.error(f"Error generating session title: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate title")
+
+@app.get("/_ui/memories")
+async def get_ui_memories(request: Request, q: str = ""):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            params = {"q": q, "limit": 50}
+            response = await client.get(f"{API_BASE}/memory/search", params=params, headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Memory store unreachable")
+            
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching memories: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve memories")
+
+@app.get("/_ui/knowledge/stats")
+async def get_ui_knowledge_stats(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching knowledge stats: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve stats")
+
+@app.get("/_ui/train/status")
+async def get_ui_train_status(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            # Check /health first to see if a job is running
+            health = await client.get(f"{API_BASE}/health")
+            health_data = health.json()
+            job_id = health_data.get("training_job")
+            
+            if not job_id:
+                return {"state": "idle", "progress": 0, "job_id": None}
+            
+            # Get detailed job status
+            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
+            if job_res.status_code != 200:
+                return {"state": "unknown", "progress": 0, "job_id": job_id}
+            
+            job_data = job_res.json()
+            return {
+                "state": job_data.get("state"),
+                "progress": job_data.get("progress", 0),
+                "job_id": job_id,
+                "step": job_data.get("step"),
+                "max_steps": job_data.get("max_steps")
+            }
+    except Exception as e:
+        log.error(f"Error fetching train status: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve training status")
+
+@app.get("/_ui/train/configs")
+async def get_ui_train_configs(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/train/configs", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Config store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching configs: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve configs")
+
+@app.post("/_ui/train")
+async def post_ui_train(request: Request, payload: dict):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.post(f"{API_BASE}/train", json=payload, headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 202:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+            return response.json()
+    except Exception as e:
+        log.error(f"Error starting training: {e}")
+        raise HTTPException(status_code=500, detail="Could not start training")
+
+@app.get("/_ui/train/jobs")
+async def get_ui_train_jobs(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/train", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Jobs store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching jobs: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve jobs")
+
+@app.get("/_ui/model/compare")
+async def get_ui_model_compare(request: Request, model_a: str = "latest", model_b: str = "baseline"):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            res_a = await client.get(f"{API_BASE}/model", headers={"X-API-Key": session[1].api_key})
+            res_b = await client.get(f"{API_BASE}/model", headers={"X-API-Key": session[1].api_key})
+            
+            return {
+                "model_a": res_a.json(),
+                "model_b": res_b.json(),
+                "comparison_id": secrets.token_hex(8)
+            }
+    except Exception as e:
+        log.error(f"Comparison error: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch models for comparison")
+
+@app.post("/_ui/model/promote")
+async def promote_model(request: Request, payload: dict):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    checkpoint_path = payload.get("checkpoint")
+    if not checkpoint_path:
+        raise HTTPException(status_code=422, detail="Checkpoint path required")
+    
+    return {"status": "promoted", "checkpoint": checkpoint_path}
+
+@app.get("/_ui/knowledge/stats")
+async def get_ui_knowledge_stats(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching knowledge stats: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve stats")
+
+@app.get("/_ui/train/status")
+async def get_ui_train_status(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            # Check /health first to see if a job is running
+            health = await client.get(f"{API_BASE}/health")
+            health_data = health.json()
+            job_id = health_data.get("training_job")
+            
+            if not job_id:
+                return {"state": "idle", "progress": 0, "job_id": None}
+            
+            # Get detailed job status
+            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
+            if job_res.status_code != 200:
+                return {"state": "unknown", "progress": 0, "job_id": job_id}
+            
+            job_data = job_res.json()
+            return {
+                "state": job_data.get("state"),
+                "progress": job_data.get("progress", 0),
+                "job_id": job_id,
+                "step": job_data.get("step"),
+                "max_steps": job_data.get("max_steps")
+            }
+    except Exception as e:
+        log.error(f"Error fetching train status: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve training status")
+
+@app.get("/_ui/train/configs")
+async def get_ui_train_configs(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/train/configs", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Config store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching configs: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve configs")
+
+@app.post("/_ui/train")
+async def post_ui_train(request: Request, payload: dict):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.post(f"{API_BASE}/train", json=payload, headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 202:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+            return response.json()
+    except Exception as e:
+        log.error(f"Error starting training: {e}")
+        raise HTTPException(status_code=500, detail="Could not start training")
+
+@app.get("/_ui/train/jobs")
+async def get_ui_train_jobs(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/train", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Jobs store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching jobs: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve jobs")
+
+@app.get("/_ui/knowledge/stats")
+async def get_ui_knowledge_stats(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
+            return response.json()
+    except Exception as e:
+        log.error(f"Error fetching knowledge stats: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve stats")
+
+@app.get("/_ui/train/status")
+async def get_ui_train_status(request: Request):
+    session = await _get_key_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        async with _new_http_client() as client:
+            # Check /health first to see if a job is running
+            health = await client.get(f"{API_BASE}/health")
+            health_data = health.json()
+            job_id = health_data.get("training_job")
+            
+            if not job_id:
+                return {"state": "idle", "progress": 0, "job_id": None}
+            
+            # Get detailed job status
+            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
+            if job_res.status_code != 200:
+                return {"state": "unknown", "progress": 0, "job_id": job_id}
+            
+            job_data = job_res.json()
+            return {
+                "state": job_data.get("state"),
+                "progress": job_data.get("progress", 0),
+                "job_id": job_id,
+                "step": job_data.get("step"),
+                "max_steps": job_data.get("max_steps")
+            }
+    except Exception as e:
+        log.error(f"Error fetching train status: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve training status")
+
 
 
 @app.post("/_ui/login")
