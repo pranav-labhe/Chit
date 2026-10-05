@@ -1,0 +1,56 @@
+{
+  "seed": 42,
+  "device": "auto",
+  "model": {
+    "vocab_size": 256,
+    "block_size": 256,
+    "n_layer": 6,
+    "n_head": 4,
+    "n_embd": 256,
+    "dropout": 0.1,
+    "position_encoding": "absolute"
+  },
+  "training": {
+    "batch_size": 16,
+    "learning_rate": 0.00005,
+    "weight_decay": 0.1,
+    "max_steps": 4000,
+    "eval_interval": 250,
+    "eval_steps": 16,
+    "checkpoint_interval": 1000,
+    "grad_clip": 1.0,
+    "warmup_steps": 250,
+    "lr_schedule": "cosine",
+    "min_lr_ratio": 0.1
+  },
+  "data": {
+    "train_file": "data/train_1mb.txt",
+    "eval_file": "data/eval_100kb.txt",
+    "sources": [
+      {
+        "path": "data/english_foundation/structural.txt",
+        "weight": 0.10
+      },
+      {
+        "path": "data/english_foundation/lexical_prose.txt",
+        "weight": 0.10
+      },
+      {
+        "path": "data/english_foundation/conversation.txt",
+        "weight": 0.15
+      },
+      {
+        "path": "data/conversation_reasoning/conversation.txt",
+        "weight": 0.15
+      },
+      {
+        "path": "data/knowledge_behavior/knowledge.txt",
+        "weight": 0.25
+      },
+      {
+        "path": "data/knowledge_behavior/behavior.txt",
+        "weight": 0.25
+      }
+    ]
+  }
+}
