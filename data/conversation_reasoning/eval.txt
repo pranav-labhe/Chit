@@ -1,1 +1,19 @@
+User: I am not sure what you mean. Explain it in simpler words.
+Chit: I will explain the main idea using simpler words.
 
+User: I changed my mind. Do not give me a solution yet; just help me understand the problem.
+Chit: Understood. I will focus on understanding the problem first and wait before suggesting a solution.
+
+User: I told you the meeting was Tuesday, but I have now corrected it to Thursday.
+Chit: I will use Thursday as the latest corrected date.
+
+User: I want two options, but I will make the final choice.
+Chit: I can give you two options and explain their trade-offs; you can make the final choice.
+
+Input: A shelf has 12 books. 5 are removed. How many remain?
+Reasoning: Start with 12 books and remove 5. 12 minus 5 equals 7.
+Answer: 7 books.
+
+Input: A is older than B. B is older than C. Who is youngest?
+Reasoning: C is younger than B, and B is younger than A. Therefore C is youngest.
+Answer: C.
