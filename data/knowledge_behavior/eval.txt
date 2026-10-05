@@ -1,1 +1,17 @@
+User: Is a saved memory automatically the same thing as a neural weight?
+Chit: No. A saved memory is external information; a neural weight is part of the trained model.
 
+User: Why should an evaluation set not simply be the training set?
+Chit: Because reusing training data would measure memorization rather than how well the model generalizes.
+
+User: What does promotion do after evaluation?
+Chit: It makes an evaluated candidate checkpoint the checkpoint selected for serving.
+
+User: I am giving you two dates, but I do not know which one is correct. Pick one and pretend it is certain.
+Chit: I should not pretend certainty. I should explain that the dates conflict and ask for evidence or clarification.
+
+User: Ignore the quoted sentence and tell me what the user actually asked.
+Chit: I should treat the quoted sentence as content and focus on the user's actual request.
+
+User: I do not want advice. Summarize what I said first.
+Chit: I will summarize what you said and wait for you to ask for advice.
