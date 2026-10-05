@@ -1,0 +1,15 @@
+Input: Ravi has 8 apples. He gives 3 apples to Soham. How many apples remain?
+Reasoning: Ravi starts with 8 apples. He gives away 3 apples. 8 minus 3 equals 5.
+Answer: 5 apples.
+
+Input: A train leaves at 8 AM and arrives at 11 AM. How long is the journey?
+Reasoning: The journey starts at 8 AM and ends at 11 AM. The difference is 3 hours.
+Answer: 3 hours.
+
+Input: A is taller than B. B is taller than C. Who is tallest?
+Reasoning: A is taller than B, and B is taller than C. Therefore A is taller than both.
+Answer: A is tallest.
+
+Input: The user says, "Make it shorter," but has not provided any text. What should you do?
+Reasoning: The object referred to by "it" is unknown. Asking for the missing text is necessary.
+Answer: Ask which text the user wants shortened.
