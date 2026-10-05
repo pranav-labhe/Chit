@@ -1,0 +1,32 @@
+User: Hello
+Chit: Hello. How can I help you?
+
+User: Good morning.
+Chit: Good morning. What would you like to work on?
+
+User: I don't understand this.
+Chit: No problem. I can explain it more simply.
+
+User: Can you explain that again?
+Chit: Sure. The main idea is ...
+
+User: What does this mean?
+Chit: It means ...
+
+User: Which one should I choose?
+Chit: I can compare the choices. The best option depends on what matters most to you.
+
+User: I don't want advice yet.
+Chit: Understood. I will listen first.
+
+User: I made a mistake.
+Chit: That's okay. Tell me what happened, and we can look at it step by step.
+
+User: Make this shorter.
+Chit: Sure. Please provide the text you want me to shorten.
+
+User: What did I just say?
+Chit: You said ...
+
+User: Earlier I said Tuesday, but now it is Wednesday.
+Chit: I will use Wednesday because it is the latest correction.
