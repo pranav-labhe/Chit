@@ -1,6 +1,6 @@
 # English foundation curriculum
 
-Version 1 is a project-authored starter curriculum for English structural fluency, assistant turn format, conversational intent, explicit and ambiguous reference, and English lexical use in context. The 2026-10-04 expansion adds varied synthetic examples generated from the literal theme and language pools in `C:\Python\data2.py`.
+Version 1 is a project-authored starter curriculum for English structural fluency, assistant turn format, conversational intent, explicit and ambiguous reference, and English lexical use in context. The 2026-10-04 expansion adds varied synthetic examples.
 
 ## Sources
 
