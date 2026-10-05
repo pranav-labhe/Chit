@@ -25,8 +25,16 @@
   },
   "data": {
     "train_file": "data/train_1mb.txt",
-    "eval_file": "data/eval_100kb.txt",
-    "sources": [
+    "eval_file": "data/conversation_reasoning/eval.txt",
+    "sources": [      
+      {
+        "path": "data/train_1mb.txt",
+        "weight": 0.10
+      },
+      {
+        "path": "data/prompts_1mb.txt",
+        "weight": 0.10
+      },
       {
         "path": "data/english_foundation/structural.txt",
         "weight": 0.10
