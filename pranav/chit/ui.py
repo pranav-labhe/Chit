@@ -72,7 +72,7 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Memory", "name": "Search memories", "method": "GET", "path": "/memory/search", "pattern": r"^/memory/search$", "query": {"q": "office", "limit": 5}, "body": None},
     {"category": "Memory", "name": "Delete memory", "method": "DELETE", "path": "/memory/{memory_id}", "pattern": r"^/memory/[A-Za-z0-9_-]+$", "query": {}, "body": None, "confirm": True},
     {"category": "Training & jobs", "name": "List training presets", "method": "GET", "path": "/train/configs", "pattern": r"^/train/configs$", "query": {}, "body": None},
-    {"category": "Training & jobs", "name": "Start training", "method": "POST", "path": "/train", "pattern": r"^/train$", "query": {}, "body": {"config": "chit_assistant_cpu", "init": "scratch"}, "confirm": True},
+    {"category": "Training & jobs", "name": "Start training", "method": "POST", "path": "/train", "pattern": r"^/train$", "query": {}, "body": {"config": "chit_assistant_cpu", "init": "scratch", "promote": False, "force_promote": False}, "confirm": True},
     {"category": "Training & jobs", "name": "List training jobs", "method": "GET", "path": "/train", "pattern": r"^/train$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Read training job", "method": "GET", "path": "/train/{job_id}", "pattern": r"^/train/[0-9a-f]{32}$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Cancel training job", "method": "POST", "path": "/train/{job_id}/cancel", "pattern": r"^/train/[0-9a-f]{32}/cancel$", "query": {}, "body": None, "confirm": True},

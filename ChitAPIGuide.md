@@ -220,8 +220,10 @@ The answer has an `"id"`. **Copy it.** This is your training job. It starts runn
 `GET /train/PASTE_THE_ID_HERE`
 
 Repeat every few seconds. Watch two fields: `"state"` and `"progress"` (0 to 1). When `"state"` is
-`"succeeded"` and `"promoted"` is `true`, the new model is already live. On a small test computer a full
-run took about two minutes; your server may be faster or slower.
+`"succeeded"` means training finished. By default the result remains a candidate and `"promoted"` is
+`false`; use the reviewed promotion workflow to serve it. To explicitly bypass those review gates, send
+`"force_promote": true` with `POST /train`. On a small test computer a full run took about two minutes;
+your server may be faster or slower.
 
 ### Step 5 — Ask the model
 `POST /generate` with this body:
@@ -629,8 +631,9 @@ No matches gives `{"results": []}`.
 ## 6.5 Training
 
 **Training** is how the model learns. It reads `train.txt` over and over and slowly improves. It runs in the
-**background**: you start it, get a job ID, and check on it as often as you like. When it finishes well, the
-new model goes live automatically, with no restart.
+**background**: you start it, get a job ID, and check on it as often as you like. By default it creates a
+candidate and leaves the served model unchanged. Set `force_promote: true` in the `POST /train` body to
+install a successful candidate while bypassing evaluation and reviewer gates; the previous checkpoint is archived.
 
 **Only one training job can run at a time.**
 
@@ -660,7 +663,8 @@ one job by adding them to your request (see the tables below).
 | `init` | `scratch` | `scratch`, `current`, `auto` | Where learning starts. See the box below. |
 | `model` | none | see the model table | Change the model's size for this job only. |
 | `training` | none | see the training table | Change training settings for this job only. |
-| `promote` | `true` | `true` or `false` | `true` = if it succeeds, it becomes the live model. `false` = train and keep the result but do not switch to it. |
+| `promote` | `false` | `true` or `false` | Legacy promotion request. `true` is rejected with `422` unless `force_promote` is also true. |
+| `force_promote` | `false` | `true` or `false` | Explicitly install the successful candidate as the live model, bypassing evaluation and reviewer gates. The prior checkpoint is archived. |
 
 **`init`: where does learning start?**
 
@@ -704,6 +708,12 @@ one job by adding them to your request (see the tables below).
 ```json
 {"config": "chit_strong", "init": "scratch", "training": {"max_steps": 60}}
 ```
+
+**Example (explicitly bypass review and force promotion)**
+```json
+{"config":"chit_strong","init":"scratch","promote":true,"force_promote":true}
+```
+Use this only when accepting an unreviewed candidate. The server still checks that it can load the checkpoint and that its tokenizer family matches the served model.
 
 **Checks done before it starts** (a failed check gives a `422` with a list of reasons):
 - The files `train.txt` and `eval.txt` must exist.

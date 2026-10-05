@@ -563,6 +563,7 @@ class TrainRequest(BaseModel):
     model: ModelOverrides = Field(default_factory=ModelOverrides)
     training: TrainingOverrides = Field(default_factory=TrainingOverrides)
     promote: bool = Field(default=False, description="deprecated; candidates require evaluation and explicit promotion")
+    force_promote: bool = Field(default=False, description="force-install this candidate after successful training, bypassing evaluation and reviewer gates")
 
 
 def _overrides(m: BaseModel) -> dict:
@@ -671,14 +672,65 @@ def _snapshot_init(init: Path | None, job_dir: Path) -> Path | None:
 
 
 def _submit(cfg: ChitConfig, r: TrainRequest, job_id: str, init: Path | None, **kw) -> dict:
-    if r.promote:
+    if r.promote and not r.force_promote:
         raise HTTPException(status_code=422, detail=(
             "direct training promotion is disabled; evaluate the candidate with eval_runner.py "
-            "and promote it with promote_candidate.py after it passes the reviewed gates"))
+            "and promote it with promote_candidate.py after it passes the reviewed gates; "
+            "set force_promote=true to bypass those gates"))
     try:
-        return get_jobs().submit(cfg, promote=False, job_id=job_id, init_checkpoint=init, **kw)
+        callback = kw.pop("after_success", None)
+        metadata = dict(kw.pop("metadata", {}) or {})
+        metadata["force_promote"] = r.force_promote
+        if r.force_promote:
+            def after_success(snapshot: dict) -> None:
+                _force_promote_candidate(snapshot)
+                snapshot["promoted"] = True
+                if callback:
+                    callback(snapshot)
+        else:
+            after_success = callback
+        return get_jobs().submit(cfg, promote=r.force_promote, job_id=job_id,
+                                 init_checkpoint=init, metadata=metadata,
+                                 after_success=after_success, **kw)
     except JobConflict as e:
         raise HTTPException(status_code=409, detail={"message": str(e), "active_job": e.active_id})
+
+
+def _force_promote_candidate(snapshot: dict) -> None:
+    """Install a successfully trained candidate without evaluation/reviewer gates."""
+    import shutil
+    from datetime import datetime, timezone
+    from .promotion_state import file_sha256, install_checkpoint
+
+    candidate = Path(snapshot["checkpoint"])
+    target = Path(CHECKPOINT)
+    # Load first so a corrupt/incompatible checkpoint cannot replace the live file.
+    candidate_runtime = ChitRuntime.from_checkpoint(candidate, memory=_state["memory"])
+    current_runtime = _state.get("runtime")
+    if current_runtime and candidate_runtime.tokenizer.name != current_runtime.tokenizer.name:
+        raise ValueError("force promotion does not bypass tokenizer compatibility")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    archive = target.parent / "champions"
+    archive.mkdir(exist_ok=True)
+    old_hash, candidate_hash = file_sha256(target), file_sha256(candidate)
+    old_archive, new_archive = archive / f"{old_hash}.pt", archive / f"{candidate_hash}.pt"
+    if not old_archive.exists():
+        shutil.copy2(target, old_archive)
+    if not new_archive.exists():
+        shutil.copy2(candidate, new_archive)
+    manifest_path = target.parent / "champion.json"
+    previous = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    now = datetime.now(timezone.utc).isoformat()
+    manifest = {"schema_version": 1, "updated_at": now,
+                "current": {"sha256": candidate_hash, "checkpoint": str(new_archive),
+                            "evaluation": snapshot.get("final_evaluation")},
+                "previous": {"sha256": old_hash, "checkpoint": str(old_archive)},
+                "decision": {"mode": "forced_training_promotion", "evaluation_gates_bypassed": True},
+                "history": previous.get("history", []) + [{"at": now, "from": old_hash,
+                    "to": candidate_hash, "reason": "explicit force_promote API option"}]}
+    install_checkpoint(target, new_archive, source_sha256=candidate_hash,
+                       previous_sha256=old_hash, previous_archive=old_archive, manifest=manifest)
+    _state.update(runtime=candidate_runtime, bridge=Bridge(candidate_runtime), error=None)
 
 
 def _ensure_idle() -> None:

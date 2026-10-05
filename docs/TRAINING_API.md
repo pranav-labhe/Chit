@@ -1,7 +1,8 @@
 # Training API
 
-The Chit API can train a new model in the background and, when training
-succeeds, start serving it without a restart.
+The Chit API trains candidates in the background. By default, candidates are
+not served until they pass the reviewed promotion workflow. `force_promote: true`
+is an explicit override that installs a successful candidate immediately.
 
 ```bash
 export CHIT_API_KEY=change-me
@@ -38,7 +39,8 @@ curl -X POST localhost:8000/train \
         "init": "scratch",
         "model":    {"block_size": 512, "n_layer": 4, "n_head": 4, "n_embd": 128, "dropout": 0.05},
         "training": {"max_steps": 500, "learning_rate": 0.0005, "batch_size": 8},
-        "promote": false
+        "promote": false,
+        "force_promote": false
       }'
 ```
 
@@ -50,6 +52,18 @@ otherwise `scratch`). When fine-tuning, the served checkpoint is copied to
 
 `training` also accepts `warmup_steps`, `lr_schedule` (`constant` or `cosine`)
 and `min_lr_ratio` (the cosine floor as a fraction of `learning_rate`).
+
+Set `force_promote: true` in the `POST /train` body to install the candidate as
+the served checkpoint when training succeeds. This explicitly bypasses the
+Golden Set reviewer and evaluation gates. The previous checkpoint is archived
+and a forced-promotion decision is recorded in `checkpoints/champion.json`.
+This does not bypass checkpoint loading or tokenizer-family compatibility
+checks. If you also send `promote: true`, it is accepted only when
+`force_promote: true`; otherwise the API returns `422` with that explanation.
+
+```json
+{"config":"chit_assistant_cpu","init":"auto","promote":true,"force_promote":true}
+```
 
 To train on knowledge you have taught Chit, use `POST /knowledge/train`
 instead; see [KNOWLEDGE_API.md](KNOWLEDGE_API.md).
@@ -98,9 +112,11 @@ cases and still requires human review.
 
 ## Candidate evaluation and promotion
 
-Training jobs always write candidates under `checkpoints/jobs/<id>/` and do not
-replace the served model. `promote: true` is rejected because an unevaluated
-checkpoint must never become the champion. Evaluate the candidate and current
+Training jobs always write candidates under `checkpoints/jobs/<id>/`. By
+default, they do not replace the served model. `promote: true` without
+`force_promote: true` is rejected. The force option bypasses the review gates;
+use it only when intentionally accepting an unreviewed candidate. Otherwise,
+evaluate the candidate and current
 champion with the same `data/eval.txt` and `data/golden_set.json`; have two
 reviewers independently rate every golden response using the rubric in
 `docs/GOLDEN_SET.md`. The ratings file must bind to the exact checkpoint and

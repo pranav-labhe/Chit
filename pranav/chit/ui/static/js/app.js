@@ -281,13 +281,15 @@ $('#startTrain').addEventListener('click', async () => {
         alert('Choose a learning plan first.');
         return;
     }
+    const forcePromote=$('#forcePromote').checked;
+    if(forcePromote&&!confirm('Force promotion bypasses evaluation and reviewer gates and replaces the live model when training succeeds. Continue?'))return;
     const status = $('#trainStatus');
     status.textContent = 'Igniting forge...';
     try {
         const r = await req('/_ui/train', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ config: window.selectedRecipe, init: 'auto' })
+            body: JSON.stringify({ config: window.selectedRecipe, init: 'auto', promote: forcePromote, force_promote: forcePromote })
         });
         if (!r.ok) throw new Error(friendlyError(r.data, r.status));
         status.textContent = 'Chit has started learning. You can follow progress below.';
@@ -414,7 +416,9 @@ async function inspectTrainingData(splitPreview=false,writeSplit=false){
 
 async function trainSavedKnowledge(){
     const status=$('#trainStatus');status.textContent='Preparing a lesson-based learning session…';
-    const body={config:$('#trainConfig')?.value||window.selectedRecipe||'chit_cpu_learning',select:$('#lessonScope').value,init:'auto'};
+    const forcePromote=$('#forcePromote').checked;
+    if(forcePromote&&!confirm('Force promotion bypasses evaluation and reviewer gates and replaces the live model when training succeeds. Continue?'))return;
+    const body={config:$('#trainConfig')?.value||window.selectedRecipe||'chit_cpu_learning',select:$('#lessonScope').value,init:'auto',promote:forcePromote,force_promote:forcePromote};
     const r=await callApi('POST','/knowledge/train',{},body);
     status.textContent=r.ok?'Chit has started learning your saved lessons. Follow progress below.':friendlyError(r.data,r.status);
     if(r.ok)renderJobs();
@@ -739,6 +743,8 @@ top_k:['Limits the number of next-token choices.','50 is the usual starting poin
 stop:['Text that tells generation where to stop.','A list such as ["\\nUser:"].','Leave the default unless the model continues past the answer.','A matching stop string cuts off the response.'],
 session_id:['ID of the conversation to continue or inspect.','Copy the 32-character ID from a conversation result.','Leave empty to create a new chat when starting a chat.','Wrong IDs return not found; continuing a session adds saved messages.'],
 config:['Name of the training plan to use.','Choose a name returned by the training plans list.','Inspect the plan and its data before starting training.','Training changes model files and uses compute.'],
+force_promote:['Explicitly installs the successful candidate as the live model, skipping evaluation and reviewer gates.','true to force promotion; false keeps the normal candidate-only workflow.','Use only when you accept the unreviewed candidate replacing the current model.','Bypasses quality gates; the previous checkpoint is archived for rollback.'],
+promote:['Requests that the successful training job become the served model.','true requires force_promote:true; otherwise it returns 422.','Use force_promote only when intentionally bypassing evaluation and reviewer gates.','A forced candidate replaces the live model after successful training.'],
 init:['Chooses whether training starts from scratch or continues a model.','scratch starts fresh; current continues the live model; auto continues when possible.','Continue the current model unless you intentionally want a fresh start.','Starting from scratch does not build on prior weights.'],
 repeat:['How many times selected lessons are shown during training.','Use the plan’s suggested value as a starting point.','Keep it modest and review results before increasing.','More repeats may overfit a small set of lessons.'],
 select:['Which saved lessons to include in training.','Use all or pending, depending on the operation.','Use pending for only new lessons; all to revisit everything.','A narrow selection gives the model less review material.'],

@@ -232,6 +232,8 @@
                             <button class="primary" id="startTrain">Start learning with this plan</button>
                                     <span class="status" id="trainStatus"></span>
                                 </div>
+                        <label class="check-row"><input type="checkbox" id="forcePromote"> Force this candidate live when training succeeds (skip evaluation and reviewer gates)</label>
+                        <p class="notice">Force promotion replaces the served checkpoint after training succeeds. It bypasses quality review; the previous checkpoint is archived for rollback.</p>
                         <div class="field"><label for="lessonScope">Lessons to include</label><select id="lessonScope"><option value="all">All lessons (recommended)</option><option value="pending">Only lessons not yet learned</option></select></div>
                         <button class="secondary" id="trainKnowledge">Learn saved lessons</button>
                                 <div id="jobList" class="job-list">
