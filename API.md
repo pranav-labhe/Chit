@@ -1113,3 +1113,23 @@ Set as environment variables on the server (not request parameters).
 | `CHIT_MAX_SESSION_TURNS` | `200` | Messages kept per session. |
 | `CHIT_HISTORY_TURNS` | `8` | Most recent session messages offered to the model as context. |
 | `CHIT_DATA_DIR` | `data` | Folder that `POST /data/split` reads corpus files from. |
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models and their Golden Gate evaluation scores.
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

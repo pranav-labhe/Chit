@@ -257,3 +257,23 @@ The project contains 137 tests driven by `pytest`.
 - **Train model**: `python -m pranav.chit.tools.train --config configs/chit_strong.json`
 - **Evaluate**: `python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/jobs/<id>/latest.pt`
 - **Promote**: `python -m pranav.chit.tools.promote_candidate checkpoints/jobs/<id>/latest.pt --reviewer-1 name`
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models and their Golden Gate evaluation scores.
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

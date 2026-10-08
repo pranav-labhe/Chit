@@ -580,6 +580,12 @@ $('#sendChat').addEventListener('click', async () => {
         recordResponseEvidence({mode:'Chat',prompt:message,tokens:'server default',temperature:0.4,topK:'server default',continued:wasContinuing,response:r.data});
         
         $('#chatSession').textContent = chatId ? `Session ${chatId}` : 'No saved session';
+        if (!wasContinuing && chatId) {
+            updateSessionTitle(chatId).catch(console.error);
+        }
+        if (typeof loadChatFacts === 'function') {
+            loadChatFacts().catch(console.error);
+        }
         const recalled=r.data?.metadata?.memory_ids;
         if(Array.isArray(recalled)&&recalled.length){
             const breadcrumb=document.createElement('div');breadcrumb.className='memory-breadcrumb';
@@ -595,7 +601,46 @@ $('#sendChat').addEventListener('click', async () => {
     }
 });
 
+
+async function loadChatFacts() {
+    if (!chatId) {
+        document.getElementById('chatThoughtsCard').style.display = 'none';
+        return;
+    }
+    document.getElementById('chatThoughtsCard').style.display = 'block';
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:`/sessions/${chatId}/facts`})});
+        if (r.ok && r.data && r.data.facts) {
+            const facts = r.data.facts;
+            document.getElementById('chatFactsList').innerHTML = Object.entries(facts).length === 0 ? '<p class="status">No facts extracted yet.</p>' : '';
+            for (const [k, v] of Object.entries(facts)) {
+                const div = document.createElement('div');
+                div.className = 'memory-item';
+                div.innerHTML = `<b>` + esc(k) + `</b>: ` + esc(v);
+                document.getElementById('chatFactsList').appendChild(div);
+            }
+        }
+    } catch (e) {
+        document.getElementById('factsStatus').textContent = 'Could not load facts.';
+    }
+}
+document.getElementById('refreshFactsBtn')?.addEventListener('click', loadChatFacts);
+document.getElementById('clearFactsBtn')?.addEventListener('click', async () => {
+    if (!chatId || !confirm('Clear all facts for this session?')) return;
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'DELETE',path:`/sessions/${chatId}/facts`})});
+        if (r.ok) {
+            document.getElementById('factsStatus').textContent = 'Facts cleared.';
+            setTimeout(() => document.getElementById('factsStatus').textContent = '', 2000);
+            await loadChatFacts();
+        }
+    } catch (e) {
+        document.getElementById('factsStatus').textContent = 'Failed to clear facts.';
+    }
+});
+
 async function renderMemoryGallery(results = []) {
+
     const grid = $('#memoryGrid');
     grid.innerHTML = '';
     
@@ -796,3 +841,100 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape')closeContext
 decorateHelp();
 new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{if(node.nodeType===1){if(node.matches?.('button,input,textarea,select,summary'))addHelpTrigger(node);decorateHelp(node)}}))).observe(document.body,{childList:true,subtree:true});
 checkSession();
+
+
+async function loadCandidates() {
+    const list = document.getElementById('candidateList');
+    if (!list) return;
+    list.innerHTML = '<p class="status">Loading...</p>';
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/candidates'})});
+        if (!r.ok || !r.data.candidates) throw new Error();
+        const cands = r.data.candidates;
+        if (cands.length === 0) {
+            list.innerHTML = '<p class="status">No candidates available.</p>';
+            return;
+        }
+        list.innerHTML = '';
+        for (const c of cands) {
+            const div = document.createElement('div');
+            div.className = 'job-card';
+            div.style.marginBottom = '10px';
+            
+            const evalHtml = c.evaluation ? 
+                `<b>Score:</b> ${c.evaluation.behavioral_gate?.case_ratings?.length || 0} evaluated | Gate Pass: ${c.evaluation.behavioral_gate?.gate_pass ? 'YES' : 'NO'}` : 
+                `<i>Not yet evaluated.</i>`;
+                
+            div.innerHTML = `
+                <div><b>Job ID:</b> ${esc(c.job_id)}</div>
+                <div style="font-size:12px; margin: 4px 0;">${evalHtml}</div>
+                <div class="actions" style="margin-top: 8px;">
+                    <button class="secondary eval-btn" data-id="${esc(c.job_id)}">Evaluate Model</button>
+                    <button class="primary promote-btn" data-id="${esc(c.job_id)}" ${c.evaluation?.behavioral_gate?.gate_pass ? '' : 'disabled'}>Promote to Live</button>
+                </div>
+            `;
+            list.appendChild(div);
+        }
+        
+        document.querySelectorAll('.eval-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            e.target.textContent = 'Evaluating...';
+            e.target.disabled = true;
+            await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/evaluate`})});
+            alert('Evaluation started in the background. Refresh in a moment.');
+        }));
+        
+        document.querySelectorAll('.promote-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            if (!confirm('Promote this candidate to be the live brain?')) return;
+            e.target.textContent = 'Promoting...';
+            e.target.disabled = true;
+            try {
+                const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/promote`})});
+                if (r.ok) {
+                    alert('Promoted successfully! The live model has been hot-swapped.');
+                    await refreshHealth();
+                } else {
+                    alert('Promotion failed: ' + (r.data?.detail || r.status));
+                }
+            } finally {
+                loadCandidates();
+            }
+        }));
+    } catch(e) {
+        list.innerHTML = '<p class="status">Error loading candidates.</p>';
+    }
+}
+document.getElementById('refreshCandidatesBtn')?.addEventListener('click', loadCandidates);
+
+document.getElementById('reloadModelBtn')?.addEventListener('click', async () => {
+    if (!confirm('Reload the live model from disk? This will briefly pause generation.')) return;
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:'/admin/reload'})});
+        if (r.ok) {
+            alert('Model reloaded.');
+            await refreshHealth();
+        } else {
+            alert('Reload failed.');
+        }
+    } catch(e) { console.error(e); }
+});
+
+document.getElementById('rollbackModelBtn')?.addEventListener('click', async () => {
+    const hash = document.getElementById('rollbackHashInput').value.trim();
+    if (!hash) { alert('Enter a SHA256 to rollback to.'); return; }
+    if (!confirm('Rollback to ' + hash + '?')) return;
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:'/admin/rollback',query:{to_sha256:hash}})});
+        if (r.ok) {
+            alert('Rollback successful.');
+            document.getElementById('rollbackHashInput').value = '';
+            await refreshHealth();
+        } else {
+            alert('Rollback failed.');
+        }
+    } catch(e) { console.error(e); }
+});
+
+
+

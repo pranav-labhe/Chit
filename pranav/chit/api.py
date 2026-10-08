@@ -1056,3 +1056,135 @@ def split_data(r: SplitRequest):
             raise HTTPException(status_code=500, detail=f"could not write {e.filename or 'the data files'}: "
                                                         f"{e.strerror or e} (is the folder mounted read-only?)")
     return {**report, "written": True, "backups": backups}
+
+import asyncio
+import subprocess
+from fastapi import BackgroundTasks
+
+@app.get("/candidates")
+async def list_candidates():
+    """List finished training jobs and their evaluation status."""
+    jobs_dir = Path(JOBS_DIR)
+    if not jobs_dir.is_dir():
+        return {"candidates": []}
+    
+    candidates = []
+    for p in jobs_dir.iterdir():
+        if not p.is_dir():
+            continue
+        manifest_path = p / "job.json"
+        if not manifest_path.is_file():
+            continue
+        try:
+            job_data = json.loads(manifest_path.read_text())
+        except Exception:
+            continue
+            
+        if job_data.get("state") != "success":
+            continue
+            
+        eval_path = p / "evaluation-golden.json"
+        eval_data = None
+        if eval_path.is_file():
+            try:
+                eval_data = json.loads(eval_path.read_text())
+            except Exception:
+                pass
+                
+        candidates.append({
+            "job_id": p.name,
+            "job_manifest": job_data,
+            "evaluation": eval_data
+        })
+    return {"candidates": candidates}
+
+def _run_eval_background(job_id: str):
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        log.error(f"Cannot evaluate {job_id}: checkpoint missing")
+        return
+        
+    try:
+        # Run eval_runner via subprocess to avoid blocking the main worker thread
+        # and to cleanly load/unload the heavy evaluation model.
+        subprocess.run(
+            ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path)],
+            check=True,
+            capture_output=True
+        )
+    except subprocess.CalledProcessError as e:
+        log.error(f"Evaluation failed for {job_id}: {e.stderr.decode('utf-8', errors='ignore')}")
+    except Exception as e:
+        log.error(f"Evaluation exception for {job_id}: {e}")
+
+@app.post("/candidates/{job_id}/evaluate")
+async def evaluate_candidate(job_id: str, background_tasks: BackgroundTasks):
+    """Trigger the Golden Gate evaluation for a candidate in the background."""
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        raise HTTPException(status_code=404, detail="Candidate checkpoint not found")
+        
+    eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+    if eval_path.is_file():
+        return {"status": "already_evaluated", "job_id": job_id}
+        
+    background_tasks.add_task(_run_eval_background, job_id)
+    return {"status": "evaluating", "job_id": job_id}
+
+@app.post("/candidates/{job_id}/promote")
+async def promote_candidate_route(job_id: str):
+    """Promote a candidate to Champion safely if it passes the Golden Gate."""
+    from pranav.chit.tools.promote_candidate import promote
+    
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+    
+    if not ckpt_path.is_file() or not eval_path.is_file():
+        raise HTTPException(status_code=400, detail="Candidate checkpoint or evaluation report missing.")
+        
+    champion_eval_path = Path(CHECKPOINT).parent / "champion_evaluation.json"
+    if not champion_eval_path.exists():
+        # Fallback if there is no current champion evaluation to compare against
+        # The script will handle bootstrap mode if incumbent fails.
+        champion_eval_path = Path(JOBS_DIR) / job_id / "evaluation-step_1.json"
+        
+    target_path = Path(CHECKPOINT)
+    
+    try:
+        # promote validates all safety gates (lift, score, hashes)
+        promote(ckpt_path, eval_path, champion_eval_path, target_path)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=f"Golden Gate promotion failed: {e}")
+    except Exception as e:
+        log.exception("Promotion error")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    # Hot-swap the runtime using existing safe reload logic
+    _load_served_model()
+    return {"status": "promoted", "job_id": job_id}
+
+
+
+@app.post("/admin/rollback")
+async def rollback_champion_route(to_sha256: str):
+    """Rollback the active champion to a previous version."""
+    from pranav.chit.tools.rollback_champion import rollback
+    target_path = Path(CHECKPOINT)
+    try:
+        manifest = rollback(target_path, to_sha256)
+    except Exception as e:
+        log.exception("Rollback error")
+        raise HTTPException(status_code=500, detail=str(e))
+    _load_served_model()
+    return manifest
+
+@app.post("/admin/reload")
+async def reload_champion_route():
+    """Reload the active champion from disk into memory."""
+    try:
+        _load_served_model()
+        return {"status": "reloaded"}
+    except Exception as e:
+        log.exception("Reload error")
+        raise HTTPException(status_code=500, detail=str(e))
+
