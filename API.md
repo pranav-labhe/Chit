@@ -134,6 +134,23 @@ curl $BASE/health
 **Recommended.** Poll this after a deployment until `status` is `ok`. A new server with no checkpoint
 reports `no_model`: that is normal until the first training job finishes.
 
+### GET /sys_metrics
+Returns real-time system hardware metrics (requires `psutil`). Used by the UI for the live header badge.
+
+**Request**
+```http
+GET /sys_metrics HTTP/1.1
+```
+
+**Response (200 OK)**
+```json
+{
+  "cpu": 12.5,
+  "mem": 45.2,
+  "disk": 80.1
+}
+```
+
 ### GET /ready
 
 **Purpose.** Readiness check for traffic routing. Returns `200` only when a model, memory, knowledge,

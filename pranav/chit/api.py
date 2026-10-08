@@ -276,6 +276,27 @@ class MemoryIn(BaseModel):
     tags: list[Tag] = Field(default_factory=list, max_length=20)
 
 
+
+@app.get("/sys_metrics", dependencies=[Depends(require_key)])
+def system_metrics():
+    import shutil
+    try:
+        import psutil
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+    except ImportError:
+        cpu = 0.0
+        mem = 0.0
+        
+    disk = shutil.disk_usage("/")
+    disk_pct = (disk.used / disk.total) * 100 if disk.total else 0
+    
+    return {
+        "cpu": round(cpu, 1),
+        "mem": round(mem, 1),
+        "disk": round(disk_pct, 1)
+    }
+
 @app.get("/health")
 def health():
     jobs = _state["jobs"]
@@ -316,8 +337,12 @@ def readiness():
 @app.get("/model", dependencies=[Depends(require_key)])
 def model_info():
     rt = get_runtime()
+    import os, datetime
+    ckpt_path = Path(CHECKPOINT)
+    mtime = ckpt_path.stat().st_mtime if ckpt_path.exists() else None
+    timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat() if mtime else None
     return {"model_config": rt.model_config, "parameters": rt.model.num_parameters(),
-            "device": str(rt.device), "checkpoint": rt.checkpoint_meta,
+            "device": str(rt.device), "checkpoint": rt.checkpoint_meta, "checkpoint_timestamp": timestamp,
             "tokenizer": {"name": rt.tokenizer.name, "vocab_size": rt.tokenizer.vocab_size,
                           "sha256": getattr(rt.tokenizer, "asset_sha256", None)},
             "memory_search": _memory_search_status(),
@@ -753,7 +778,7 @@ def start_training(r: TrainRequest, response: Response):
     job_id = uuid.uuid4().hex
     job_dir = Path(JOBS_DIR) / job_id
     try:
-        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init})
+        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init, "config_name": r.config})
     except BaseException:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
@@ -1091,8 +1116,16 @@ async def list_candidates():
             except Exception:
                 pass
                 
+        ckpt_path = p / "latest.pt"
+        ckpt_timestamp = None
+        if ckpt_path.is_file():
+            import datetime
+            mtime = ckpt_path.stat().st_mtime
+            ckpt_timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+            
         candidates.append({
             "job_id": p.name,
+            "checkpoint_timestamp": ckpt_timestamp,
             "job_manifest": job_data,
             "evaluation": eval_data
         })

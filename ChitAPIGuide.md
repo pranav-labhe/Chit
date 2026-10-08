@@ -280,6 +280,20 @@ out, the **Default** is used.
 
 ---
 
+### `GET /sys_metrics`
+Shows the real-time health of the server hardware running Chit.
+
+**You send:** Nothing.
+**You get:**
+```json
+{
+  "cpu": 12.5,
+  "mem": 45.2,
+  "disk": 80.1
+}
+```
+**What happens:** The server returns the CPU load, Memory usage, and Disk storage usage as percentages (0-100). The Studio UI uses this to display a live traffic-light badge in the header.
+
 ### `GET /model`
 **What it does.** Describes the model that is currently live: its size and how it was trained.
 **Key needed:** yes.

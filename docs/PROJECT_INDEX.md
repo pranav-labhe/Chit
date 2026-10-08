@@ -119,6 +119,14 @@ Because Chit is a personal assistant, protecting its data is critical.
 
 ---
 
+
+## 5. UI Features & Philosophy
+
+The Chit UI (`ui.py` & `app.js`) is the primary way to interact with the system. It strictly wraps the API.
+- **Universal Page Guides**: Every UI view has a "Page Guide" button that explicitly maps friendly UI terms to their underlying JSON API payloads (e.g. mapping "Text reader" to `tokenizer`, or "Learn from scratch" to `init_checkpoint: null`).
+- **Real-Time System Metrics**: The UI header features a live CPU/Mem/Disk badge polling `GET /sys_metrics` every 2 seconds.
+- **Unified Training & Candidates**: The Studio UI lists training jobs and immediately surfaces their associated Golden Gate evaluations, file timestamps, and promotion buttons once completed.
+
 ## 6. Directory & Module Map (Wiring)
 
 ### Core AI Brain (The Neural Network)

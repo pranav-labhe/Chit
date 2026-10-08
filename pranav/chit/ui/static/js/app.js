@@ -1,5 +1,55 @@
 const $=s=>document.querySelector(s); let chatId=null, authenticated=false;
 const controlHelp={
+  helpChatPage: {
+    what: 'This page lets you talk with Chit. It automatically remembers recent messages to keep a conversation going.',
+    example: 'API Mapping: Clicking Send calls POST /chat with JSON {"message": "your text", "session_id": "current_session"}.',
+    best: 'The chat UI hides the complexity of tracking history (the Notebook). It uses sessions.db to recall recent context automatically.',
+    recommended: 'Use this for natural interaction. If the AI seems confused, use "Start new conversation" to wipe the session_id context.',
+    risk: 'This only uses standard chat generation, it does not permanently teach Chit new facts (use Teach for that).'
+  },
+  helpGenPage: {
+    what: 'This page provides raw, direct access to the neural network brain without chat history or memory lookup.',
+    example: 'API Mapping: Clicking Generate calls POST /generate with JSON {"prompt": "...", "max_new_tokens": length, "temperature": creativity}.',
+    best: 'Use this when you want Chit to continue exactly from your prompt without chat formatting getting in the way.',
+    recommended: 'Lower the Temperature for factual answers, increase it for creative writing.',
+    risk: 'Because there is no session history, Chit will only know exactly what you type in the Prompt box.'
+  },
+  helpTeachPage: {
+    what: 'This page lets you explicitly save new facts (memories) and queue lessons for future training.',
+    example: 'API Mapping: Saving calls POST /knowledge/items with JSON {"kind": "text"|"qa", "text": "...", "source": "..."}. Checking "Also save as memory" simultaneously calls POST /memory.',
+    best: 'The Knowledge API queues the text into the Notebook (knowledge.db) as a Pending lesson. Training will later burn it into the Brain weights.',
+    recommended: 'Save a memory if you need Chit to know a fact immediately during chat via vector retrieval.',
+    risk: 'Training data must be explicitly moved into training files via the Training Library page before the AI can learn it.'
+  },
+  helpDataPage: {
+    what: 'This page prepares raw text and saved lessons into actual training files (.txt) used by learning plans.',
+    example: 'API Mapping: Creating splits calls POST /data/split with JSON {"config": "recipe_name", "source": "filename", "overwrite": true/false}.',
+    best: 'Use this to compile all pending Knowledge into plain text files that the neural network can process.',
+    recommended: 'Always inspect the split preview to ensure your train and review (validation) files have enough data.',
+    risk: 'Checking "Replace existing" will overwrite your current dataset files. A backup is kept, but be careful.'
+  },
+  helpStudioPage: {
+    what: 'This page manages the actual training process that changes the AI brain weights permanently.',
+    example: 'API Mapping: Calls POST /train with {"config": "recipe"}. UI term "from scratch" maps to init_checkpoint: null in JSON (fresh brain). "from current" maps to init_checkpoint: "latest".',
+    best: 'The neural network learns by reading the .txt files defined in the config. New AI versions are saved as Candidates.',
+    recommended: 'Leave "Force promotion" off so you can test new Candidates before making them Live.',
+    risk: 'Training "from scratch" creates a completely empty brain. Only do this for entirely new models!'
+  },
+  helpDiagPage: {
+    what: 'This page checks if the AI Brain, Memory, and Server are all running correctly.',
+    example: 'API Mapping: Calls GET /model. The UI term "Text reader" maps to "tokenizer" in JSON. "Context window" maps to "model_config.block_size".',
+    best: 'Use this when the chat isn\'t responding or the AI generates garbage text. It helps you find exactly which subsystem failed.',
+    recommended: 'Ensure the "Text reader" (tokenizer) matches your model. A mismatch here is the #1 cause of corrupted text.',
+    risk: 'This page only reads server status; it does not change or fix configurations itself.'
+  },
+  helpApiPage: {
+    what: 'This page allows you to test the raw JSON API endpoints exactly as another program would see them.',
+    example: 'API Mapping: It reads ui.ROUTES and renders a form that executes raw fetch() calls returning complete JSON bodies.',
+    best: 'Use this to test specific routes or verify the exact response structures before writing your own scripts.',
+    recommended: 'Review the JSON response carefully, as this represents the exact payload you must parse programmatically.',
+    risk: 'These API calls operate directly on the live databases and checkpoints.'
+  },
+  activeAiHelpWrap:{what:'The exact file timestamp of the latest.pt checkpoint currently powering your chats.',example:'Match this timestamp with a job below to see which checkpoint is live.',best:'Use this to confirm that a new checkpoint was successfully promoted.',recommended:'Check this after promoting a new candidate.',risk:'None.'},
 apiKey:{what:'Lets this browser sign in to Chit. The key stays on the server for this browser session.',example:'Paste the API key given to you by the server owner.',best:'Only enter the key on the trusted Chit page. Do not share it in a message or screenshot.',recommended:'Use the key supplied for this server.',risk:'Anyone with this key may be able to change data or start training.'},
 chatInput:{what:'Write a message for Chit. Chat keeps a conversation going and may use saved memories.',example:'“Help me plan a simple weekly meal list.”',best:'Ask one clear question at a time. Add important context that Chit would not know.',recommended:'Use a complete sentence; press Enter to send or Shift+Enter for a new line.',risk:'Chit can make mistakes. Check important information.'},
 sendChat:{what:'Sends your message and adds Chit’s reply to this saved conversation.',example:'Send “What should I pack for a rainy day?”',best:'Give Chit enough detail to understand what you need.',recommended:'Start a new conversation when you switch to a different topic.',risk:'The conversation is saved under your account session.'},
@@ -57,6 +107,8 @@ apiKeySubmit:{what:'Checks the key and opens the Chit console.',example:'Enter t
 refreshSessions:{what:'Reloads your saved conversation list.',example:'Choose after creating a conversation.',best:'Use if the list is out of date.',recommended:'No setting needed.',risk:'Read-only.'}
 };
 function inferredHelp(element){
+      if(element.classList.contains('job-ai-stamp'))return {what:'The file timestamp of the latest.pt checkpoint inside this job\'s folder.',example:'If this matches the Live AI Checkpoint above, this checkpoint is the one you are currently using.',best:'Use this to verify if a promotion was successful.',recommended:'None.',risk:'None.'};
+
     const label=element.getAttribute('aria-label')||element.labels?.[0]?.textContent?.trim()||element.textContent?.trim()||element.getAttribute('placeholder')||element.id||'This control';
     const view=element.dataset?.view;
     const words=(element.textContent||'').trim().toLowerCase();
@@ -64,6 +116,8 @@ function inferredHelp(element){
     if(words==='continue conversation')return {what:'Opens this saved chat so you can keep talking in the same context.',example:'Choose it on the conversation you want to reopen.',best:'Start a new chat for a new topic.',recommended:'Review the conversation title before opening.',risk:'New messages will be added to this saved conversation.'};
     if(words==='delete'||words==='remove lesson')return {what:'Removes the selected saved conversation or lesson.',example:'Choose only after confirming you no longer need it.',best:'Review the item before removing it.',recommended:'Keep it if you are unsure.',risk:'This removes saved information and may not be undoable.'};
     if(words==='use in chat'||words==='use')return {what:'Copies this fact into the Chat message box so you can ask Chit about it.',example:'Choose Use, then add a question about the fact.',best:'Check the inserted text before sending it.',recommended:'Use when you want to discuss this fact now.',risk:'The fact is added to your draft; it is not sent until you choose Send.'};
+    if(element.classList.contains('eval-btn'))return {what:'Tests this new AI version against 50 strict safety rules.',example:'Choose this to start the automatic grading process.',best:'Always test a new AI before trusting it.',recommended:'Required before you can make it the live AI.',risk:'Testing can take several minutes in the background.'};
+    if(element.classList.contains('promote-btn'))return {what:'Replaces your current AI with this new tested version.',example:'Choose this to swap out the AI.',best:'Do this only if the test score says YES.',recommended:'Make sure you want to replace your current AI.',risk:'This immediately changes the AI for all your chats.'};
     if(words==='copy')return {what:'Copies Chit’s reply to your clipboard.',example:'Choose Copy, then paste the text where you need it.',best:'Review the answer before sharing it.',recommended:'Use when you want to reuse the reply.',risk:'Copied text may contain mistakes; check it before sharing.'};
     if(words==='try another answer')return {what:'Asks Chit to answer your latest message again.',example:'Choose after a reply missed your intent.',best:'Make your original prompt clearer if the next reply is also wrong.',recommended:'Try once after checking the prompt.',risk:'This sends another request and uses compute.'};
     const navInfo={chat:{what:'Opens the conversation screen where you can talk with Chit.',example:'Choose Chat to ask a question and continue the conversation.',best:'Use one conversation for one topic.',recommended:'Start here for normal use.',risk:'Replies can be wrong; check important facts.'},conversations:{what:'Opens your saved conversation list.',example:'Choose one to continue it or remove it.',best:'Use this when you need to return to an earlier topic.',recommended:'No setting needed.',risk:'Deleting a conversation removes its saved messages.'},generate:{what:'Opens the one-time answer screen.',example:'Ask for one answer without saving a conversation.',best:'Use Chat for a back-and-forth exchange.',recommended:'Use the default response settings.',risk:'Long answers take longer and may be less focused.'},brain:{what:'Opens saved memories and lesson progress.',example:'Search for a memory or review learning counts.',best:'Use memory for facts Chit should recall now.',recommended:'No setting needed.',risk:'Deleting a memory removes it from recall.'},teach:{what:'Opens the lesson form for information Chit may learn later.',example:'Save one checked fact or question and answer.',best:'Keep lessons accurate and focused.',recommended:'Use a short, clear lesson.',risk:'Lessons affect the model only after training.'},studio:{what:'Opens learning plans and training progress.',example:'Choose a plan, read its settings, then start learning.',best:'Inspect data before training.',recommended:'Use the everyday assistant plan when available.',risk:'Training uses compute and may take time.'},data:{what:'Opens the training file inspection screen.',example:'Check that the plan has enough training text.',best:'Preview a file split before writing it.',recommended:'No setting needed.',risk:'Creating a split changes files used by future training.'},diagnostics:{what:'Opens checks for the server, model, tokenizer, data, and recent training.',example:'Use after a reply looks unreadable or unexpected.',best:'Run checks, then try the simple sample prompt.',recommended:'Choose the same plan that produced the problem.',risk:'Checks cannot guarantee that a model will answer correctly.'},explorer:{what:'Opens the plain-language API reference and optional technical editor.',example:'Choose a topic to see what it does and what it needs.',best:'Use the guided screens for normal tasks.',recommended:'Only open the request editor if you understand the selected route.',risk:'Advanced requests can change data or start work.'}};
@@ -86,7 +140,7 @@ function showContextHelp(element){
     panel.classList.remove('hidden');$('#closeContextHelp').focus();
 }
 function addHelpTrigger(element){
-    if(element.dataset.helpDecorated||element.id==='closeContextHelp'||element.classList.contains('help-trigger'))return;
+    if(element.dataset.helpDecorated||element.id==='closeContextHelp'||element.classList.contains('help-trigger')||element.classList.contains('page-help'))return;
     if(element.matches('input[type="hidden"]'))return;
     const info=controlHelp[element.id]||element._helpInfo||inferredHelp(element);
     element._helpInfo=info;element._helpLabel=element.labels?.[0]?.textContent?.trim()||element.getAttribute('aria-label')||element.textContent?.trim()||element.placeholder||element.id||'Help';
@@ -227,18 +281,25 @@ async function showConfigDetails(name){
 }
 
 async function renderJobs() {
-    const r = await req('/_ui/train/jobs');
+    const [rJobs, rCands] = await Promise.all([
+        req('/_ui/train/jobs'),
+        req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/candidates'})})
+    ]);
     const list = $('#jobList');
-    if (!r.ok) {
-        list.textContent = 'Could not load learning history. ' + friendlyError(r.data, r.status);
+    if (!rJobs.ok) {
+        list.textContent = 'Could not load learning history. ' + friendlyError(rJobs.data, rJobs.status);
         return;
     }
     list.replaceChildren();
-    if (r.data.jobs.length === 0) {
+    
+    const cands = (rCands.ok && rCands.data?.candidates) ? Object.fromEntries(rCands.data.candidates.map(c => [c.job_id, c])) : {};
+
+    if (rJobs.data.jobs.length === 0) {
         list.innerHTML = '<div class="status" style="text-align: center; padding: 20px;">No recent jobs.</div>';
         return;
     }
-    r.data.jobs.forEach(job => {
+    
+    rJobs.data.jobs.forEach(job => {
         const card = document.createElement('div');
         card.className = 'job-card';
         const stateCls = 'state-' + job.state;
@@ -246,7 +307,7 @@ async function renderJobs() {
         header.className = 'job-header';
         const id = document.createElement('div');
         id.style.fontWeight = 'bold';
-        id.textContent = `${String(job.id || '').slice(0, 8)}…`;
+        id.textContent = `Job: ${String(job.id || '').slice(0, 8)}…`;
         const state = document.createElement('div');
         state.className = `job-state ${stateCls}`;
         const narratives={queued:'Getting ready to learn',running:'Studying the training material',succeeded:'Learning complete',failed:'Learning stopped with a problem',cancelled:'Learning session stopped'};
@@ -261,18 +322,92 @@ async function renderJobs() {
         const meta = document.createElement('div');
         meta.className = 'job-meta';
         const step = document.createElement('span');
-        step.textContent = job.state==='running'?`Learning progress · step ${job.step ?? 0} of ${job.max_steps ?? '—'}`:job.state==='succeeded'?'Chit finished this learning session':`Progress · step ${job.step ?? 0} of ${job.max_steps ?? '—'}`;
+        step.textContent = job.state==='running'?`Learning progress - step ${job.step ?? 0} of ${job.max_steps ?? '?'}`:job.state==='succeeded'?'Chit finished this learning session':`Progress - step ${job.step ?? 0} of ${job.max_steps ?? '?'}`;
         const loss = document.createElement('span');
         loss.textContent = `Loss: ${Number.isFinite(job.latest?.eval_loss) ? job.latest.eval_loss.toFixed(4) : 'N/A'}`;
-        meta.append(step, loss);
+        const plan = document.createElement('span');
+        plan.textContent = `Plan: ${job.metadata?.config_name || 'Unknown'}`;
+        plan.style.marginLeft = '12px';
+        meta.append(step, loss, plan);
         card.append(header, progress, meta);
+        
         if(['queued','running'].includes(job.state)){
-            const cancel=document.createElement('button');cancel.type='button';cancel.className='danger';cancel.textContent='Stop this learning session';
-            cancel.addEventListener('click',async()=>{if(!confirm('Ask Chit to stop this learning session? Work already completed remains saved.'))return;const result=await callApi('POST',`/train/${encodeURIComponent(job.id)}/cancel`,{},null);if(result.ok){cancel.textContent='Stop requested';renderJobs()}else alert(friendlyError(result.data,result.status))});
-            card.appendChild(cancel);
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            actions.style.marginTop = '10px';
+            const btn = document.createElement('button');
+            btn.className = 'danger';
+            btn.textContent = 'Stop learning session';
+            btn.addEventListener('click', async () => {
+                if(!confirm('Stop this learning session immediately?')) return;
+                const cr = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/train/${job.id}/cancel`})});
+                if(cr.ok) setTimeout(renderJobs, 500);
+            });
+            actions.appendChild(btn);
+            card.appendChild(actions);
+        } else if (job.state === 'succeeded' && cands[job.id]) {
+            const c = cands[job.id];
+            const ts = c.checkpoint_timestamp ? new Date(c.checkpoint_timestamp).toLocaleString() : 'Unknown';
+            const evalHtml = c.evaluation ? 
+                `<b>Safety Test:</b> <span style="color:${c.evaluation.behavioral_gate?.gate_pass ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${c.evaluation.behavioral_gate?.gate_pass ? 'Passed' : 'Failed'}</span> (Checked ${c.evaluation.behavioral_gate?.case_ratings?.length || 0} rules)` : 
+                `<i>Safety Test: Not tested yet</i>`;
+            
+            // Check if this job is explicitly marked promoted
+            const promotedTag = job.promoted ? `<span style="color:var(--success); font-weight:bold; margin-left: 8px;">(Active AI)</span>` : '';
+                
+            const candDiv = document.createElement('div');
+            candDiv.style.marginTop = '10px';
+            candDiv.style.paddingTop = '10px';
+            candDiv.style.borderTop = '1px dashed var(--accent)';
+            
+            candDiv.innerHTML = `
+                <div style="font-size:12px; margin-bottom:4px; display:inline-block;" class="job-ai-stamp" id="candStamp_${job.id}"><b>Job Checkpoint:</b> ${ts} ${promotedTag}</div><br>
+                <div style="font-size:12px; margin: 4px 0;">${evalHtml}</div>
+                <div class="actions" style="margin-top: 8px;">
+                    <button class="secondary eval-btn" data-id="${job.id}">Test this AI version</button>
+                    <button class="primary promote-btn" data-id="${job.id}" ${c.evaluation?.behavioral_gate?.gate_pass ? '' : 'disabled'}>Make this the Live AI</button>
+                </div>
+            `;
+            
+            card.appendChild(candDiv);
         }
+        
         list.appendChild(card);
     });
+    
+    // Wire up candidate buttons
+    document.querySelectorAll('.eval-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        e.target.textContent = 'Testing...';
+        e.target.disabled = true;
+        await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/evaluate`})});
+        alert('Test started in the background. Refresh in a minute.');
+    }));
+    
+    document.querySelectorAll('.promote-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        if (!confirm('Promote this tested version to be your live AI?')) return;
+        e.target.textContent = 'Making live...';
+        e.target.disabled = true;
+        try {
+            const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/promote`})});
+            if (r.ok) {
+                alert('Success! The live AI has been hot-swapped.');
+                await refreshHealth();
+                await renderJobs();
+            } else {
+                alert('Promotion failed: ' + (r.data?.detail || r.status));
+                e.target.textContent = 'Make this the Live AI';
+                e.target.disabled = false;
+            }
+        } catch(err) {
+            e.target.textContent = 'Make this the Live AI';
+            e.target.disabled = false;
+        }
+    }));
+    
+    // Add dynamically injected buttons to tooltip system
+    document.querySelectorAll('.eval-btn, .promote-btn, .job-ai-stamp').forEach(addHelpTrigger);
 }
 
 $('#startTrain').addEventListener('click', async () => {
@@ -843,98 +978,67 @@ new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(
 checkSession();
 
 
-async function loadCandidates() {
-    const list = document.getElementById('candidateList');
-    if (!list) return;
-    list.innerHTML = '<p class="status">Loading...</p>';
-    try {
-        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/candidates'})});
-        if (!r.ok || !r.data.candidates) throw new Error();
-        const cands = r.data.candidates;
-        if (cands.length === 0) {
-            list.innerHTML = '<p class="status">No candidates available.</p>';
-            return;
-        }
-        list.innerHTML = '';
-        for (const c of cands) {
-            const div = document.createElement('div');
-            div.className = 'job-card';
-            div.style.marginBottom = '10px';
-            
-            const evalHtml = c.evaluation ? 
-                `<b>Score:</b> ${c.evaluation.behavioral_gate?.case_ratings?.length || 0} evaluated | Gate Pass: ${c.evaluation.behavioral_gate?.gate_pass ? 'YES' : 'NO'}` : 
-                `<i>Not yet evaluated.</i>`;
-                
-            div.innerHTML = `
-                <div><b>Job ID:</b> ${esc(c.job_id)}</div>
-                <div style="font-size:12px; margin: 4px 0;">${evalHtml}</div>
-                <div class="actions" style="margin-top: 8px;">
-                    <button class="secondary eval-btn" data-id="${esc(c.job_id)}">Evaluate Model</button>
-                    <button class="primary promote-btn" data-id="${esc(c.job_id)}" ${c.evaluation?.behavioral_gate?.gate_pass ? '' : 'disabled'}>Promote to Live</button>
-                </div>
-            `;
-            list.appendChild(div);
-        }
-        
-        document.querySelectorAll('.eval-btn').forEach(btn => btn.addEventListener('click', async (e) => {
-            const id = e.target.dataset.id;
-            e.target.textContent = 'Evaluating...';
-            e.target.disabled = true;
-            await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/evaluate`})});
-            alert('Evaluation started in the background. Refresh in a moment.');
-        }));
-        
-        document.querySelectorAll('.promote-btn').forEach(btn => btn.addEventListener('click', async (e) => {
-            const id = e.target.dataset.id;
-            if (!confirm('Promote this candidate to be the live brain?')) return;
-            e.target.textContent = 'Promoting...';
-            e.target.disabled = true;
-            try {
-                const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/promote`})});
-                if (r.ok) {
-                    alert('Promoted successfully! The live model has been hot-swapped.');
-                    await refreshHealth();
-                } else {
-                    alert('Promotion failed: ' + (r.data?.detail || r.status));
-                }
-            } finally {
-                loadCandidates();
-            }
-        }));
-    } catch(e) {
-        list.innerHTML = '<p class="status">Error loading candidates.</p>';
-    }
-}
-document.getElementById('refreshCandidatesBtn')?.addEventListener('click', loadCandidates);
 
 document.getElementById('reloadModelBtn')?.addEventListener('click', async () => {
-    if (!confirm('Reload the live model from disk? This will briefly pause generation.')) return;
+    if (!confirm('Reload the live AI from disk? This will briefly pause generation.')) return;
     try {
         const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:'/admin/reload'})});
         if (r.ok) {
-            alert('Model reloaded.');
+            alert('AI Restarted.');
             await refreshHealth();
         } else {
-            alert('Reload failed.');
+            alert('Restart failed.');
         }
     } catch(e) { console.error(e); }
 });
 
 document.getElementById('rollbackModelBtn')?.addEventListener('click', async () => {
     const hash = document.getElementById('rollbackHashInput').value.trim();
-    if (!hash) { alert('Enter a SHA256 to rollback to.'); return; }
-    if (!confirm('Rollback to ' + hash + '?')) return;
+    if (!hash) { alert('Enter an old version ID to restore.'); return; }
+    if (!confirm('Restore the AI to version ' + hash + '?')) return;
     try {
         const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:'/admin/rollback',query:{to_sha256:hash}})});
         if (r.ok) {
-            alert('Rollback successful.');
+            alert('Restored successfully.');
             document.getElementById('rollbackHashInput').value = '';
             await refreshHealth();
         } else {
-            alert('Rollback failed.');
+            alert('Restore failed.');
         }
     } catch(e) { console.error(e); }
 });
 
+addHelpTrigger(document.getElementById('activeAiHelpWrap'));
+
+document.querySelectorAll('.page-help').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn._helpInfo = controlHelp[btn.id];
+        showContextHelp(btn);
+    });
+});
 
 
+async function pollMetrics() {
+    if (!authenticated) {
+        setTimeout(pollMetrics, 3000);
+        return;
+    }
+    try {
+        const r = await req('/_ui/proxy', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({method: 'GET', path: '/sys_metrics'})});
+        if (r.ok && r.data) {
+            const updateStat = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = val.toFixed(1) + '%';
+                el.style.color = val < 60 ? 'var(--success)' : (val < 85 ? 'darkorange' : 'var(--danger)');
+            };
+            updateStat('sysCpu', r.data.cpu);
+            updateStat('sysMem', r.data.mem);
+            updateStat('sysDisk', r.data.disk);
+        }
+    } catch(e) {}
+    setTimeout(pollMetrics, 2000);
+}
+setTimeout(pollMetrics, 2000);
