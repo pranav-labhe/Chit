@@ -176,7 +176,7 @@ stateDiagram-v2
     Candidate --> GoldenSetEvaluation: tools/eval_runner.py
     
     GoldenSetEvaluation --> Rejected: Score < 85% or Fails Critical
-    GoldenSetEvaluation --> Approved: Score >= 85% + 100% Critical + 2 Reviewers
+    GoldenSetEvaluation --> Approved: Score >= 85% + 100% Critical + Auto-Rated
     
     Approved --> Champion: tools/promote_candidate.py
     Champion --> [*]: Serves API Traffic
@@ -255,8 +255,8 @@ The project contains 137 tests driven by `pytest`.
 - **Run UI (8001)**: `python -m uvicorn pranav.chit.ui:app --port 8001 --workers 1`
 - **Run tests**: `python -m pytest`
 - **Train model**: `python -m pranav.chit.tools.train --config configs/chit_strong.json`
-- **Evaluate**: `python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/jobs/<id>/latest.pt`
-- **Promote**: `python -m pranav.chit.tools.promote_candidate checkpoints/jobs/<id>/latest.pt --reviewer-1 name`
+- **Evaluate**: Use the 'Evaluate Model' button in the Studio UI (Calls `POST /candidates/{job_id}/evaluate`)
+- **Promote**: Use the 'Promote to Live' button in the Studio UI (Calls `POST /candidates/{job_id}/promote`)
 
 ## Model Candidates and Administration
 

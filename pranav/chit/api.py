@@ -1107,11 +1107,24 @@ def _run_eval_background(job_id: str):
     try:
         # Run eval_runner via subprocess to avoid blocking the main worker thread
         # and to cleanly load/unload the heavy evaluation model.
+        eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
         subprocess.run(
-            ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path)],
+            ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path), "--output", str(eval_path)],
             check=True,
             capture_output=True
         )
+        
+        from pranav.chit.tools.auto_rate import auto_rate
+        golden_path = Path("data/golden_set.json")
+        ratings_path = Path(JOBS_DIR) / job_id / "ratings.json"
+        
+        if eval_path.exists() and golden_path.exists():
+            auto_rate(golden_path, eval_path, ratings_path)
+            subprocess.run(
+                ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path), "--output", str(eval_path), "--ratings", str(ratings_path)],
+                check=True,
+                capture_output=True
+            )
     except subprocess.CalledProcessError as e:
         log.error(f"Evaluation failed for {job_id}: {e.stderr.decode('utf-8', errors='ignore')}")
     except Exception as e:

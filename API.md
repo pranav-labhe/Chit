@@ -520,7 +520,7 @@ with the job and a `Location: /train/{id}` header.
 | `model` | object | none | Override model size, see the table below. |
 | `training` | object | none | Override training settings, see the table below. |
 | `promote` | boolean | `false` | Legacy promotion request; `true` returns `422` unless `force_promote` is also true. |
-| `force_promote` | boolean | `false` | Explicitly install the successful candidate as served, bypassing evaluation/reviewer gates. The previous checkpoint is archived. |
+| `force_promote` | boolean | `false` | Explicitly install the successful candidate as served, bypassing automated evaluation gates. The previous checkpoint is archived. |
 
 **`init` values**
 

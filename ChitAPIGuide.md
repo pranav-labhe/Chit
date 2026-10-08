@@ -633,7 +633,7 @@ No matches gives `{"results": []}`.
 **Training** is how the model learns. It reads `train.txt` over and over and slowly improves. It runs in the
 **background**: you start it, get a job ID, and check on it as often as you like. By default it creates a
 candidate and leaves the served model unchanged. Set `force_promote: true` in the `POST /train` body to
-install a successful candidate while bypassing evaluation and reviewer gates; the previous checkpoint is archived.
+install a successful candidate while bypassing automated evaluation gates; the previous checkpoint is archived.
 
 **Only one training job can run at a time.**
 
@@ -664,7 +664,7 @@ one job by adding them to your request (see the tables below).
 | `model` | none | see the model table | Change the model's size for this job only. |
 | `training` | none | see the training table | Change training settings for this job only. |
 | `promote` | `false` | `true` or `false` | Legacy promotion request. `true` is rejected with `422` unless `force_promote` is also true. |
-| `force_promote` | `false` | `true` or `false` | Explicitly install the successful candidate as the live model, bypassing evaluation and reviewer gates. The prior checkpoint is archived. |
+| `force_promote` | `false` | `true` or `false` | Explicitly install the successful candidate as the live model, bypassing automated evaluation gates. The prior checkpoint is archived. |
 
 **`init`: where does learning start?**
 

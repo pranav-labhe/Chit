@@ -111,7 +111,7 @@ format and benefit from training examples written in that format.
    python -m pranav.chit.tools.train --config configs/chit_assistant_cpu.json
    ```
    or, with the server running, `POST /train` (see [section 5](#5-api-reference-and-examples)).
-   By default the API saves a candidate and leaves the served model unchanged. Set `force_promote: true` in `POST /train` only when you explicitly want a successful candidate installed without evaluation/reviewer gates; the previous checkpoint is archived. Otherwise use the reviewed promotion workflow in [docs/TRAINING_API.md](docs/TRAINING_API.md).
+   By default the API saves a candidate and leaves the served model unchanged. Set `force_promote: true` in `POST /train` only when you explicitly want a successful candidate installed without automated evaluation gates; the previous checkpoint is archived. Otherwise use the reviewed promotion workflow in [docs/TRAINING_API.md](docs/TRAINING_API.md).
 3. **Generate** from a request:
    ```json
    {"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}

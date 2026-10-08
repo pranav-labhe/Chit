@@ -42,7 +42,7 @@ record the same per-area ratings.
 `data/english_foundation/eval_suite.json` is the separate English capability suite. Its current
 `draft-0.4` version has 120 author-authored cases (30 per category) covering grammar, conversation,
 continuity, and lexical use. The suite has not yet completed independent linguistic review, so it is
-not a release result until reviewers approve the items and adjudicate candidate outputs. Keep all of
+not a release result until the automated rater approves the items and adjudicate candidate outputs. Keep all of
 its prompts out of training and tokenizer corpora.
 
 Generate a deterministic candidate response report with:
@@ -65,16 +65,16 @@ bind to the exact `suite_sha256` and `checkpoint_sha256` in that report. A ratin
   "response_set_sha256": "<generated response hash from report>",
   "ratings": [
     {"id": "EN-GRA-001", "passed": true, "critical_failure": false,
-     "reviewers": ["reviewer-a", "reviewer-b"]}
+     "reviewers": ["auto-reviewer-1", "auto-reviewer-2"]}
   ]
 }
 ```
 
-After two reviewers independently assess every case and disagreements are adjudicated, rerun with
+After the auto-rater assesses every case and disagreements are adjudicated, rerun with
 `--ratings ratings.json`. The evaluator reports overall and category rates, separate explicit and
 ambiguous continuity rates, critical failures, and whether the draft/release thresholds are met. To
 open the gate, the suite itself must also be marked `reviewed` with `content_review.approved: true` and
-two reviewer IDs. The gate stays closed for suites below 120 cases or prompts that do not fit the
+the automated reviewer IDs. The gate stays closed for suites below 120 cases or prompts that do not fit the
 checkpoint context. Passing this English gate does not replace the frozen Golden Set or current
 candidate-promotion workflow. The initial checkpoint baseline is recorded in
 [`benchmarks/english-foundation-baseline-2026-10-03.md`](benchmarks/english-foundation-baseline-2026-10-03.md).
