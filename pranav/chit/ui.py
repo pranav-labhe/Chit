@@ -61,12 +61,21 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Health & model", "name": "Server health", "method": "GET", "path": "/health", "pattern": r"^/health$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Service readiness", "method": "GET", "path": "/ready", "pattern": r"^/ready$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Live model details", "method": "GET", "path": "/model", "pattern": r"^/model$", "query": {}, "body": None},
+    {"category": "Health & model", "name": "System metrics", "method": "GET", "path": "/sys_metrics", "pattern": r"^/sys_metrics$", "query": {}, "body": None},
     {"category": "Generate & chat", "name": "Generate a response", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}},
     {"category": "Generate & chat", "name": "Continue raw text", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Chit is the", "mode": "continue", "tokens": 60, "temperature": 0}},
     {"category": "Generate & chat", "name": "Chat message", "method": "POST", "path": "/chat", "pattern": r"^/chat$", "query": {}, "body": {"message": "Hello, Chit.", "temperature": 0}},
     {"category": "Sessions", "name": "Create session", "method": "POST", "path": "/sessions", "pattern": r"^/sessions$", "query": {}, "body": None},
     {"category": "Sessions", "name": "List sessions", "method": "GET", "path": "/sessions", "pattern": r"^/sessions$", "query": {"limit": 50, "offset": 0}, "body": None},
     {"category": "Sessions", "name": "Read session", "method": "GET", "path": "/sessions/{session_id}", "pattern": r"^/sessions/[0-9a-f]{32}$", "query": {"limit": 100}, "body": None},
+    {"category": "Sessions", "name": "Read facts", "method": "GET", "path": "/sessions/{session_id}/facts", "pattern": r"^/sessions/[0-9a-f]{32}/facts$", "query": {}, "body": None},
+    {"category": "Sessions", "name": "Configure facts", "method": "PATCH", "path": "/sessions/{session_id}/facts", "pattern": r"^/sessions/[0-9a-f]{32}/facts$", "query": {}, "body": {"enabled": True}},
+    {"category": "Sessions", "name": "Refresh facts", "method": "POST", "path": "/sessions/{session_id}/facts/refresh", "pattern": r"^/sessions/[0-9a-f]{32}/facts/refresh$", "query": {}, "body": None},
+    {"category": "Sessions", "name": "Clear facts", "method": "DELETE", "path": "/sessions/{session_id}/facts", "pattern": r"^/sessions/[0-9a-f]{32}/facts$", "query": {}, "body": None, "confirm": True},
+    {"category": "Sessions", "name": "Read summary", "method": "GET", "path": "/sessions/{session_id}/summary", "pattern": r"^/sessions/[0-9a-f]{32}/summary$", "query": {}, "body": None},
+    {"category": "Sessions", "name": "Configure summary", "method": "PATCH", "path": "/sessions/{session_id}/summary", "pattern": r"^/sessions/[0-9a-f]{32}/summary$", "query": {}, "body": {"enabled": True}},
+    {"category": "Sessions", "name": "Refresh summary", "method": "POST", "path": "/sessions/{session_id}/summary/refresh", "pattern": r"^/sessions/[0-9a-f]{32}/summary/refresh$", "query": {}, "body": None},
+    {"category": "Sessions", "name": "Clear summary", "method": "DELETE", "path": "/sessions/{session_id}/summary", "pattern": r"^/sessions/[0-9a-f]{32}/summary$", "query": {}, "body": None, "confirm": True},
     {"category": "Sessions", "name": "Delete session", "method": "DELETE", "path": "/sessions/{session_id}", "pattern": r"^/sessions/[0-9a-f]{32}$", "query": {}, "body": None, "confirm": True},
     {"category": "Memory", "name": "Save a memory", "method": "POST", "path": "/memory", "pattern": r"^/memory$", "query": {}, "body": {"content": "Chit API console example memory.", "memory_type": "experience", "importance": 0.5, "tags": []}},
     {"category": "Memory", "name": "Search memories", "method": "GET", "path": "/memory/search", "pattern": r"^/memory/search$", "query": {"q": "office", "limit": 5}, "body": None},
@@ -76,6 +85,11 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Training & jobs", "name": "List training jobs", "method": "GET", "path": "/train", "pattern": r"^/train$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Read training job", "method": "GET", "path": "/train/{job_id}", "pattern": r"^/train/[0-9a-f]{32}$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Cancel training job", "method": "POST", "path": "/train/{job_id}/cancel", "pattern": r"^/train/[0-9a-f]{32}/cancel$", "query": {}, "body": None, "confirm": True},
+    {"category": "Training & jobs", "name": "List candidates", "method": "GET", "path": "/candidates", "pattern": r"^/candidates$", "query": {}, "body": None},
+    {"category": "Training & jobs", "name": "Evaluate candidate", "method": "POST", "path": "/candidates/{job_id}/evaluate", "pattern": r"^/candidates/[0-9a-f]{32}/evaluate$", "query": {}, "body": None, "confirm": True},
+    {"category": "Training & jobs", "name": "Promote candidate", "method": "POST", "path": "/candidates/{job_id}/promote", "pattern": r"^/candidates/[0-9a-f]{32}/promote$", "query": {}, "body": None, "confirm": True},
+    {"category": "Health & model", "name": "Rollback champion", "method": "POST", "path": "/admin/rollback", "pattern": r"^/admin/rollback$", "query": {"to_sha256": ""}, "body": None, "confirm": True},
+    {"category": "Health & model", "name": "Reload champion", "method": "POST", "path": "/admin/reload", "pattern": r"^/admin/reload$", "query": {}, "body": None, "confirm": True},
     {"category": "Knowledge", "name": "Teach knowledge", "method": "POST", "path": "/knowledge", "pattern": r"^/knowledge$", "query": {}, "body": {"items": [{"kind": "qa", "question": "What is Chit?", "answer": "Chit is the neural brain of Atmini."}]}},
     {"category": "Knowledge", "name": "List knowledge", "method": "GET", "path": "/knowledge", "pattern": r"^/knowledge$", "query": {"status": "pending", "limit": 50, "offset": 0}, "body": None},
     {"category": "Knowledge", "name": "Knowledge statistics", "method": "GET", "path": "/knowledge/stats", "pattern": r"^/knowledge/stats$", "query": {}, "body": None},
@@ -392,173 +406,6 @@ async def get_ui_train_jobs(request: Request):
         log.error(f"Error fetching jobs: {e}")
         raise HTTPException(status_code=502, detail="The Chit API could not be reached from the UI server.")
 
-@app.get("/_ui/knowledge/stats")
-async def get_ui_knowledge_stats(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching knowledge stats: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve stats")
-
-@app.get("/_ui/train/status")
-async def get_ui_train_status(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            # Check /health first to see if a job is running
-            health = await client.get(f"{API_BASE}/health")
-            health_data = health.json()
-            job_id = health_data.get("training_job")
-            
-            if not job_id:
-                return {"state": "idle", "progress": 0, "job_id": None}
-            
-            # Get detailed job status
-            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
-            if job_res.status_code != 200:
-                return {"state": "unknown", "progress": 0, "job_id": job_id}
-            
-            job_data = job_res.json()
-            return {
-                "state": job_data.get("state"),
-                "progress": job_data.get("progress", 0),
-                "job_id": job_id,
-                "step": job_data.get("step"),
-                "max_steps": job_data.get("max_steps")
-            }
-    except Exception as e:
-        log.error(f"Error fetching train status: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve training status")
-
-@app.get("/_ui/train/configs")
-async def get_ui_train_configs(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/train/configs", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Config store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching configs: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve configs")
-
-@app.post("/_ui/train")
-async def post_ui_train(request: Request, payload: dict):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.post(f"{API_BASE}/train", json=payload, headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 202:
-                raise HTTPException(status_code=response.status_code, detail=response.text)
-            return response.json()
-    except Exception as e:
-        log.error(f"Error starting training: {e}")
-        raise HTTPException(status_code=500, detail="Could not start training")
-
-@app.get("/_ui/train/jobs")
-async def get_ui_train_jobs(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/train", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Jobs store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching jobs: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve jobs")
-
-@app.get("/_ui/knowledge/stats")
-async def get_ui_knowledge_stats(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            response = await client.get(f"{API_BASE}/knowledge/stats", headers={"X-API-Key": session[1].api_key})
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Knowledge store unreachable")
-            return response.json()
-    except Exception as e:
-        log.error(f"Error fetching knowledge stats: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve stats")
-
-@app.get("/_ui/train/status")
-async def get_ui_train_status(request: Request):
-    session = await _get_key_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    try:
-        async with _new_http_client() as client:
-            # Check /health first to see if a job is running
-            health = await client.get(f"{API_BASE}/health")
-            health_data = health.json()
-            job_id = health_data.get("training_job")
-            
-            if not job_id:
-                return {"state": "idle", "progress": 0, "job_id": None}
-            
-            # Get detailed job status
-            job_res = await client.get(f"{API_BASE}/train/{job_id}", headers={"X-API-Key": session[1].api_key})
-            if job_res.status_code != 200:
-                return {"state": "unknown", "progress": 0, "job_id": job_id}
-            
-            job_data = job_res.json()
-            return {
-                "state": job_data.get("state"),
-                "progress": job_data.get("progress", 0),
-                "job_id": job_id,
-                "step": job_data.get("step"),
-                "max_steps": job_data.get("max_steps")
-            }
-    except Exception as e:
-        log.error(f"Error fetching train status: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve training status")
-
-
-
-def _remove_duplicate_ui_routes() -> None:
-    """Keep the first explicit handler for each UI path and method."""
-    seen: set[tuple[str, tuple[str, ...]]] = set()
-    unique_routes = []
-    for route in app.router.routes:
-        path = getattr(route, "path", "")
-        methods = tuple(sorted(getattr(route, "methods", ()) or ()))
-        key = (path, methods)
-        if path.startswith("/_ui/") and key in seen:
-            continue
-        if path.startswith("/_ui/"):
-            seen.add(key)
-        unique_routes.append(route)
-    app.router.routes[:] = unique_routes
-
-
-_remove_duplicate_ui_routes()
-
-
 @app.post("/_ui/login")
 async def login(payload: LoginRequest, request: Request, response: Response):
     _check_origin(request)
@@ -657,48 +504,6 @@ async def proxy(payload: ProxyRequest, request: Request):
 async def _new_http_client():
     """Borrow the app's pooled client without closing it after one request."""
     yield app.state.api_client
-
-
-_HTML = r'''<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark light"><title>Chit Console</title>
-<style>
-:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e9edf5;background:#0c111b;font-synthesis:none;--panel:#131c2a;--line:#283449;--muted:#99a8bd;--accent:#9cddc4;--red:#f6a49c}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 10% -10%,#233a42 0,transparent 38%),#0c111b}button,input,textarea,select{font:inherit}button{cursor:pointer}.shell{max-width:1420px;margin:auto;padding:28px 24px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:22px}.brand{display:flex;align-items:center;gap:13px}.mark{width:44px;height:44px;border-radius:15px;display:grid;place-items:center;background:#a2e0c6;color:#0b1917;font-weight:800;font-size:20px}.brand h1{font-size:19px;margin:0}.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}.badge{border:1px solid var(--line);border-radius:999px;padding:7px 11px;color:var(--muted);font-size:12px}.layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px}.nav,.card{background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:18px}.nav{padding:14px;height:max-content;position:sticky;top:16px}.nav button{display:flex;width:100%;text-align:left;padding:10px 11px;margin:3px 0;border:0;border-radius:10px;background:transparent;color:#b9c5d6}.nav button:hover,.nav button.active{background:#243448;color:#f4f7fb}.nav small{display:block;margin:15px 8px 5px;color:#7f8da2;text-transform:uppercase;letter-spacing:.1em;font-size:10px}.main{min-width:0}.card{padding:21px;margin-bottom:16px}.card h2{font-size:17px;margin:0 0 5px}.sub{font-size:13px;color:var(--muted);margin:0 0 17px}.hidden{display:none!important}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.field{display:flex;flex-direction:column;gap:7px;margin:10px 0}.field label{font-size:12px;color:#bec9d8}.field input,.field textarea,.field select{width:100%;border:1px solid #34435a;border-radius:10px;background:#0e1622;color:#e9edf5;padding:10px 11px;outline:none}.field input:focus,.field textarea:focus,.field select:focus{border-color:#8acdb2}.field textarea{min-height:150px;resize:vertical;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}.smallarea textarea{min-height:70px}.actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:12px}.primary,.secondary,.danger{border:0;border-radius:10px;padding:10px 15px;font-weight:650}.primary{background:#9cddc4;color:#0d201a}.secondary{background:#26364a;color:#e3eaf4}.danger{background:#4a252a;color:#ffd7d2}.notice{padding:10px 12px;border-radius:10px;background:#1d2c3b;color:#b8c7d8;font-size:13px}.notice.error{background:#43272a;color:#ffc3bc}.chatlog{display:flex;flex-direction:column;gap:11px;max-height:460px;overflow:auto;margin:16px 0}.bubble{max-width:88%;padding:12px 14px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:14px}.bubble.user{align-self:flex-end;background:#294337}.bubble.chit{align-self:flex-start;background:#1d2a3a}.bubble.system{align-self:center;background:#292b35;color:var(--muted);font-size:12px}.bubble pre{white-space:pre-wrap}.result{max-height:480px;overflow:auto;border-radius:12px;padding:14px;background:#0a1019;border:1px solid #263247;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}.status{color:var(--muted);font-size:12px}.endpoint-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin:14px 0}.endpoint{background:#111a27;border:1px solid var(--line);border-radius:10px;padding:10px;color:#e4eaf2;text-align:left}.endpoint:hover{border-color:#8acdb2}.endpoint b{display:block;font-size:12px}.endpoint span{font:11px ui-monospace,monospace;color:#9fadc0}.method{display:inline-block;font-size:10px;font-weight:750;padding:3px 5px;border-radius:5px;background:#253349;color:#b8d9cb;margin-right:5px}.overlay{position:fixed;inset:0;background:#070b12eF;display:grid;place-items:center;padding:20px;z-index:5}.login{max-width:440px;width:100%;padding:26px;background:#151f2d;border:1px solid #34445a;border-radius:18px;box-shadow:0 20px 80px #0008}.login h2{margin:0 0 8px}.login p{color:#aebbd0;font-size:13px;line-height:1.55}.footer{font-size:11px;color:#7f8da2;margin-top:14px}@media(max-width:800px){.shell{padding:18px 12px 40px}.layout{grid-template-columns:1fr}.nav{position:static;display:flex;overflow:auto;gap:4px}.nav small{display:none}.nav button{white-space:nowrap;width:auto}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.badge{display:none}}
-</style></head>
-<body><div class="shell"><header class="top"><div class="brand"><div class="mark">चित् </div><div><h1>चित्त · Chit Console</h1><p>Browser console for the Chit API</p></div></div><div class="badge" id="connection">Checking server…</div></header>
-<div class="layout"><nav class="nav" aria-label="Console sections"><small>Workspace</small><button class="active" data-view="chat">Chat</button><button data-view="generate">Generate</button><small>API tools</small><button data-view="explorer">All API routes</button><button id="logout" class="hidden">Lock console</button></nav>
-<main class="main">
-<section class="view" id="view-chat"><div class="card"><h2>Talk with Chit</h2><p class="sub">A continuing conversation uses the API’s saved session and memory context.</p><div class="field smallarea"><label for="chatInput">Your message (Markdown is supported)</label><textarea id="chatInput" placeholder="What would you like to work through?"></textarea></div><div class="actions"><button class="primary" id="sendChat">Send message</button><button class="secondary" id="newChat">New conversation</button><span class="status" id="chatSession"></span></div><div class="chatlog" id="chatlog" aria-live="polite"></div></div></section>
-<section class="view hidden" id="view-generate"><div class="card"><h2>Generate</h2><p class="sub">Ask Chit for a one-shot response or continue a raw text prefix.</p><div class="field"><label for="genPrompt">Prompt / request</label><textarea id="genPrompt" placeholder="Write an explanation, solve a problem, or create something…"></textarea></div><div class="grid"><div class="field"><label for="genMode">Mode</label><select id="genMode"><option value="assistant">Assistant request (uses memory)</option><option value="continue">Raw text continuation</option></select></div><div class="field"><label for="genTokens">Maximum new tokens (1–500)</label><input type="number" id="genTokens" min="1" max="500" value="160"></div><div class="field"><label for="genTemp">Temperature (0–2)</label><input type="number" id="genTemp" min="0" max="2" step="0.1" value="0.4"></div><div class="field"><label for="genTopK">Top K (1–256)</label><input type="number" id="genTopK" min="1" max="256" value="50"></div></div><div class="field smallarea"><label for="genStop">Optional stop strings (JSON array)</label><textarea id="genStop">[]</textarea></div><div class="actions"><button class="primary" id="runGenerate">Generate</button><span class="status" id="genStatus"></span></div><h3>Response</h3><pre class="result" id="genResult">Your response will appear here.</pre></div></section>
-<section class="view hidden" id="view-explorer"><div class="card"><h2>Documented API routes</h2><p class="sub">Choose a route to load its example. Replace path IDs and request values as needed. Changes such as delete, training, cancellation, and file splitting ask for confirmation.</p><div class="endpoint-list" id="endpointList"></div><div class="grid"><div class="field"><label for="apiMethod">Method</label><select id="apiMethod"><option>GET</option><option>POST</option><option>DELETE</option></select></div><div class="field"><label for="apiPath">API path</label><input id="apiPath" spellcheck="false"></div></div><div class="field smallarea"><label for="apiQuery">Query parameters (JSON object)</label><textarea id="apiQuery">{}</textarea></div><div class="field"><label for="apiBody">Request body (JSON; ignored for GET)</label><textarea id="apiBody">null</textarea></div><div class="actions"><button class="primary" id="runApi">Send API request</button><span class="status" id="apiStatus"></span></div><h3>API response</h3><pre class="result" id="apiResult">Choose a route above.</pre></div></section>
-</main></div><p class="footer">The API key stays on the server after sign-in. This browser receives only a short-lived HttpOnly session cookie.</p></div>
-<div class="overlay" id="loginOverlay"><form class="login" id="loginForm"><div class="mark">चित् </div><h2>Unlock Chit Console</h2><p>Enter the Chit API key. The server will retain it for this browser session and use it for API calls.</p><div class="field"><label for="apiKey">API key</label><input type="password" id="apiKey" autocomplete="current-password" required></div><div class="actions"><button class="primary" type="submit">Continue</button><span class="status" id="loginStatus"></span></div><p class="footer">Use this page over HTTPS when accessing it outside your own computer.</p></form></div>
-<script>
-const BASE=__BASE_PATH__, ROUTES=__ROUTES__;
-const $=s=>document.querySelector(s), esc=s=>String(s??''); let chatId=null;
-async function req(path,options={}){const r=await fetch(BASE+path,{credentials:'same-origin',...options});let data=null;const txt=await r.text();try{data=txt?JSON.parse(txt):null}catch{data=txt}if(r.status===401&&path!='/_ui/login'){lock();throw new Error('Console session expired. Enter the API key again.')}return {ok:r.ok,status:r.status,data}}
-function pretty(x){return typeof x==='string'?x:JSON.stringify(x,null,2)}
-function setLogin(auth){$('#loginOverlay').classList.toggle('hidden',auth);$('#logout').classList.toggle('hidden',!auth)}
-function showError(el,e){el.textContent=e.message||String(e);el.classList.add('error')}
-async function lock(){setLogin(false);$('#apiKey').value='';chatId=null;$('#chatSession').textContent=''}
-async function checkSession(){try{const r=await req('/_ui/session');setLogin(!!r.data?.authenticated);$('#connection').textContent=r.data?.authenticated?'Key held for this browser session':'Sign in required';if(r.data?.authenticated)await refreshHealth()}catch(e){$('#connection').textContent=e.message}}
-async function refreshHealth(){try{const r=await callApi('GET','/health',{},null);$('#connection').textContent='API · '+(r.data?.status||r.status)}catch(e){$('#connection').textContent='API unavailable'}}
-$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();const status=$('#loginStatus');status.textContent='Checking…';status.classList.remove('error');const key=$('#apiKey').value;try{const r=await req('/_ui/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})});$('#apiKey').value='';if(!r.ok)throw new Error(r.data?.detail||'Could not sign in.');setLogin(true);$('#connection').textContent='Key held for this browser session';await refreshHealth()}catch(err){status.textContent=err.message;status.classList.add('error')}});
-$('#logout').addEventListener('click',async()=>{try{await req('/_ui/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}finally{await lock();$('#connection').textContent='Signed out'}});
-async function callApi(method,path,query,body){const r=await req('/_ui/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method,path,query,body})});return r}
-document.querySelectorAll('.nav button[data-view]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.nav button[data-view]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+b.dataset.view))}));
-function addBubble(role,text){const b=document.createElement('div');b.className='bubble '+role;b.textContent=text;$('#chatlog').appendChild(b);$('#chatlog').scrollTop=$('#chatlog').scrollHeight}
-$('#sendChat').addEventListener('click',async()=>{const box=$('#chatInput'),message=box.value.trim();if(!message)return;addBubble('user',message);box.value='';$('#sendChat').disabled=true;try{const r=await callApi('POST','/chat',{}, {message,session_id:chatId,temperature:0.4});if(!r.ok)throw new Error(r.data?.detail?pretty(r.data.detail):'Request failed ('+r.status+')');chatId=r.data.session_id;$('#chatSession').textContent=chatId?'Session '+chatId:'No saved session';addBubble('chit',r.data.text||'')}catch(e){addBubble('system',e.message)}finally{$('#sendChat').disabled=false}});
-$('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendChat').click()}});
-$('#newChat').addEventListener('click',()=>{chatId=null;$('#chatlog').replaceChildren();$('#chatSession').textContent='New conversation'});
-$('#runGenerate').addEventListener('click',async()=>{const status=$('#genStatus');status.textContent='Generating…';status.classList.remove('error');try{let stop=JSON.parse($('#genStop').value||'[]');if(!Array.isArray(stop))throw new Error('Stop strings must be a JSON array.');const body={prompt:$('#genPrompt').value,mode:$('#genMode').value,tokens:Number($('#genTokens').value),temperature:Number($('#genTemp').value),top_k:Number($('#genTopK').value),stop};const r=await callApi('POST','/generate',{},body);$('#genResult').textContent=pretty(r.data);if(!r.ok)throw new Error('API returned '+r.status);status.textContent='Complete'}catch(e){status.textContent=e.message;status.classList.add('error')}});
-const list=$('#endpointList');let selected=null;ROUTES.forEach((route,i)=>{const b=document.createElement('button');b.className='endpoint';b.innerHTML='<b><i class="method">'+route.method+'</i>'+route.name+'</b><span>'+route.path+'</span>';b.title=route.category;b.addEventListener('click',()=>selectRoute(i));list.appendChild(b)});
-function selectRoute(i){selected=ROUTES[i];$('#apiMethod').value=selected.method;$('#apiPath').value=selected.path;$('#apiQuery').value=JSON.stringify(selected.query||{},null,2);$('#apiBody').value=selected.body===null?'':JSON.stringify(selected.body,null,2);$('#apiResult').textContent='Ready: '+selected.name+' · '+selected.category;$('#apiStatus').textContent=''}
-$('#runApi').addEventListener('click',async()=>{const status=$('#apiStatus'),result=$('#apiResult'),method=$('#apiMethod').value,path=$('#apiPath').value.trim();status.textContent='Sending…';status.classList.remove('error');try{const query=JSON.parse($('#apiQuery').value||'{}');if(!query||Array.isArray(query)||typeof query!=='object')throw new Error('Query parameters must be a JSON object.');let body=null;const raw=$('#apiBody').value.trim();if(raw)body=JSON.parse(raw);if(selected?.confirm&&!confirm('This operation may change Chit data, start work, or stop a job. Continue?')){status.textContent='Cancelled';return}const r=await callApi(method,path,query,body);result.textContent=pretty(r.data);status.textContent='HTTP '+r.status;if(!r.ok)status.classList.add('error')}catch(e){result.textContent=e.message;status.textContent='Could not send request';status.classList.add('error')}});
-checkSession();
-</script></body></html>'''
 
 
 class NoSignalServer(uvicorn.Server):

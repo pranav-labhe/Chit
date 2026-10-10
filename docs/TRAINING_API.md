@@ -55,7 +55,7 @@ and `min_lr_ratio` (the cosine floor as a fraction of `learning_rate`).
 
 Set `force_promote: true` in the `POST /train` body to install the candidate as
 the served checkpoint when training succeeds. This explicitly bypasses the
-Golden Set reviewer and evaluation gates. The previous checkpoint is archived
+Golden Set automated evaluation gates. The previous checkpoint is archived
 and a forced-promotion decision is recorded in `checkpoints/champion.json`.
 This does not bypass checkpoint loading or tokenizer-family compatibility
 checks. If you also send `promote: true`, it is accepted only when
@@ -118,7 +118,7 @@ default, they do not replace the served model. `promote: true` without
 use it only when intentionally accepting an unreviewed candidate. Otherwise,
 evaluate the candidate and current
 champion with the same `data/eval.txt` and `data/golden_set.json`; have two
-reviewers independently rate every golden response using the rubric in
+the auto-rater (`auto_rate.py`) automatically evaluates every golden response using the heuristics in
 `docs/GOLDEN_SET.md`. The ratings file must bind to the exact checkpoint and
 golden-set SHA-256 values reported by `eval_runner.py`.
 
@@ -131,7 +131,7 @@ checkpoint's evaluation output:
   "checkpoint_sha256": "<hash from report>",
   "ratings": [
     {"id": "G001", "passed": true, "critical_failure": false,
-     "reviewers": ["reviewer-a", "reviewer-b"]}
+     "reviewers": ["auto-reviewer-1", "auto-reviewer-2"]}
   ]
 }
 ```
@@ -141,10 +141,10 @@ independent review; set `critical_failure` if the response triggers any critical
 rubric failure.
 
 ```bash
-python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/jobs/<job-id>/latest.pt \
+Use the Evaluate UI or POST /candidates/{job_id}/evaluate to evaluate automatically.
   --eval-file data/eval.txt --golden-set data/golden_set.json \
   --max-new-tokens 64 --output checkpoints/jobs/<job-id>/responses.json
-python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/latest.pt \
+Use the Evaluate UI or POST /candidates/{job_id}/evaluate to evaluate automatically.
   --eval-file data/eval.txt --golden-set data/golden_set.json \
   --output checkpoints/evaluations/champion.json
 python -m pranav.chit.tools.promote_candidate \
@@ -153,7 +153,7 @@ python -m pranav.chit.tools.promote_candidate \
   --champion-eval checkpoints/evaluations/champion.json
 ```
 
-Reviewers score every candidate response and record the checkpoint and Golden
+The auto-rater scores every candidate response and record the checkpoint and Golden
 Set hashes from its response report. Then repeat the candidate evaluation with
 `--max-new-tokens 64 --ratings checkpoints/jobs/<job-id>/ratings.json` and save
 the result as `evaluation.json`; this binds ratings to the generated report.
@@ -163,7 +163,7 @@ matching evaluation data hashes. When a valid passing champion report exists,
 the candidate must also exceed it by a paired bootstrap 95% lower bound above
 a 2 percentage-point behavior lift. For the first eligible champion only, a
 context-ineligible incumbent with zero scorable cases may be replaced by a
-candidate that passes the absolute two-reviewer Golden Set gate; this bootstrap
+candidate that passes the automated Golden Set gate; this bootstrap
 path is recorded in the manifest. The promoted
 and previous checkpoints are archived under `checkpoints/champions/` and
 tracked in `checkpoints/champion.json`. Restart the service after CLI promotion

@@ -1,5 +1,69 @@
 const $=s=>document.querySelector(s); let chatId=null, authenticated=false;
 const controlHelp={
+  helpChatPage: {
+    what: 'Provides an interactive chat console to converse with Chit. Chit automatically preserves conversation history across turns and recalls relevant memories from SQLite during inference.',
+    example: 'API Mapping: Sending a message calls POST /chat with JSON payload {"message": "Hello Chit", "session_id": "hex_session_id", "temperature": 0.0}. Chit looks up past turns via sessions.py and relevant facts via memory.py before generating a response.',
+    best: 'Keep each conversation focused on a single topic or task. Use "New conversation" when changing subjects so older, unrelated conversational turns do not pollute the context window.',
+    recommended: 'Start with direct, complete questions. Use Shift+Enter for multiline inputs.',
+    risk: 'Chatting only uses existing neural weights and notebook memories; it does not permanently train the model. Very long sessions will eventually drop older turns once the token limit is reached.'
+  },
+  helpConversationsPage: {
+    what: 'View, reopen, or remove past chat sessions. Chit manages isolated conversations in sessions.db, tracking full turn history, extracted facts, and automatic progressive summaries.',
+    example: 'API Mapping: Listing sessions calls GET /sessions?limit=50&offset=0. Reopening a conversation calls GET /sessions/{session_id}?limit=100 to fetch message history. Deleting a conversation calls DELETE /sessions/{session_id}.',
+    best: 'Revisit earlier conversations when you need to resume a specific line of thinking. Use session summaries to quickly find previous discussions.',
+    recommended: 'Delete old or test conversations that are no longer needed to keep your conversation list organized.',
+    risk: 'Deleting a conversation is permanent and cannot be undone. All turns, extracted user facts, and summaries in that session will be wiped from sessions.db.'
+  },
+  helpGenPage: {
+    what: 'Provides raw, direct inference from the Transformer neural network for one-shot answers or open-ended text completion without chat formatting or session history.',
+    example: 'API Mapping: Clicking Generate calls POST /generate with JSON payload {"prompt": "...", "mode": "assistant" (default) or "continue", "tokens": 160, "temperature": 0.4, "top_k": 50}. UI "Response length" maps to "tokens", "Creativity" maps to "temperature", and "Response variety" maps to "top_k".',
+    best: 'Use "Answer my request" (assistant mode) for one-off tasks and answers. Use "Continue my text" (continue mode) when you want the model to directly continue writing from a given text prefix.',
+    recommended: 'Keep Temperature at 0.0 for deterministic factual responses, or set to 0.4-0.7 for creative writing. Start with Concise or Detailed response length.',
+    risk: 'Because there is no session history or memory lookup, Chit only sees the exact text in the prompt box. Long prompts may leave less room for generated tokens within the model context window.'
+  },
+  helpBrainPage: {
+    what: 'Explore, search, and manage Chit\'s long-term memory store (memory.db) and monitor the knowledge learning pipeline. Memories are recalled at inference time to personalize responses.',
+    example: 'API Mapping: Searching memories calls GET /memory/search?q=query&limit=50. Adding a memory calls POST /memory with JSON payload {"content": "...", "memory_type": "experience"|"fact", "importance": 0.5, "tags": []}. Deleting calls DELETE /memory/{memory_id}. Pipeline stage counts query GET /knowledge/stats.',
+    best: 'Store persistent user preferences, project guidelines, and facts that Chit should recall in every chat session without needing to retrain neural weights.',
+    recommended: 'Write concise, clear facts and set importance to 0.5 or 0.8 for key information.',
+    risk: 'Deleting a memory permanently removes it from FTS5 and vector search indexes. Memories provide inference context only and do not alter the neural weights.'
+  },
+  helpTeachPage: {
+    what: 'Queue structured facts and Q&A lessons for future training runs in knowledge.db. Lessons remain pending until you train a new candidate model in Studio.',
+    example: 'API Mapping: Saving a lesson calls POST /knowledge with JSON payload {"items": [{"kind": "text"|"qa", "question": "...", "answer": "...", "text": "...", "source": "..."}]}. Checking "Also save as memory" triggers both POST /knowledge/items and POST /memory simultaneously.',
+    best: 'Use Q&A pairs for specific questions Chit should answer accurately. Use text passages for general background knowledge and definitions.',
+    recommended: 'Check "Also save as memory" if you want Chit to recall the fact immediately in chat without waiting for a training run.',
+    risk: 'Saving a lesson does not immediately change the AI\'s neural weights. The lesson remains in the training queue until a training run is initiated and the resulting candidate is promoted.'
+  },
+  helpDataPage: {
+    what: 'Inspect training material for selected recipes and divide raw text files into training and held-out validation (eval) datasets required by learning plans.',
+    example: 'API Mapping: Inspecting files calls GET /data?config=recipe_name. Creating file splits calls POST /data/split with JSON payload {"source": "filename.txt", "config": "recipe_name", "by": "paragraph", "eval_fraction": 0.1, "dry_run": true/false}. UI "Replace existing training files" maps to overwrite: true.',
+    best: 'Always use "Preview a file split" (dry_run: true) first to verify line counts and byte splits before modifying dataset files on disk.',
+    recommended: 'Ensure your dataset is clean UTF-8 text with consistent paragraph breaks and sufficient eval data (at least 10%).',
+    risk: 'Checking "Replace existing training files" will overwrite existing train.txt and eval.txt files in the server data directory. Although backups are made, accidental overwrites can alter training behavior.'
+  },
+  helpStudioPage: {
+    what: 'Configure, start, and monitor neural network training runs, and review/promote candidate checkpoints to become the live Champion model.',
+    example: 'API Mapping: Starting training calls POST /train with JSON payload {"config": "recipe", "init": "scratch"|"auto", "force_promote": false}. UI "from scratch" maps to init_checkpoint: null (fresh randomized brain); UI "from current" maps to init_checkpoint: "latest". Evaluating a candidate calls POST /candidates/{job_id}/evaluate; promoting calls POST /candidates/{job_id}/promote.',
+    best: 'Train on top of the current model ("from current") for continuous learning. Let training complete, run the safety evaluation against the 50 Golden Gate rules, and verify passing score before promoting.',
+    recommended: 'Leave "Force promotion" unchecked so candidates undergo automated safety evaluation before taking over live traffic.',
+    risk: 'Training "from scratch" (init_checkpoint: null) completely resets and wipes all existing neural weights, starting from randomized initialization. Training also uses significant CPU/GPU compute.'
+  },
+  helpDiagPage: {
+    what: 'Run comprehensive diagnostics across the server, neural runtime, memory store, and tokenization settings to detect hardware issues or garbled output.',
+    example: 'API Mapping: Diagnostics query GET /ready, GET /health, and GET /model. UI "Text reader" maps to "tokenizer" (ByteTokenizer or BpeTokenizer); UI "Context window" maps to "model_config.block_size". Generating test output calls POST /generate.',
+    best: 'Run diagnostics whenever responses appear garbled, repetitive, or off-topic. Check whether the tokenizer matches the model configuration.',
+    recommended: 'Inspect the active model\'s tokenizer sha256 against recipe expectations. A tokenizer mismatch is the most common cause of unreadable text.',
+    risk: 'This screen is diagnostic and read-only. It identifies issues and suggests next steps but does not alter model files or configuration.'
+  },
+  helpApiPage: {
+    what: 'Interactive developer reference for all allowlisted Chit API routes. Build requests visually or edit raw JSON payloads directly.',
+    example: 'API Mapping: Proxies HTTP calls through POST /_ui/proxy with JSON payload {"method": "GET"|"POST"|"DELETE", "path": "/route", "query": {...}, "body": {...}}, attaching the session-held API key.',
+    best: 'Use the guided builder to understand schema fields, default values, and response layouts before integrating external clients.',
+    recommended: 'Test with read-only GET requests (e.g. /health, /model, /sys_metrics) before submitting mutating POST or DELETE requests.',
+    risk: 'Requests sent through the proxy execute directly against the backend API and will alter live databases or start actual training runs.'
+  },
+  activeAiHelpWrap:{what:'The exact file timestamp of the latest.pt checkpoint currently powering your chats.',example:'Match this timestamp with a job below to see which checkpoint is live.',best:'Use this to confirm that a new checkpoint was successfully promoted.',recommended:'Check this after promoting a new candidate.',risk:'None.'},
 apiKey:{what:'Lets this browser sign in to Chit. The key stays on the server for this browser session.',example:'Paste the API key given to you by the server owner.',best:'Only enter the key on the trusted Chit page. Do not share it in a message or screenshot.',recommended:'Use the key supplied for this server.',risk:'Anyone with this key may be able to change data or start training.'},
 chatInput:{what:'Write a message for Chit. Chat keeps a conversation going and may use saved memories.',example:'“Help me plan a simple weekly meal list.”',best:'Ask one clear question at a time. Add important context that Chit would not know.',recommended:'Use a complete sentence; press Enter to send or Shift+Enter for a new line.',risk:'Chit can make mistakes. Check important information.'},
 sendChat:{what:'Sends your message and adds Chit’s reply to this saved conversation.',example:'Send “What should I pack for a rainy day?”',best:'Give Chit enough detail to understand what you need.',recommended:'Start a new conversation when you switch to a different topic.',risk:'The conversation is saved under your account session.'},
@@ -57,6 +121,8 @@ apiKeySubmit:{what:'Checks the key and opens the Chit console.',example:'Enter t
 refreshSessions:{what:'Reloads your saved conversation list.',example:'Choose after creating a conversation.',best:'Use if the list is out of date.',recommended:'No setting needed.',risk:'Read-only.'}
 };
 function inferredHelp(element){
+      if(element.classList.contains('job-ai-stamp'))return {what:'The file timestamp of the latest.pt checkpoint inside this job\'s folder.',example:'If this matches the Live AI Checkpoint above, this checkpoint is the one you are currently using.',best:'Use this to verify if a promotion was successful.',recommended:'None.',risk:'None.'};
+
     const label=element.getAttribute('aria-label')||element.labels?.[0]?.textContent?.trim()||element.textContent?.trim()||element.getAttribute('placeholder')||element.id||'This control';
     const view=element.dataset?.view;
     const words=(element.textContent||'').trim().toLowerCase();
@@ -64,6 +130,8 @@ function inferredHelp(element){
     if(words==='continue conversation')return {what:'Opens this saved chat so you can keep talking in the same context.',example:'Choose it on the conversation you want to reopen.',best:'Start a new chat for a new topic.',recommended:'Review the conversation title before opening.',risk:'New messages will be added to this saved conversation.'};
     if(words==='delete'||words==='remove lesson')return {what:'Removes the selected saved conversation or lesson.',example:'Choose only after confirming you no longer need it.',best:'Review the item before removing it.',recommended:'Keep it if you are unsure.',risk:'This removes saved information and may not be undoable.'};
     if(words==='use in chat'||words==='use')return {what:'Copies this fact into the Chat message box so you can ask Chit about it.',example:'Choose Use, then add a question about the fact.',best:'Check the inserted text before sending it.',recommended:'Use when you want to discuss this fact now.',risk:'The fact is added to your draft; it is not sent until you choose Send.'};
+    if(element.classList.contains('eval-btn'))return {what:'Tests this new AI version against 50 strict safety rules.',example:'Choose this to start the automatic grading process.',best:'Always test a new AI before trusting it.',recommended:'Required before you can make it the live AI.',risk:'Testing can take several minutes in the background.'};
+    if(element.classList.contains('promote-btn'))return {what:'Replaces your current AI with this new tested version.',example:'Choose this to swap out the AI.',best:'Do this only if the test score says YES.',recommended:'Make sure you want to replace your current AI.',risk:'This immediately changes the AI for all your chats.'};
     if(words==='copy')return {what:'Copies Chit’s reply to your clipboard.',example:'Choose Copy, then paste the text where you need it.',best:'Review the answer before sharing it.',recommended:'Use when you want to reuse the reply.',risk:'Copied text may contain mistakes; check it before sharing.'};
     if(words==='try another answer')return {what:'Asks Chit to answer your latest message again.',example:'Choose after a reply missed your intent.',best:'Make your original prompt clearer if the next reply is also wrong.',recommended:'Try once after checking the prompt.',risk:'This sends another request and uses compute.'};
     const navInfo={chat:{what:'Opens the conversation screen where you can talk with Chit.',example:'Choose Chat to ask a question and continue the conversation.',best:'Use one conversation for one topic.',recommended:'Start here for normal use.',risk:'Replies can be wrong; check important facts.'},conversations:{what:'Opens your saved conversation list.',example:'Choose one to continue it or remove it.',best:'Use this when you need to return to an earlier topic.',recommended:'No setting needed.',risk:'Deleting a conversation removes its saved messages.'},generate:{what:'Opens the one-time answer screen.',example:'Ask for one answer without saving a conversation.',best:'Use Chat for a back-and-forth exchange.',recommended:'Use the default response settings.',risk:'Long answers take longer and may be less focused.'},brain:{what:'Opens saved memories and lesson progress.',example:'Search for a memory or review learning counts.',best:'Use memory for facts Chit should recall now.',recommended:'No setting needed.',risk:'Deleting a memory removes it from recall.'},teach:{what:'Opens the lesson form for information Chit may learn later.',example:'Save one checked fact or question and answer.',best:'Keep lessons accurate and focused.',recommended:'Use a short, clear lesson.',risk:'Lessons affect the model only after training.'},studio:{what:'Opens learning plans and training progress.',example:'Choose a plan, read its settings, then start learning.',best:'Inspect data before training.',recommended:'Use the everyday assistant plan when available.',risk:'Training uses compute and may take time.'},data:{what:'Opens the training file inspection screen.',example:'Check that the plan has enough training text.',best:'Preview a file split before writing it.',recommended:'No setting needed.',risk:'Creating a split changes files used by future training.'},diagnostics:{what:'Opens checks for the server, model, tokenizer, data, and recent training.',example:'Use after a reply looks unreadable or unexpected.',best:'Run checks, then try the simple sample prompt.',recommended:'Choose the same plan that produced the problem.',risk:'Checks cannot guarantee that a model will answer correctly.'},explorer:{what:'Opens the plain-language API reference and optional technical editor.',example:'Choose a topic to see what it does and what it needs.',best:'Use the guided screens for normal tasks.',recommended:'Only open the request editor if you understand the selected route.',risk:'Advanced requests can change data or start work.'}};
@@ -86,7 +154,7 @@ function showContextHelp(element){
     panel.classList.remove('hidden');$('#closeContextHelp').focus();
 }
 function addHelpTrigger(element){
-    if(element.dataset.helpDecorated||element.id==='closeContextHelp'||element.classList.contains('help-trigger'))return;
+    if(element.dataset.helpDecorated||element.id==='closeContextHelp'||element.classList.contains('help-trigger')||element.classList.contains('page-help'))return;
     if(element.matches('input[type="hidden"]'))return;
     const info=controlHelp[element.id]||element._helpInfo||inferredHelp(element);
     element._helpInfo=info;element._helpLabel=element.labels?.[0]?.textContent?.trim()||element.getAttribute('aria-label')||element.textContent?.trim()||element.placeholder||element.id||'Help';
@@ -227,18 +295,32 @@ async function showConfigDetails(name){
 }
 
 async function renderJobs() {
-    const r = await req('/_ui/train/jobs');
+    const [rJobs, rCands, rModel] = await Promise.all([
+        req('/_ui/train/jobs'),
+        req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/candidates'})}),
+        req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/model'})})
+    ]);
+    const liveStampEl = document.getElementById('studioLiveStamp');
+    const liveTsRaw = (rModel.ok && rModel.data?.checkpoint_timestamp) ? rModel.data.checkpoint_timestamp : null;
+    const liveStampFormatted = liveTsRaw ? new Date(liveTsRaw).toLocaleString() : null;
+    if (liveStampEl) {
+        liveStampEl.textContent = liveStampFormatted || 'None (Not initialized)';
+    }
     const list = $('#jobList');
-    if (!r.ok) {
-        list.textContent = 'Could not load learning history. ' + friendlyError(r.data, r.status);
+    if (!rJobs.ok) {
+        list.textContent = 'Could not load learning history. ' + friendlyError(rJobs.data, rJobs.status);
         return;
     }
     list.replaceChildren();
-    if (r.data.jobs.length === 0) {
+    
+    const cands = (rCands.ok && rCands.data?.candidates) ? Object.fromEntries(rCands.data.candidates.map(c => [c.job_id, c])) : {};
+
+    if (rJobs.data.jobs.length === 0) {
         list.innerHTML = '<div class="status" style="text-align: center; padding: 20px;">No recent jobs.</div>';
         return;
     }
-    r.data.jobs.forEach(job => {
+    
+    rJobs.data.jobs.forEach(job => {
         const card = document.createElement('div');
         card.className = 'job-card';
         const stateCls = 'state-' + job.state;
@@ -246,7 +328,7 @@ async function renderJobs() {
         header.className = 'job-header';
         const id = document.createElement('div');
         id.style.fontWeight = 'bold';
-        id.textContent = `${String(job.id || '').slice(0, 8)}…`;
+        id.textContent = `Job: ${String(job.id || '').slice(0, 8)}…`;
         const state = document.createElement('div');
         state.className = `job-state ${stateCls}`;
         const narratives={queued:'Getting ready to learn',running:'Studying the training material',succeeded:'Learning complete',failed:'Learning stopped with a problem',cancelled:'Learning session stopped'};
@@ -261,18 +343,96 @@ async function renderJobs() {
         const meta = document.createElement('div');
         meta.className = 'job-meta';
         const step = document.createElement('span');
-        step.textContent = job.state==='running'?`Learning progress · step ${job.step ?? 0} of ${job.max_steps ?? '—'}`:job.state==='succeeded'?'Chit finished this learning session':`Progress · step ${job.step ?? 0} of ${job.max_steps ?? '—'}`;
+        step.textContent = job.state==='running'?`Learning progress - step ${job.step ?? 0} of ${job.max_steps ?? '?'}`:job.state==='succeeded'?'Chit finished this learning session':`Progress - step ${job.step ?? 0} of ${job.max_steps ?? '?'}`;
         const loss = document.createElement('span');
         loss.textContent = `Loss: ${Number.isFinite(job.latest?.eval_loss) ? job.latest.eval_loss.toFixed(4) : 'N/A'}`;
-        meta.append(step, loss);
+        const plan = document.createElement('span');
+        plan.textContent = `Plan: ${job.metadata?.config_name || 'Unknown'}`;
+        plan.style.marginLeft = '12px';
+        meta.append(step, loss, plan);
         card.append(header, progress, meta);
+        
         if(['queued','running'].includes(job.state)){
-            const cancel=document.createElement('button');cancel.type='button';cancel.className='danger';cancel.textContent='Stop this learning session';
-            cancel.addEventListener('click',async()=>{if(!confirm('Ask Chit to stop this learning session? Work already completed remains saved.'))return;const result=await callApi('POST',`/train/${encodeURIComponent(job.id)}/cancel`,{},null);if(result.ok){cancel.textContent='Stop requested';renderJobs()}else alert(friendlyError(result.data,result.status))});
-            card.appendChild(cancel);
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            actions.style.marginTop = '10px';
+            const btn = document.createElement('button');
+            btn.className = 'danger';
+            btn.textContent = 'Stop learning session';
+            btn.addEventListener('click', async () => {
+                if(!confirm('Stop this learning session immediately?')) return;
+                const cr = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/train/${job.id}/cancel`})});
+                if(cr.ok) setTimeout(renderJobs, 500);
+            });
+            actions.appendChild(btn);
+            card.appendChild(actions);
+        } else if (job.state === 'succeeded') {
+            const c = cands[job.id] || {};
+            const rawTs = c.checkpoint_timestamp;
+            const ts = rawTs ? new Date(rawTs).toLocaleString() : 'No checkpoint';
+            const isLive = ts !== 'No checkpoint' && (
+                job.promoted ||
+                (liveTsRaw && rawTs && new Date(rawTs).getTime() === new Date(liveTsRaw).getTime()) ||
+                (liveStampFormatted && ts === liveStampFormatted)
+            );
+            const liveBadge = isLive ? `<span style="color:var(--success); font-weight:bold; margin-left: 8px;">(Currently Live AI)</span>` : '';
+            const evalHtml = c.evaluation ? 
+                `<b>Safety Test:</b> <span style="color:${c.evaluation.behavioral_gate?.gate_pass ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${c.evaluation.behavioral_gate?.gate_pass ? 'Passed' : 'Failed'}</span> (Checked ${c.evaluation.behavioral_gate?.case_ratings?.length || 0} rules)` : 
+                `<i>Safety Test: Not tested yet</i>`;
+                
+            const candDiv = document.createElement('div');
+            candDiv.style.marginTop = '10px';
+            candDiv.style.paddingTop = '10px';
+            candDiv.style.borderTop = '1px dashed var(--accent)';
+            
+            candDiv.innerHTML = `
+                <div style="font-size:12px; margin-bottom:4px; display:inline-block;" class="job-ai-stamp" id="candStamp_${job.id}"><b>Job Checkpoint:</b> ${ts} ${liveBadge}</div><br>
+                <div style="font-size:12px; margin: 4px 0;">${evalHtml}</div>
+                <div class="actions" style="margin-top: 8px;">
+                    <button class="secondary eval-btn" data-id="${job.id}">Test this AI version</button>
+                    <button class="primary promote-btn" data-id="${job.id}" ${c.evaluation?.behavioral_gate?.gate_pass ? '' : 'disabled'}>Make this the Live AI</button>
+                </div>
+            `;
+            
+            card.appendChild(candDiv);
         }
+        
         list.appendChild(card);
     });
+    
+    // Wire up candidate buttons
+    document.querySelectorAll('.eval-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        e.target.textContent = 'Testing...';
+        e.target.disabled = true;
+        await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/evaluate`})});
+        alert('Test started in the background. Refresh in a minute.');
+    }));
+    
+    document.querySelectorAll('.promote-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        if (!confirm('Promote this tested version to be your live AI?')) return;
+        e.target.textContent = 'Making live...';
+        e.target.disabled = true;
+        try {
+            const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/promote`})});
+            if (r.ok) {
+                alert('Success! The live AI has been hot-swapped.');
+                await refreshHealth();
+                await renderJobs();
+            } else {
+                alert('Promotion failed: ' + (r.data?.detail || r.status));
+                e.target.textContent = 'Make this the Live AI';
+                e.target.disabled = false;
+            }
+        } catch(err) {
+            e.target.textContent = 'Make this the Live AI';
+            e.target.disabled = false;
+        }
+    }));
+    
+    // Add dynamically injected buttons to tooltip system
+    document.querySelectorAll('.eval-btn, .promote-btn, .job-ai-stamp').forEach(addHelpTrigger);
 }
 
 $('#startTrain').addEventListener('click', async () => {
@@ -321,6 +481,14 @@ async function loadModelSummary(){
             const config=model.data.model_config||{};
             details.textContent=`Current brain · ${config.n_layer??'—'} layers · ${model.data.parameters?.toLocaleString?.()??'—'} learned settings · ${model.data.device||'device not reported'}`;
             box.appendChild(details);
+        }
+        const liveStampEl = document.getElementById('studioLiveStamp');
+        if (liveStampEl) {
+            if (model.ok && model.data?.checkpoint_timestamp) {
+                liveStampEl.textContent = new Date(model.data.checkpoint_timestamp).toLocaleString();
+            } else {
+                liveStampEl.textContent = 'None (Not initialized)';
+            }
         }
     }catch(e){box.textContent=e.message}
 }
@@ -580,6 +748,12 @@ $('#sendChat').addEventListener('click', async () => {
         recordResponseEvidence({mode:'Chat',prompt:message,tokens:'server default',temperature:0.4,topK:'server default',continued:wasContinuing,response:r.data});
         
         $('#chatSession').textContent = chatId ? `Session ${chatId}` : 'No saved session';
+        if (!wasContinuing && chatId) {
+            updateSessionTitle(chatId).catch(console.error);
+        }
+        if (typeof loadChatFacts === 'function') {
+            loadChatFacts().catch(console.error);
+        }
         const recalled=r.data?.metadata?.memory_ids;
         if(Array.isArray(recalled)&&recalled.length){
             const breadcrumb=document.createElement('div');breadcrumb.className='memory-breadcrumb';
@@ -595,7 +769,46 @@ $('#sendChat').addEventListener('click', async () => {
     }
 });
 
+
+async function loadChatFacts() {
+    if (!chatId) {
+        document.getElementById('chatThoughtsCard').style.display = 'none';
+        return;
+    }
+    document.getElementById('chatThoughtsCard').style.display = 'block';
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:`/sessions/${chatId}/facts`})});
+        if (r.ok && r.data && r.data.facts) {
+            const facts = r.data.facts;
+            document.getElementById('chatFactsList').innerHTML = Object.entries(facts).length === 0 ? '<p class="status">No facts extracted yet.</p>' : '';
+            for (const [k, v] of Object.entries(facts)) {
+                const div = document.createElement('div');
+                div.className = 'memory-item';
+                div.innerHTML = `<b>` + esc(k) + `</b>: ` + esc(v);
+                document.getElementById('chatFactsList').appendChild(div);
+            }
+        }
+    } catch (e) {
+        document.getElementById('factsStatus').textContent = 'Could not load facts.';
+    }
+}
+document.getElementById('refreshFactsBtn')?.addEventListener('click', loadChatFacts);
+document.getElementById('clearFactsBtn')?.addEventListener('click', async () => {
+    if (!chatId || !confirm('Clear all facts for this session?')) return;
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'DELETE',path:`/sessions/${chatId}/facts`})});
+        if (r.ok) {
+            document.getElementById('factsStatus').textContent = 'Facts cleared.';
+            setTimeout(() => document.getElementById('factsStatus').textContent = '', 2000);
+            await loadChatFacts();
+        }
+    } catch (e) {
+        document.getElementById('factsStatus').textContent = 'Failed to clear facts.';
+    }
+});
+
 async function renderMemoryGallery(results = []) {
+
     const grid = $('#memoryGrid');
     grid.innerHTML = '';
     
@@ -796,3 +1009,82 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape')closeContext
 decorateHelp();
 new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{if(node.nodeType===1){if(node.matches?.('button,input,textarea,select,summary'))addHelpTrigger(node);decorateHelp(node)}}))).observe(document.body,{childList:true,subtree:true});
 checkSession();
+
+
+
+document.getElementById('reloadModelBtn')?.addEventListener('click', async () => {
+    if (!confirm('Reload the live AI from disk? This will briefly pause generation.')) return;
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:'/admin/reload'})});
+        if (r.ok) {
+            alert('AI Restarted.');
+            await refreshHealth();
+        } else {
+            alert('Restart failed.');
+        }
+    } catch(e) { console.error(e); }
+});
+
+document.getElementById('rollbackModelBtn')?.addEventListener('click', async () => {
+    const hash = document.getElementById('rollbackHashInput').value.trim();
+    if (!hash) { alert('Enter an old version ID to restore.'); return; }
+    if (!confirm('Restore the AI to version ' + hash + '?')) return;
+    try {
+        const r = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:'/admin/rollback',query:{to_sha256:hash}})});
+        if (r.ok) {
+            alert('Restored successfully.');
+            document.getElementById('rollbackHashInput').value = '';
+            await refreshHealth();
+        } else {
+            alert('Restore failed.');
+        }
+    } catch(e) { console.error(e); }
+});
+
+addHelpTrigger(document.getElementById('activeAiHelpWrap'));
+
+const pageGuideTitles = {
+    helpChatPage: 'Chat Page Guide',
+    helpConversationsPage: 'Conversations Page Guide',
+    helpGenPage: 'Generate Page Guide',
+    helpBrainPage: 'Brain / Memories Page Guide',
+    helpTeachPage: 'Teach Chit Page Guide',
+    helpStudioPage: 'Studio Page Guide',
+    helpDataPage: 'Training Library Page Guide',
+    helpDiagPage: 'Diagnostics & Health Page Guide',
+    helpApiPage: 'Guided API Reference Page Guide'
+};
+
+document.querySelectorAll('.page-help').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn._helpLabel = pageGuideTitles[btn.id] || 'Page Guide';
+        btn._helpInfo = controlHelp[btn.id];
+        showContextHelp(btn);
+    });
+});
+
+
+async function pollMetrics() {
+    if (!authenticated) {
+        setTimeout(pollMetrics, 2000);
+        return;
+    }
+    try {
+        const r = await req('/_ui/proxy', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({method: 'GET', path: '/sys_metrics'})});
+        if (r.ok && r.data) {
+            const updateStat = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el || typeof val !== 'number') return;
+                el.textContent = val.toFixed(1) + '%';
+                el.style.color = val < 60 ? 'var(--success)' : (val < 85 ? '#ff8c00' : 'var(--danger)');
+            };
+            updateStat('sysCpu', r.data.cpu);
+            updateStat('sysMem', r.data.mem);
+            updateStat('sysDisk', r.data.disk);
+        }
+    } catch(e) {}
+    setTimeout(pollMetrics, 2000);
+}
+setTimeout(pollMetrics, 2000);

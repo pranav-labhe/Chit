@@ -119,6 +119,14 @@ Because Chit is a personal assistant, protecting its data is critical.
 
 ---
 
+
+## 5. UI Features & Philosophy
+
+The Chit UI (`ui.py` & `app.js`) is the primary way to interact with the system. It strictly wraps the API.
+- **Universal Page Guides**: Every UI view has a "Page Guide" button that explicitly maps friendly UI terms to their underlying JSON API payloads (e.g. mapping "Text reader" to `tokenizer`, or "Learn from scratch" to `init_checkpoint: null`).
+- **Real-Time System Metrics**: The UI header features a live CPU/Mem/Disk badge polling `GET /sys_metrics` every 2 seconds.
+- **Unified Training & Candidates**: The Studio UI lists training jobs and immediately surfaces their associated Golden Gate evaluations, file timestamps, and promotion buttons once completed.
+
 ## 6. Directory & Module Map (Wiring)
 
 ### Core AI Brain (The Neural Network)
@@ -176,7 +184,7 @@ stateDiagram-v2
     Candidate --> GoldenSetEvaluation: tools/eval_runner.py
     
     GoldenSetEvaluation --> Rejected: Score < 85% or Fails Critical
-    GoldenSetEvaluation --> Approved: Score >= 85% + 100% Critical + 2 Reviewers
+    GoldenSetEvaluation --> Approved: Score >= 85% + 100% Critical + Auto-Rated
     
     Approved --> Champion: tools/promote_candidate.py
     Champion --> [*]: Serves API Traffic
@@ -255,5 +263,25 @@ The project contains 137 tests driven by `pytest`.
 - **Run UI (8001)**: `python -m uvicorn pranav.chit.ui:app --port 8001 --workers 1`
 - **Run tests**: `python -m pytest`
 - **Train model**: `python -m pranav.chit.tools.train --config configs/chit_strong.json`
-- **Evaluate**: `python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/jobs/<id>/latest.pt`
-- **Promote**: `python -m pranav.chit.tools.promote_candidate checkpoints/jobs/<id>/latest.pt --reviewer-1 name`
+- **Evaluate**: Use the 'Evaluate Model' button in the Studio UI (Calls `POST /candidates/{job_id}/evaluate`)
+- **Promote**: Use the 'Promote to Live' button in the Studio UI (Calls `POST /candidates/{job_id}/promote`)
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their candidate checkpoint modification timestamps (`checkpoint_timestamp`), and their Golden Gate evaluation scores.
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

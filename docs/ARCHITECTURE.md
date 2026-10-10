@@ -16,6 +16,8 @@ POST /knowledge ──► KnowledgeStore ──(POST /knowledge/train)──► 
 Chit (चित्) is a compact neural brain designed for fast, context-aware text generation. It separates static knowledge (weights) from dynamic experiences (memory) and structured learning (knowledge base).
 
 ### Core Cognitive Pillars
+- **Telemetry**: Hardware telemetry (CPU, Memory, Disk) is monitored in real-time via `GET /sys_metrics` to provide instant visibility into system load and hardware constraints.
+
 - **Weights (`checkpoints/`)**: The deep learning model's state. Updated only via training jobs.
 - **Memory (`data/memory.db`)**: SQLite-backed experiences recalled during inference to personalize responses without retraining. `data/memory.json` remains the import and recovery format.
 - **Knowledge (`data/knowledge.db`)**: A structured queue of data that the model will "learn" during the next training cycle.
@@ -122,7 +124,9 @@ The browser console is a small backend-for-frontend (BFF) that sits in front of 
 The rendered page is assembled from `ui/templates/index.html`, `ui/static/css/style.css`, and `ui/static/js/app.js`. The template injects the base path and the server's route catalog as JSON. The JavaScript uses relative URLs under that prefix and does not call the Chit API directly. Its normal user workflows call small `/_ui/*` helper endpoints; guided and advanced API requests use `POST /_ui/proxy`. The server owns the API key and adds `X-API-Key` only when forwarding a request upstream. `GET /_ui/api-guide` serves the repository's `ChitAPIGuide.md` (falling back to `docs/ChitAPIGuide.md`) as plain text for optional in-console reading; it does not require a signed-in UI session.
 
 #### Screens and user workflows
-The single page keeps these screens in the browser and switches the visible view without a full page navigation:
+The single page keeps these screens in the browser and switches the visible view without a full page navigation. The UI unifies disconnected backend concepts:
+- **Unified Training Pipeline**: The Studio screen merges `jobs.py` (running queues) and `eval_runner.py`/`promote_candidate.py` (candidate evaluation and filesystem checkpointing) into a single unified Job Card interface, exposing physical checkpoint file modification times and automated Golden Gate safety scores natively.
+
 
 | Screen | Purpose and API relationship |
 | :--- | :--- |
@@ -133,13 +137,16 @@ The single page keeps these screens in the browser and switches the visible view
 | **Teach Chit** | Adds text or question-and-answer lessons to `/knowledge`; optionally saves the same content as a memory. Lessons enter the training queue and do not alter weights until training runs. |
 | **Studio** | Loads available training recipes from `/train/configs`, explains the selected configuration, starts training, and tracks/cancels jobs. Configuration details are read from the server's configured JSON files and combined with active model information. |
 | **Training library** | Inspects training data and previews or applies a train/review split. Applying a split changes files in the server's configured data folder. It also shows the model and service state. |
-| **Troubleshooting** | Collects health, readiness, model, data, training, and selected-recipe evidence; can generate a sample response and record the user's readability feedback in the current page. It diagnoses likely causes but is not an automatic model-quality evaluation. |
+| **Troubleshooting (and Administration)** | Includes rollback and reload capabilities for the live model, in addition to diagnostics.  Collects health, readiness, model, data, training, and selected-recipe evidence; can generate a sample response and record the user's readability feedback in the current page. It diagnoses likely causes but is not an automatic model-quality evaluation. |
 | **API reference** | Lets the user choose an operation, edit its fields in a guided builder, see the live JSON request, send it through the proxy allowlist, and read field-by-field explanations of the response or errors. Raw JSON editing and the complete Markdown guide are optional supporting views. |
 
-The UI distinguishes **memory** (available for retrieval during inference) from **knowledge** (queued as training material). Training produces a candidate checkpoint by default. `force_promote: true` on `POST /train` explicitly bypasses evaluation/reviewer gates and installs a successful candidate; the UI exposes this request option with a confirmation. Saving a lesson alone does not update model weights. The selected Studio recipe explanation includes relevant architecture, context, data-source weights, tokenizer compatibility, and training settings when the server configuration provides them.
+The UI distinguishes **memory** (available for retrieval during inference) from **knowledge** (queued as training material). Training produces a candidate checkpoint by default. `force_promote: true` on `POST /train` explicitly bypasses automated evaluation gates and installs a successful candidate; the UI exposes this request option with a confirmation. Saving a lesson alone does not update model weights. The selected Studio recipe explanation includes relevant architecture, context, data-source weights, tokenizer compatibility, and training settings when the server configuration provides them.
 
 #### Help and API explanations
-The frontend maintains contextual help content for controls and API route guides in `app.js`. Help describes purpose, examples, recommended use or values, and risks where known; a fallback explanation is used when a control has no specific entry. A mutation observer also adds help affordances to controls inserted after page load. For each selected API route, the guided builder creates controls from the route's sample query and body: scalar fields become form controls, nested objects and arrays of objects become grouped fields, and arrays or null-valued fields can be edited as JSON. The builder displays a live JSON preview, validates JSON syntax and known numeric ranges, and supports adding or removing structured list items. The technical editor remains available for request shapes beyond the guided sample. After a request, the response view explains known response keys and recursively presents nested objects and arrays; the complete raw JSON remains available. The route catalog in `ui.py`, the field and response descriptions in `app.js`, the API implementation, and `ChitAPIGuide.md` are maintained separately, so API changes need coordinated updates to these descriptions and the proxy allowlist.
+The frontend acts as an abstraction layer over the raw JSON API, maintaining contextual help content for controls and API route guides in `app.js`. 
+- **Universal Page Guides**: Every UI screen features a "Page Guide" button that explicitly maps the friendly UI terms on that page to their underlying JSON API schemas and endpoints (e.g., mapping "Text reader" to `tokenizer`, or "Learn from scratch" to `init_checkpoint: null`).
+- **Control Tooltips**: Help describes purpose, examples, recommended use or values, and risks where known. Dynamically injected elements (like Candidate model checkpoints) are bound to the `controlHelp` engine automatically to preserve context.
+ A mutation observer also adds help affordances to controls inserted after page load. For each selected API route, the guided builder creates controls from the route's sample query and body: scalar fields become form controls, nested objects and arrays of objects become grouped fields, and arrays or null-valued fields can be edited as JSON. The builder displays a live JSON preview, validates JSON syntax and known numeric ranges, and supports adding or removing structured list items. The technical editor remains available for request shapes beyond the guided sample. After a request, the response view explains known response keys and recursively presents nested objects and arrays; the complete raw JSON remains available. The route catalog in `ui.py`, the field and response descriptions in `app.js`, the API implementation, and `ChitAPIGuide.md` are maintained separately, so API changes need coordinated updates to these descriptions and the proxy allowlist.
 
 #### Authentication, proxying, and request boundaries
 1. The user submits the API key to the UI login endpoint. The UI compares it with the configured API key and keeps it server-side in a process-local session store.
@@ -218,6 +225,8 @@ and project-fact files; it does not replace the shared train/eval files.
 | | `start_training` | `r: TrainRequest` | Initiates a weight update job. |
 | | `add_knowledge` | `batch: KnowledgeBatch` | Adds data to the training queue. |
 | | `split_data` | `r: SplitRequest` | Organizes raw corpus into training/eval. |
+| | `system_metrics` | none | Real-time hardware telemetry (CPU, Memory, Disk). |
+| | `list_candidates` | none | Lists finished training candidates with evaluation and checkpoint timestamps. |
 | **`bridge.py`** | `__init__` | `runtime, max_memories, ...` | Initializes the API-to-Runtime bridge. |
 | **`data.py`** | `random_batch` | `ds, batch_size, device` | Provides shuffled data for training. |
 | **`model.py`** | `forward` | `idx, targets` | The core Transformer forward pass. |
