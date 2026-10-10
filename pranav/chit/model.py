@@ -1,4 +1,4 @@
-"""Small decoder-only Transformer trained from scratch for Chit."""
+"""Decoder-only Transformer trained from scratch for Chit."""
 from __future__ import annotations
 
 import torch
@@ -11,12 +11,17 @@ _LEGACY_BUFFER_SUFFIXES = (".attn.mask",)
 
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, n_embd: int, n_head: int, dropout: float):
+    def __init__(self, n_embd: int, n_head: int, dropout: float,
+                 position_encoding: str = "absolute", rope_theta: float = 10000.0):
         super().__init__()
         if n_embd % n_head:
             raise ValueError(f"n_embd ({n_embd}) must be divisible by n_head ({n_head})")
         self.n_head = n_head
         self.dropout = dropout
+        self.position_encoding = position_encoding
+        self.rope_theta = rope_theta
+        if position_encoding == "rope" and (n_embd // n_head) % 2:
+            raise ValueError("RoPE requires an even attention head dimension")
         self.qkv = nn.Linear(n_embd, 3 * n_embd)
         self.proj = nn.Linear(n_embd, n_embd)
         self.resid_drop = nn.Dropout(dropout)
@@ -26,18 +31,33 @@ class CausalSelfAttention(nn.Module):
         q, k, v = self.qkv(x).split(c, dim=2)
         # (b, t, c) -> (b, heads, t, head_dim)
         q, k, v = (z.view(b, t, self.n_head, c // self.n_head).transpose(1, 2) for z in (q, k, v))
+        if self.position_encoding == "rope":
+            q, k = self._apply_rope(q), self._apply_rope(k)
         # Fused kernel (Flash / memory-efficient attention where available), causal mask built in.
         y = F.scaled_dot_product_attention(
             q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=True)
         y = y.transpose(1, 2).contiguous().view(b, t, c)
         return self.resid_drop(self.proj(y))
 
+    def _apply_rope(self, x: torch.Tensor) -> torch.Tensor:
+        _, _, length, head_dim = x.shape
+        inv_freq = 1.0 / (self.rope_theta ** (
+            torch.arange(0, head_dim, 2, device=x.device, dtype=torch.float32) / head_dim))
+        angles = torch.outer(torch.arange(length, device=x.device, dtype=torch.float32), inv_freq)
+        cos = angles.cos().to(dtype=x.dtype)[None, None, :, :]
+        sin = angles.sin().to(dtype=x.dtype)[None, None, :, :]
+        paired = x.reshape(*x.shape[:-1], head_dim // 2, 2)
+        even, odd = paired[..., 0], paired[..., 1]
+        rotated = torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1)
+        return rotated.flatten(-2)
+
 
 class Block(nn.Module):
-    def __init__(self, n_embd: int, n_head: int, dropout: float):
+    def __init__(self, n_embd: int, n_head: int, dropout: float,
+                 position_encoding: str = "absolute", rope_theta: float = 10000.0):
         super().__init__()
         self.ln1 = nn.LayerNorm(n_embd)
-        self.attn = CausalSelfAttention(n_embd, n_head, dropout)
+        self.attn = CausalSelfAttention(n_embd, n_head, dropout, position_encoding, rope_theta)
         self.ln2 = nn.LayerNorm(n_embd)
         self.mlp = nn.Sequential(
             nn.Linear(n_embd, 4 * n_embd),
@@ -52,17 +72,26 @@ class Block(nn.Module):
 
 
 class ChitModel(nn.Module):
-    """Small decoder-only Transformer trained from scratch for Chit."""
+    """Decoder-only Transformer with configurable token vocabulary and positions."""
 
     def __init__(self, vocab_size: int = 256, block_size: int = 128, n_layer: int = 4,
-                 n_head: int = 4, n_embd: int = 128, dropout: float = 0.0):
+                 n_head: int = 4, n_embd: int = 128, dropout: float = 0.0,
+                 position_encoding: str = "absolute", rope_theta: float = 10000.0):
         super().__init__()
+        if position_encoding not in ("absolute", "rope"):
+            raise ValueError("position_encoding must be 'absolute' or 'rope'")
+        if rope_theta <= 0:
+            raise ValueError("rope_theta must be positive")
         self.block_size = block_size
         self.vocab_size = vocab_size
+        self.position_encoding = position_encoding
+        self.rope_theta = rope_theta
         self.token_embedding = nn.Embedding(vocab_size, n_embd)
-        self.position_embedding = nn.Embedding(block_size, n_embd)
+        if position_encoding == "absolute":
+            self.position_embedding = nn.Embedding(block_size, n_embd)
         self.drop = nn.Dropout(dropout)
-        self.blocks = nn.ModuleList([Block(n_embd, n_head, dropout) for _ in range(n_layer)])
+        self.blocks = nn.ModuleList([Block(n_embd, n_head, dropout, position_encoding, rope_theta)
+                                     for _ in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size, bias=False)
         self.lm_head.weight = self.token_embedding.weight  # weight tying
@@ -85,7 +114,10 @@ class ChitModel(nn.Module):
         if t > self.block_size:
             raise ValueError(f"sequence length {t} exceeds block_size {self.block_size}")
         pos = torch.arange(t, device=idx.device)
-        x = self.drop(self.token_embedding(idx) + self.position_embedding(pos)[None, :, :])
+        x = self.token_embedding(idx)
+        if self.position_encoding == "absolute":
+            x = x + self.position_embedding(pos)[None, :, :]
+        x = self.drop(x)
         for block in self.blocks:
             x = block(x)
         logits = self.lm_head(self.ln_f(x))

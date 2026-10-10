@@ -1,0 +1,19 @@
+{
+  "benchmark": "SQLiteMemoryStore.search synthetic hybrid exact scan",
+  "python": "3.13.0",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "cpu": "Intel Core i5-6300U, 2 cores / 4 logical processors",
+  "numpy": "2.5.3",
+  "seed": 42,
+  "dimension": 384,
+  "repeats": 15,
+  "warmups": 3,
+  "percentile_method": "numpy.percentile linear interpolation",
+  "query_embedding": "fixed unit vector; memory vectors seeded random unit vectors",
+  "results": [
+    {"records":1000,"p50_ms":78.9074,"p95_ms":99.55092,"p99_ms":106.216264,"mean_ms":82.181293,"database_bytes":2400256},
+    {"records":5000,"p50_ms":174.3474,"p95_ms":313.03111,"p99_ms":335.299902,"mean_ms":192.107007,"database_bytes":11853824},
+    {"records":10000,"p50_ms":346.8627,"p95_ms":619.06924,"p99_ms":621.137208,"mean_ms":394.42392,"database_bytes":23666688},
+    {"records":50000,"p50_ms":1817.6726,"p95_ms":2293.79636,"p99_ms":2352.931352,"mean_ms":1907.303733,"database_bytes":118308864}
+  ]
+}

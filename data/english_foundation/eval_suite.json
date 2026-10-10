@@ -1,0 +1,1799 @@
+{
+  "schema_version": 1,
+  "suite": "english-linguistic-capability",
+  "version": "draft-0.4",
+  "status": "draft; requires independent review before release gating",
+  "notes": "120 held-out cases authored for English structural, conversational, continuity, and lexical coverage. Prompts are excluded from training; human review remains required.",
+  "cases": [
+    {
+      "id": "EN-GRA-001",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Complete the sentence with the correct verb: The basket of apples ___ on the counter.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-002",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the grammar without changing meaning: My neighbors walks to the station.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-003",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite as a question: The package arrived this morning.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-004",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite in the past tense: I open the letter and read the first page.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-005",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Make the tense consistent: They waited outside and talk to the guide.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-006",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Join the ideas with because: The grass was wet. It rained overnight.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-007",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the sentence: Each of the chairs have a cushion.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-008",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Change this to a polite request: Move your bag.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-009",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct punctuation and capitalization: where does the bus stop",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-010",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite as one sentence using although: The road was busy. We crossed safely.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-011",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Make this sentence negative: The shop opens on Sunday.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-012",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the sentence: She has wrote three notes.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-013",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Turn this statement into a question: The visitors can use the west entrance.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-014",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite more concisely without changing meaning: At this moment in time, we are waiting.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-015",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Complete with a suitable conjunction: Take a flashlight ___ the path may be dark.",
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-CHAT-001",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Hi there!",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-002",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Thanks for helping me with the schedule.",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-003",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Goodbye, I have to go now.",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-004",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Which place holds the keys?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-005",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Please give me one tip for keeping notes organized.",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-006",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Can you locate the folder?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-007",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Can you shorten a paragraph for me?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-008",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Tell me a cheerful one-sentence story about a robin.",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-009",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "At which location is the parcel?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-010",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "I meant Wednesday, not Monday.",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-011",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Can you remind me tomorrow to call my sister?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-012",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "What is the capital of the country I visited last year?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-013",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Write a polite one-sentence request to reschedule a call.",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-014",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Does the bag have a high weight?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-015",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Which person reached the destination?",
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CONT-001",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Where are the keys?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The keys are in the top drawer."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-002",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What color is it?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Ravi bought a red bicycle."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-003",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "When does it arrive?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The train arrives at six."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-004",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Which place holds the keys?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "We put the clean cups beside the sink."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-005",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Who did she call?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Maya called her dentist on Tuesday."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-006",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Can you locate the folder?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The blue folder is on the chair."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-007",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What time does it close?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The library closes at five."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-008",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What did he plant?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Omar planted two tomato seeds."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-009",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "At which location is the parcel?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The parcel is by the front door."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-010",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What did Lina give Noor?",
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Lina gave Noor a notebook."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-011",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Is it warm?",
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I bought a red scarf and a blue hat."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-012",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Can you move it?",
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "There is a cup and a plate on the table."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-013",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Who changed it?",
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Sam told Alex that Jordan changed the date."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-014",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Does the bag have a high weight?",
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The bag is beside the suitcase."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-CONT-015",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Which person reached the destination?",
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Asha spoke to Meera after she arrived."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ]
+    },
+    {
+      "id": "EN-LEX-001",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The bright lamp lit the room,” what does “bright” describe?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-002",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase this sentence without changing its meaning: The path was narrow.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-003",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “Please close the window,” what does “close” mean?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-004",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Give one synonym for “brief” in this sentence: She gave a brief reply.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-005",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The glass is clear,” what does “clear” most likely mean?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-006",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase: The room was quiet, so Nila could concentrate.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-007",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “They run a small shop,” does “run” mean moving quickly or managing?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-008",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Give an antonym for “empty” in this sentence: The bottle is empty.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-009",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The sharp knife cut the apple,” what does “sharp” describe?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-010",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Explain “light” in this sentence: He carried a light bag on the hike.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-011",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase: The meeting was postponed because the speaker was ill.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-012",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The answer was sound,” what does “sound” most likely mean?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-013",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Use “patient” in a sentence where it means able to wait calmly.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-014",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "What is the difference in meaning between “their” and “there”?",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-015",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase: The eastern route is shorter, but the western route is more scenic.",
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-GRA-016",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Choose the correct verb: Neither the keys nor the wallet ___ in the drawer.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-017",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the grammar: The group of students are waiting outside.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-018",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite as a question beginning with “Where”: The guests left their coats near the entrance.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-019",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite in the future tense: The gardener waters the plants every evening.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-020",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the tense: By noon yesterday, we have finished the repairs.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-021",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Join the ideas with “so”: The road was icy. The driver slowed down.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-022",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the sentence: One of the windows need cleaning.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-023",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Make this request more polite: Check the figures again.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-024",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Add punctuation and capitalization: my appointment is on friday at two",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-025",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Combine using “when”: The alarm rang. I was getting ready for work.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-026",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Make this sentence negative: They have seen the notice.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-027",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Correct the sentence: The letter was wrote by my colleague.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-028",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Turn into a yes-or-no question: Your reservation includes breakfast.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-029",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Rewrite concisely without changing meaning: Due to the fact that it was raining, the game was delayed.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-GRA-030",
+      "category": "grammar",
+      "subset": null,
+      "prompt": "Complete naturally: We will start the walk ___ everyone arrives.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response is grammatical English",
+        "Requested transformation is followed",
+        "Original meaning is preserved"
+      ]
+    },
+    {
+      "id": "EN-CHAT-016",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Hey, are you there?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-017",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "That explanation made sense. Thank you.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-018",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Where is the parcel located?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-019",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "What does a compass help you find?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-020",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Give me one idea for making a morning routine easier.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-021",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "I am disappointed that the event was canceled.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-022",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Could you check my spelling if I paste a message?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-023",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Write a friendly two-line poem about spring.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-024",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Give exactly three examples of reusable household items.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-025",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Correction: the delivery is Friday, not Thursday.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-026",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Can you book a table for me at seven?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-027",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "What was the name of the teacher I met yesterday?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-028",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Write a brief apology for replying late.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-029",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "I have a lot to do, but I cannot tell what is most urgent.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CHAT-030",
+      "category": "conversation",
+      "subset": null,
+      "prompt": "Answer in exactly four words: Can birds fly?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Response matches the user's intent",
+        "Follows explicit length/format constraints",
+        "Does not claim unsupported capability or information"
+      ]
+    },
+    {
+      "id": "EN-CONT-016",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "When does it open?",
+      "history": [
+        {
+          "role": "user",
+          "content": "The museum opens at nine."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-017",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What color is it?",
+      "history": [
+        {
+          "role": "user",
+          "content": "Priya bought a yellow umbrella."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-018",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Where is the parcel located?",
+      "history": [
+        {
+          "role": "user",
+          "content": "The parcel is inside the cupboard."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-019",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "How many did we borrow?",
+      "history": [
+        {
+          "role": "user",
+          "content": "We borrowed three chairs from the hall."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-020",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Who did he email?",
+      "history": [
+        {
+          "role": "user",
+          "content": "David emailed his supervisor on Monday."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-021",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What time does it close?",
+      "history": [
+        {
+          "role": "user",
+          "content": "The bakery closes at six."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-022",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What did she plant?",
+      "history": [
+        {
+          "role": "user",
+          "content": "Noor planted a lemon tree."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-023",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Where is the key?",
+      "history": [
+        {
+          "role": "user",
+          "content": "I put the spare key under the flowerpot."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-024",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "Which room is it in?",
+      "history": [
+        {
+          "role": "user",
+          "content": "The workshop moved to room twelve."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-025",
+      "category": "continuity",
+      "subset": "explicit",
+      "prompt": "What did he return?",
+      "history": [
+        {
+          "role": "user",
+          "content": "Ben returned the library books yesterday."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": false,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-026",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Can you wash it?",
+      "history": [
+        {
+          "role": "user",
+          "content": "I own a green cup and a white plate."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-027",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Is it charged?",
+      "history": [
+        {
+          "role": "user",
+          "content": "The phone is beside the wallet."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-028",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Whose train was late?",
+      "history": [
+        {
+          "role": "user",
+          "content": "Elena told Rosa that her train was late."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-029",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Can you carry it?",
+      "history": [
+        {
+          "role": "user",
+          "content": "A box is next to a bag."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-CONT-030",
+      "category": "continuity",
+      "subset": "ambiguous",
+      "prompt": "Who finished work?",
+      "history": [
+        {
+          "role": "user",
+          "content": "Tom met Alex after he finished work."
+        },
+        {
+          "role": "assistant",
+          "content": "Okay."
+        }
+      ],
+      "critical": true,
+      "criteria": [
+        "Uses only the visible context",
+        "Resolves clear references correctly",
+        "Clarifies or states uncertainty for ambiguous references"
+      ]
+    },
+    {
+      "id": "EN-LEX-016",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The child drew a bright star,” what does “bright” describe?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-017",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase this sentence: The path became wider near the bridge.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-018",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “They close the shop at eight,” what does “close” mean?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-019",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Give a synonym for “calm” in: The lake was calm at dawn.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-020",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The instructions are clear,” what does “clear” mean?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-021",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase: The floor was slippery because water had spilled on it.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-022",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “Rina runs the kitchen,” what does “runs” mean?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-023",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Give an antonym for “narrow” describing a road.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-024",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “He gave a sharp reply,” what might “sharp” describe?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-025",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Explain “light” in: A light breeze moved the curtains.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-026",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase: The store remained open despite the storm.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-027",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "In “The sound plan worked well,” what does “sound” mean?",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-028",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Use “patient” to describe someone receiving care from a doctor.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-029",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Explain the difference between “weather” and “whether.”",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    },
+    {
+      "id": "EN-LEX-030",
+      "category": "lexical",
+      "subset": null,
+      "prompt": "Paraphrase: The northern path is longer, while the southern path is steeper.",
+      "history": [],
+      "critical": false,
+      "criteria": [
+        "Uses the word in its contextually intended sense",
+        "Paraphrase preserves the meaning",
+        "Does not add unsupported detail"
+      ]
+    }
+  ],
+  "content_review": {
+    "approved": false,
+    "reviewers": [],
+    "reviewed_at": null
+  }
+}

@@ -1,14 +1,16 @@
 # Chit — चित् — Pranav's Atmini Brain
 
-Chit is a small language model built from scratch (byte-level tokenizer, tiny Transformer, your own
-weights) that acts as the learning layer of **Atmini**. It comes with a web API for generating text,
-storing memory, teaching new material and training in the background.
+**चित् (Chit) is the neural brain of Atmini.** It is a compact Transformer trained from scratch,
+with its own weights, memory, learning path, and conversation context. Its API supports communication,
+problem solving, storing experience, teaching knowledge, and training.
 
-> **Read this first — what Chit is and is not.** Chit is a *text-continuation* model with a few
-> hundred thousand parameters, trained on whatever you put in `data/train.txt`. It can finish
-> sentences it has seen and answer questions it was trained on. It cannot reason about, or answer,
-> things that are not in its training text — those come out as gibberish. It is a learning
-> project and a component of Atmini, not a ChatGPT, Claude, Gemini replacement.
+> **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
+> `/generate` and `/chat` format messages for a context-aware Chit response, while `/generate` can still
+> do raw continuation with `mode: "continue"`. It employs a bounded inference scheduler to handle concurrent
+> requests and a hybrid SQLite/Vector memory store for durable, fast-access experiences. It learns from 
+> reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
+
+> 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.
 
 ---
 
@@ -39,23 +41,27 @@ source .venv/bin/activate            # Linux / macOS / Git Bash
 # 2. Install (PyTorch is a large download; this can take a few minutes)
 pip install -r requirements.txt
 
-# 3. Train. This config is tuned for the small sample text in data/train.txt
-python -m pranav.chit.tools.train --config configs/chit_train_txt.json
+# 3. Train Chit's CPU preset on the curated data
+python -m pranav.chit.tools.train --config configs/chit_assistant_cpu.json
 
-# 4. Try it: type the START of a sentence from data/train.txt, e.g.  I am
-python try_chit.py
+# 4. Start both the API and browser console from the repository root
+python -m pranav.chit.ui
 ```
 
 Training prints `step=... train=... eval=...` lines and writes `checkpoints/latest.pt`.
-The training loss should fall steadily (from about 5.5 towards 0.1 or lower).
+The CPU preset trains Chit's current architecture within the available resources; lower loss does not by itself prove
+that it understands new requests or can solve unfamiliar problems well. With the server running, try `POST /generate` using the examples
+below or visit `http://127.0.0.1:8000/docs`. The console is at `http://127.0.0.1:8001/`; enter the configured
+`CHIT_API_KEY` once to unlock it.
 
 > **Why `chit_train_txt.json` and not `chit_cpu_learning.json`?**
 > `chit_cpu_learning.json` runs only 300 steps at a low learning rate, which is too little to learn
 > even a small text: in testing it produced nonsense. `chit_train_txt.json` (2500 steps, learning
 > rate 0.003) reproduced the sample sentences correctly.
 
-`try_chit.py` samples with some randomness (temperature 0.7), so small mistakes are normal. For the
-cleanest output use the CLI with greedy decoding:
+`try_chit.py` and `pranav.chit.tools.generate` are raw continuation tools. For request-oriented
+assistant behavior, use the API endpoints (`/generate` or `/chat`). Both tools sample with randomness
+by default, so small mistakes are normal. For greedy raw continuation:
 
 ```bash
 python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
@@ -67,27 +73,28 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 
 | I want to… | Use | Notes |
 | --- | --- | --- |
-| Finish a sentence or continue some text | `POST /generate` | Best fit for a model trained on plain text. Use `temperature: 0` and `stop: ["\n"]`. |
-| Have Chit answer questions | Train on `User:` / `Chit:` pairs, then `POST /generate` with `User: <question>\nChit:` (or `POST /chat`) | It only answers questions it was trained on. |
-| Give Chit a fact **right now**, without retraining | `POST /memory` | Stored outside the model; recalled by `/chat`. Never changes the weights. |
+| Ask Chit to understand, answer, or help solve something | `POST /generate` or `POST /chat` | Both format requests for Chit's response; `/chat` adds session history and memory. |
+| Continue text literally | `POST /generate` with `mode: "continue"` | Sends the prompt directly to the model without the assistant wrapper. |
+| Give Chit a fact **right now**, without retraining | `POST /memory` | Stored outside the model; recalled by assistant-mode `/generate` and `/chat`. Never changes the weights. |
 | Teach Chit new material and train on it | `POST /knowledge`, then `POST /knowledge/train` | Knowledge is queued, then baked into the weights when you train. |
 | Retrain from my own text file | Edit `data/train.txt`, then `POST /train` or the CLI | See [section 3](#3-recommended-workflow-train-on-your-own-text). |
 | Prepare train/eval from one big text file (for example a mounted folder) | `POST /data/split`, then check with `GET /data` | Holds out an eval set with no overlap. Docs: `docs/DATA_API.md`. |
 | Explore the API in a browser | `http://localhost:8000/docs` | Interactive; works the same on every operating system. |
+| Open the Chit browser console | `http://localhost:8001/` | Chat, generation, and controls for every documented API route. |
 | Connect Atmini | `POST /generate` or `POST /chat` with the `X-API-Key` header | Keep the server on `127.0.0.1`. |
 
 **Memory vs knowledge vs weights**
 
 | | Stored in | Changes the model? | Available |
 | --- | --- | --- | --- |
-| **Memory** (`/memory`) | `data/memory.json` | No | immediately (used by `/chat`) |
+| **Memory** (`/memory`) | `data/memory.db` (SQLite) | No | immediately in assistant-mode `/generate` and `/chat` via hybrid keyword/vector search |
 | **Knowledge** (`/knowledge`) | `data/knowledge.db` | Only after `/knowledge/train` | after training |
 | **Weights** | `checkpoints/latest.pt` | — | what the model was trained on |
 
 **`/generate` or `/chat`?**
-`/generate` continues exactly the text you send. `/chat` wraps your message in a fixed template
-(`Task: chat / Known memory: … / User: … / Chit:`), so it only works well for a model trained on
-`User:` / `Chit:` pairs. For a model trained on plain sentences, use `/generate`.
+Use `/generate` for a single request or raw text continuation. Use `/chat` when the exchange needs
+conversation history and memory. Both assistant modes use the same `Task: chat` / `User:` / `Chit:`
+format and benefit from training examples written in that format.
 
 ---
 
@@ -97,39 +104,46 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
    `python -m pranav.chit.tools.split corpus.txt`) to create both files with no overlap. Then `GET /data` shows `ready_to_train`.
 1. **Write your text in `data/train.txt`** — one fact or sentence per line. Vary the wording, and
    repeat the important lines. Put a few *different* lines in `data/eval.txt`.
-   The eval file must be **larger than `model.block_size` bytes** (64 by default), or the API
+   The eval file must contain **more than `model.block_size` model tokens** (for the default byte tokenizer, 512 bytes), or the API
    rejects the job with `422`.
-2. **Train** — either way:
+2. **Train** — either way (the API accepts a named preset; pass `chit_assistant_cpu` to use the assistant corpus):
    ```bash
-   python -m pranav.chit.tools.train --config configs/chit_train_txt.json
+   python -m pranav.chit.tools.train --config configs/chit_assistant_cpu.json
    ```
    or, with the server running, `POST /train` (see [section 5](#5-api-reference-and-examples)).
-   The API promotes the finished model automatically, with no restart.
-3. **Generate** with the start of a line from your text:
+   By default the API saves a candidate and leaves the served model unchanged. Set `force_promote: true` in `POST /train` only when you explicitly want a successful candidate installed without automated evaluation gates; the previous checkpoint is archived. Otherwise use the reviewed promotion workflow in [docs/TRAINING_API.md](docs/TRAINING_API.md).
+3. **Generate** from a request:
    ```json
-   {"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}
+   {"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}
    ```
 4. **Check the loss.** A training loss far below the eval loss (for example 0.07 vs 0.9) means the
    model is memorising your text. That is expected at this size. More varied text is the biggest
    improvement.
 
-**Getting answers to questions:** add `User:` / `Chit:` pairs to `data/train.txt` (or teach them via
-`POST /knowledge` with `"kind": "qa"`), repeat them several times, and prompt with the same shape:
+**Optional model variants.** See [the operating guide](docs/OPERATIONS.md) for tokenizer setup. BPE
+and RoPE configurations create a new training lineage; existing byte/absolute checkpoints remain
+supported. Compare each variant on the held-out set before serving it.
+
+**Teaching requests:** add varied `Task: chat` / `User:` / `Chit:` examples to `data/train.txt` (or
+teach Q&A with `POST /knowledge` and train through `/knowledge/train`). Cover multiple tasks and
+wordings; repeated examples alone encourage memorization.
 
 ```
 User: What is Chit?
 Chit: Chit is the model inside Atmini.
 ```
 
-The prompt is then `User: What is Chit?\nChit:` with `"stop": ["\nUser:"]`.
+In `/generate`, send the request as `prompt`. In `/chat`, send it as `message` and keep the returned
+`session_id` to continue the conversation.
 
 **Settings worth changing** (in a file in `configs/`, or per request under `"training"` / `"model"`):
 
 | Setting | Effect |
 | --- | --- |
+| `configs/chit_assistant_cpu.json` | 512-token context and Chit's current CPU training preset with conversation and problem-solving examples. |
 | `training.max_steps` | Longer training. 300 is too few; 2500–3000 worked on the sample text. |
-| `training.learning_rate` | `0.003` worked for this small model; `0.0005` was too slow. |
-| `model.block_size` | Context length in bytes. Larger needs a larger `data/eval.txt`. |
+| `training.learning_rate` | `0.003` worked for the earlier byte-model preset; `0.0005` learned too slowly there. |
+| `model.block_size` | Context length in model tokens. Larger needs a larger `data/eval.txt`; byte models use one byte per token. |
 | `model.n_layer`, `model.n_embd` | Bigger model, slower training. `configs/chit_tiny.json` is a larger preset. |
 | `device` | `cpu`, `cuda` or `auto`. |
 
@@ -140,16 +154,17 @@ The prompt is then `User: What is Chit?\nChit:` with `"stop": ["\nUser:"]`.
 ```bash
 # Linux / macOS / Git Bash
 export CHIT_API_KEY="$(python -c 'import secrets; print(secrets.token_hex(24))')"
-uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
+python -m pranav.chit.ui
 ```
 
 ```powershell
 # Windows PowerShell
 $env:CHIT_API_KEY = python -c "import secrets; print(secrets.token_hex(24))"
-uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
+python -m pranav.chit.ui
 ```
 
 - Open **http://localhost:8000/docs** for an interactive page where you can try every endpoint.
+- Open **http://localhost:8001/** for the Chit console. It asks for the same API key once per browser session.
 - Use **one worker** (the default). The loaded model and the training-job list live in the process.
 - Keep `--host 127.0.0.1` unless you have set `CHIT_API_KEY` and put HTTPS in front of the server.
 - If no model is trained yet, the server still starts: `GET /health` reports `no_model` and
@@ -167,10 +182,11 @@ uvicorn pranav.chit.api:app --host 127.0.0.1 --port 8000
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/health` | Server status, whether a model is loaded, active training job (no key needed) |
+| GET | `/ready` | Check if model, stores, and inference scheduler are fully ready |
 | GET | `/model` | Loaded model details |
 | GET | `/data` | Check the train/eval files on the server: size, hash, overlap, `ready_to_train` |
 | POST | `/data/split` | Split a corpus file from the data folder into train and eval (`overwrite`, `dry_run`) |
-| POST | `/generate` | Continue text: `prompt`, `tokens` (1–500), `temperature` (0 = greedy), `top_k`, `stop` |
+| POST | `/generate` | Respond to a request; `mode: "continue"` opts into raw continuation. Supports `prompt`, `tokens`, `temperature`, `top_k`, `stop` |
 | POST | `/chat` | Chat template + recalled memory: `message`, `task` |
 | POST | `/memory` | Store a fact (`content`, optional `tags`, `importance`) |
 | GET | `/memory/search?q=…` | Search memory |
@@ -191,20 +207,20 @@ not set (unless the dev flag above is on). Full details: `docs/TRAINING_API.md`,
 
 The examples read your key from `CHIT_API_KEY`.
 
-**Generate** — start of a sentence in, rest of the sentence out:
+**Generate** — send a request for a response (or use `mode: "continue"` for raw continuation):
 
 ```bash
 # Linux / macOS / Git Bash
 curl -X POST http://localhost:8000/generate \
   -H "X-API-Key: $CHIT_API_KEY" -H "Content-Type: application/json" \
-  -d '{"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}'
+  -d '{"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}'
 ```
 ```powershell
 # Windows PowerShell
 $h = @{ "X-API-Key" = $env:CHIT_API_KEY }
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/generate -Headers $h `
   -ContentType "application/json" `
-  -Body '{"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}'
+  -Body '{"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}'
 ```
 
 **Train, wait, then generate** (Python; `pip install requests` first):
@@ -216,7 +232,7 @@ BASE = "http://localhost:8000"
 H = {"X-API-Key": os.environ["CHIT_API_KEY"]}
 
 job = requests.post(f"{BASE}/train", headers=H,
-                    json={"config": "chit_train_txt", "init": "scratch"}).json()
+                    json={"config": "chit_assistant_cpu", "init": "scratch"}).json()
 while True:
     j = requests.get(f"{BASE}/train/{job['id']}", headers=H).json()
     print(j["state"], j["step"], "/", j["max_steps"])
@@ -225,7 +241,7 @@ while True:
     time.sleep(2)
 
 print(requests.post(f"{BASE}/generate", headers=H, json={
-    "prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}).json()["text"])
+    "prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}).json()["text"])
 ```
 
 **Store and search a memory:**
@@ -245,10 +261,10 @@ curl -X POST http://localhost:8000/knowledge -H "X-API-Key: $CHIT_API_KEY" \
 
 curl -X POST http://localhost:8000/knowledge/train -H "X-API-Key: $CHIT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"config": "chit_train_txt", "repeat": 30}'
+  -d '{"config": "chit_assistant_cpu", "repeat": 30}'
 ```
 
-Then ask with `POST /generate`, prompt `"User: Who created Chit?\nChit:"`, `temperature` 0.
+Then ask with `POST /generate`, prompt `"Who created Chit?"`, `temperature` 0.
 
 > On Windows, PowerShell's `curl` is not real curl. Use `Invoke-RestMethod` as above, `curl.exe`
 > with the JSON saved in a file (`-d "@body.json"`), or the `/docs` page.
@@ -266,7 +282,10 @@ Then ask with `POST /generate`, prompt `"User: Who created Chit?\nChit:"`, `temp
 | `CHIT_JOBS_DIR` | `checkpoints/jobs` | Output folder for background training jobs |
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper limit on `training.max_steps` |
 | `CHIT_MAX_DATASET_MB` | `200` | Upper limit on a generated training set |
-| `CHIT_MEMORY_PATH` | `data/memory.json` | Memory file |
+| `CHIT_MEMORY_PATH` | `data/memory.json` | Legacy memory JSON import/recovery source |
+| `CHIT_MEMORY_DB` | `data/memory.db` | Canonical SQLite memory store |
+| `CHIT_INFERENCE_QUEUE_SIZE` | `32` | Maximum waiting inference requests |
+| `CHIT_INFERENCE_QUEUE_TIMEOUT` | `30` seconds | Queue wait deadline |
 | `CHIT_DATA_DIR` | `data` | Folder `POST /data/split` reads corpus files from |
 | `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database |
 
@@ -279,14 +298,16 @@ Setting a variable: `export NAME=value` (Linux/macOS/Git Bash), `$env:NAME = "va
 
 | Path | What it is |
 | --- | --- |
-| `data/train.txt`, `data/eval.txt` | Training and evaluation text |
-| `data/memory.json`, `data/memory_seed.json` | External memory and the facts it starts with |
+| `data/train.txt`, `data/eval.txt` | Training and held-out evaluation examples |
+| `data/prompts.txt`, `data/CORPUS.md` | Open-ended review prompts and corpus provenance/use notes |
+| `data/memory.db` | Canonical external memory store (SQLite) |
+| `data/memory.json`, `data/memory_seed.json` | Legacy import/recovery source and initial facts |
 | `data/knowledge.db` | Taught knowledge (SQLite) |
 | `configs/*.json` | Training presets |
 | `checkpoints/latest.pt` | The trained model that is served |
 | `checkpoints/jobs/<id>/` | One folder per API training job (weights, dataset, `job.json`) |
 | `pranav/chit/` | Source: `model.py`, `training.py`, `api.py`, `jobs.py`, `knowledge.py`, `memory.py`, … |
-| `docs/` | Architecture, roadmap, training and knowledge API guides |
+| `docs/` | Architecture, implementation plan, operations and API guides |
 
 Trained weights and your own data are local files. Add them to `.gitignore` so they are not
 committed by accident:
@@ -294,6 +315,7 @@ committed by accident:
 ```
 checkpoints/
 data/memory.json
+data/memory.db*
 data/knowledge.db*
 ```
 
@@ -303,7 +325,7 @@ data/knowledge.db*
 
 | Symptom | Cause and fix |
 | --- | --- |
-| Output is gibberish | Normal for a prompt that does not start like your training text, and for too little training. Use `temperature: 0`, start prompts like a line from `train.txt`, and train with `chit_train_txt.json`. |
+| Output is gibberish | The current from-scratch weights may not have learned that request pattern yet. Use `temperature: 0`, add reviewed request examples to `train.txt`, preserve held-out examples in `eval.txt`, and train with `chit_assistant_cpu.json`. |
 | `ModuleNotFoundError: pranav` | Run commands from the repository root. |
 | `401` | Missing or wrong `X-API-Key` header. |
 | `403` on `/train` or `/knowledge` | `CHIT_API_KEY` is not set on the server (or set the dev flag). |

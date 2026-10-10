@@ -14,7 +14,7 @@ authority for what is deployed.
 
 1. [Conventions](#1-conventions)
 2. [Endpoint index](#2-endpoint-index)
-3. [Health and model](#3-health-and-model) — `GET /health`, `GET /model`
+3. [Health and model](#3-health-and-model) — `GET /health`, `GET /ready`, `GET /model`
 4. [Text generation](#4-text-generation) — `POST /generate`, `POST /chat`
 5. [Sessions](#5-sessions) — `/sessions`
 6. [Memory](#6-memory) — `/memory`
@@ -41,15 +41,17 @@ an error and never silently ignored.
 | Access level | Endpoints | Rule |
 | --- | --- | --- |
 | Public | `GET /health` | No key needed. |
-| Key | `/model`, `/generate`, `/chat`, `/sessions*`, `/memory*` | If the server has `CHIT_API_KEY` set, the header is required (`401` otherwise). If the server has no key, these are open. |
+| Key | `/ready`, `/model`, `/generate`, `/chat`, `/sessions*`, `/memory*` | If the server has `CHIT_API_KEY` set, the header is required (`401` otherwise). If the server has no key, these are open. |
 | Training | `/train*`, `/knowledge*`, `/data*` | Same key rule, plus: if the server has **no** key configured these return `403`, unless it was started with `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` (local development only). |
 
-**Concurrency.** The server generates one reply at a time and runs one training job at a time. While a
-job runs, generation stays available but is slower, because both share the CPU.
+**Concurrency.** A bounded FIFO inference queue runs one generation at a time per process/device.
+Requests are rejected with `429` when the queue is full or queue wait expires. The server runs one
+training job at a time; training and inference may compete for CPU/GPU resources.
 
-**Model type matters.** Chit is a small byte-level model. It continues text it has learned and gives
-nonsense for anything else. See the notes under [`POST /generate`](#post-generate) and
-[`POST /chat`](#post-chat) for which endpoint suits which kind of training data.
+**Model type matters.** Chit defaults to a byte-level neural brain trained from scratch, with optional
+versioned BPE checkpoints and RoPE position encoding. It does not require an external AI service. Its learned knowledge, available memory, and context
+determine what it can answer or create. `/generate` and `/chat` use assistant request formatting by
+default; `/generate` retains raw continuation through `mode: "continue"`.
 
 **Used in the examples below**
 
@@ -68,9 +70,10 @@ instead of `curl`.
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | GET | `/health` | Public | Is the server up, is a model loaded, is a job running |
+| GET | `/ready` | Key | Is the model, stores, and inference scheduler ready |
 | GET | `/model` | Key | Size, settings and training history of the loaded model |
-| POST | `/generate` | Key | Continue a piece of text |
-| POST | `/chat` | Key | Chat template with memory and session history (or plain continuation) |
+| POST | `/generate` | Key | Generate a response to a request; `mode: "continue"` opts into raw text continuation |
+| POST | `/chat` | Key | Assistant request with memory and session history (or raw continuation via `task: "continue"`) |
 | POST | `/sessions` | Key | Start an empty conversation |
 | GET | `/sessions` | Key | List conversations |
 | GET | `/sessions/{session_id}` | Key | One conversation with its messages |
@@ -131,6 +134,29 @@ curl $BASE/health
 **Recommended.** Poll this after a deployment until `status` is `ok`. A new server with no checkpoint
 reports `no_model`: that is normal until the first training job finishes.
 
+### GET /sys_metrics
+Returns real-time system hardware metrics (requires `psutil`). Used by the UI for the live header badge.
+
+**Request**
+```http
+GET /sys_metrics HTTP/1.1
+```
+
+**Response (200 OK)**
+```json
+{
+  "cpu": 12.5,
+  "mem": 45.2,
+  "disk": 80.1
+}
+```
+
+### GET /ready
+
+**Purpose.** Readiness check for traffic routing. Returns `200` only when a model, memory, knowledge,
+session store, and inference scheduler are initialized; otherwise returns `503` with per-component checks.
+**Access:** key.
+
 ### GET /model
 
 **Purpose.** Describes the model that is being served. **Access:** key. **Request.** No parameters.
@@ -155,7 +181,8 @@ curl -H "X-API-Key: $KEY" $BASE/model
     "last_eval": {"step": 3000, "train_loss": 0.09342920519411564, "eval_loss": 2.9523245334625243},
     "metadata": {},
     "path": "checkpoints/latest.pt"
-  }
+  },
+  "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00"
 }
 ```
 
@@ -163,8 +190,12 @@ curl -H "X-API-Key: $KEY" $BASE/model
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `model_config.vocab_size` | integer | Number of possible tokens. Always 256 (one per byte). |
-| `model_config.block_size` | integer | Context window in bytes: how much text the model sees at once. |
+| `model_config.vocab_size` | integer | Number of possible tokens. 256 for the byte tokenizer; configured vocabulary size for BPE. |
+| `model_config.block_size` | integer | Context window in model tokens (for byte models, one token is one UTF-8 byte). |
+| `model_config.position_encoding` | string | `absolute` (legacy default) or `rope`. |
+| `tokenizer.name`, `tokenizer.vocab_size` | string, integer | Active tokenizer and vocabulary size. BPE responses include the tokenizer asset fingerprint. |
+| `memory_search` | object | Keyword or hybrid retrieval mode and embedding coverage. |
+| `inference` | object | Queue capacity and timeout; `batching` indicates whether dynamic batching is active. |
 | `model_config.n_layer`, `n_head`, `n_embd` | integer | Number of transformer layers, attention heads, and the model width. |
 | `model_config.dropout` | number | Dropout used in training. |
 | `parameters` | integer | Number of weights. |
@@ -175,6 +206,7 @@ curl -H "X-API-Key: $KEY" $BASE/model
 | `checkpoint.last_eval` | object | `step`, `train_loss`, `eval_loss` at the last check. |
 | `checkpoint.metadata` | object | Extra information from the job that produced it. |
 | `checkpoint.path` | string | File being served. |
+| `checkpoint_timestamp` | string or null | ISO 8601 UTC timestamp of the served checkpoint file modification time (`st_mtime` of `checkpoints/latest.pt`). |
 
 **Errors.** `503` if no model is loaded.
 
@@ -187,53 +219,58 @@ the model memorized its training text.
 
 ### POST /generate
 
-**Purpose.** Continue the text you send. The model predicts one byte at a time, starting after your
-prompt. **Access:** key.
+**Purpose.** Generate a response to a request using the same learned `Task: chat` format as
+`/chat`. Set `mode: "continue"` to pass text directly to the model for raw continuation.
+**Access:** key.
 
 **Request body**
 
 | Field | Type | Required | Default | Limits | Purpose |
 | --- | --- | --- | --- | --- | --- |
-| `prompt` | string | yes | — | 1–2000 characters | The start of the text to continue. The model only sees the last `block_size` bytes. |
-| `tokens` | integer | no | 100 | 1–500 | Maximum number of new bytes (about characters) to generate. |
+| `prompt` | string | yes | — | 1–2000 characters | The user's request in assistant mode, or a raw text prefix in continue mode. |
+| `mode` | string | no | `"assistant"` | `assistant` or `continue` | `assistant` formats the prompt as a request and includes relevant memory; `continue` sends it directly as a text prefix. |
+| `tokens` | integer | no | 100 | 1–500 | Maximum new model tokens. For the byte tokenizer, each token is one UTF-8 byte. |
 | `temperature` | number | no | 0.7 | 0–2 | Randomness. `0` always picks the most likely byte (same answer each time). Higher is more random. |
 | `top_k` | integer | no | 50 | 1–256 | At each step, choose only among the `top_k` most likely bytes. Has no effect when `temperature` is 0. |
-| `stop` | array of strings | no | none | up to 8 strings | Generation stops at the first occurrence of any of these. The stop text itself is not returned. |
+| `stop` | array of strings | no | none | up to 8 strings | Custom stop strings. In assistant mode, omitted or empty uses chat-turn markers; in continue mode, omitted or empty means no explicit stop. |
 
 **Behavior**
 
-- The returned `text` contains **only the new text**, not your prompt.
-- A prompt that starts like text the model was trained on gives the best results. For a model trained
-  on plain sentences, send the first few words of a sentence and the model finishes it.
-- For a model trained on `User:` / `Chit:` pairs, send `User: <question>\nChit:` and use
-  `"stop": ["\nUser:"]`.
+- The returned `text` contains **only the generated response**, not your prompt.
+- In the default `assistant` mode, the prompt is formatted as a `User:` request and relevant
+  memories are included. Chat-turn markers are used as stops unless custom `stop` strings are given.
+- In `continue` mode, the supplied prompt is passed directly to the model and the `stop` list is
+  applied as given.
+- Markdown written in `prompt` is preserved as request text, including headings, lists, tables,
+  quotes, and fenced code. The model context limit still applies. To train from a `.md` corpus file,
+  use `/data/split`; source files are read as text, not converted from Markdown into another format.
 
-**Recommended.** For repeatable, least noisy output use `"temperature": 0` and `"stop": ["\n"]`
-(plain sentences) or `["\nUser:"]` (Q&A format). Keep `tokens` at 40–120 unless you need more.
+**Recommended.** For repeatable, least noisy output use `"temperature": 0`. Keep `tokens` at 40–120
+unless you need more. Use `mode: "continue"` when raw continuation is needed.
 
 **Sample**
 
 ```bash
 curl -X POST $BASE/generate -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
-  -d '{"prompt": "Memory lets Atmini keep", "tokens": 100, "temperature": 0, "stop": ["\n"]}'
+  -d '{"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}'
 ```
 ```json
-{"text": " an experience while the model stays the same."}
+{"text": "Relevant memories can be included in the request context. Saving a memory does not change model weights."}
 ```
 
 **Response fields**
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `text` | string | The generated continuation (your prompt is not repeated). |
+| `text` | string | The generated response (your prompt is not repeated). |
 
 **Errors.** `401` missing or wrong key. `422` a field is out of range, for example an empty `prompt` or `tokens` over 500.
 `503` no model is loaded.
 
 ### POST /chat
 
-**Purpose.** A chat-style call. It builds a prompt from a fixed template, recalled memories and the
-recent messages of a session, asks the model to continue it, and stores the exchange. **Access:** key.
+**Purpose.** Respond to a request in chat format. It builds a prompt from the task, recalled memories,
+and recent session messages, then stores the exchange. **Access:** key.
 
 **Request body**
 
@@ -242,6 +279,7 @@ recent messages of a session, asks the model to continue it, and stores the exch
 | `message` | string | yes | — | 1–2000 characters | The user's message. |
 | `task` | string | no | `"chat"` | up to 50 characters | `chat` uses the template. `continue` sends `message` straight to the model as the start of a sentence (like `/generate`, stopping at the end of the line). Any other value is written into the template as the task name. |
 | `temperature` | number or null | no | `null` | 0–2 | Randomness. `null` uses the server default, 0.7. |
+| `tokens` | integer or null | no | `null` | 1–500 | Maximum new model tokens; for the byte tokenizer, each token is one UTF-8 byte. |
 | `session_id` | string or null | no | `null` | 32 lowercase hex characters | Continue this conversation. Omit it to start a new one; the new id is returned. Not allowed with `task: "continue"`. |
 
 **Behavior.** With `task: "chat"` the prompt is built as:
@@ -255,12 +293,15 @@ User: <message>
 Chit:
 ```
 
+Markdown in `message` (headings, lists, tables, quotes and code fences) stays as text in the request.
 The prompt is shortened to fit the model's `block_size`: the oldest messages go first, then the
-lowest-ranked memories; your new message is never dropped. The reply stops when the model starts a new
-`User:`, `Chit:` or `Task:` line, or after 120 bytes. The message and reply are saved to the session in full.
+lowest-ranked memories, then the end of an overlong new request is truncated; session messages are
+still stored in full. The reply stops at a chat-turn marker or the configured token limit (256 bytes
+by default). The message and reply are saved to the session in full.
 
-**Which endpoint to use.** `task: "chat"` only works well for a model trained on text in exactly this
-template. For a model trained on plain sentences, use `task: "continue"` (or `/generate`).
+**Which endpoint to use.** Use `/chat` for a conversation that should use session history and recalled
+memory. Use `/generate` for a single request or raw continuation. The model still needs suitable
+training examples for the requested task and language.
 
 **Sample: start a conversation, then continue it**
 
@@ -303,8 +344,8 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
 combined with `task: "continue"`. `503` no model is loaded.
 
 **Recommended.** Always keep the `session_id` from the first reply and send it with every later message.
-Do not rely on long memory: a model with a small `block_size` (64–128) has room for little more than
-the template and the latest message.
+Do not rely on long memory: the byte-level model has a limited `block_size`, so only part of the
+history and memory may fit into a request.
 
 ---
 
@@ -375,6 +416,8 @@ curl -H "X-API-Key: $KEY" $BASE/sessions/eefa8d7646ca4a99bf1ef6b514cf75c5
   "created_at": "2026-10-01T08:21:49.590569+00:00",
   "updated_at": "2026-10-01T08:21:49.683996+00:00",
   "turns": 4,
+  "summary": "User asked about memory and the assistant explained its function.",
+  "facts": [{"key": "user_location", "value": "India"}],
   "messages": [
     {"role": "user", "content": "Hello, I am", "created_at": "2026-10-01T08:21:49.592302+00:00"},
     {"role": "assistant", "content": "...", "created_at": "2026-10-01T08:21:49.592302+00:00"},
@@ -398,8 +441,8 @@ stored in `data/sessions.db`.
 
 ## 6. Memory
 
-Memory is a list of stored facts, kept in a file separate from the model's weights. Storing a memory
-**never changes the model**; `/chat` finds relevant memories and puts them in the prompt.
+Memory records are stored in SQLite, separate from the model's weights; legacy JSON is imported and retained for recovery. Storing a memory
+**never changes the model**; assistant-mode `/generate` and `/chat` find relevant memories and put them in the prompt.
 
 ### POST /memory
 
@@ -477,7 +520,7 @@ the model that is being served as soon as it succeeds, with no restart.
 curl -H "X-API-Key: $KEY" $BASE/train/configs
 ```
 ```json
-{"configs": ["chit_cpu_learning", "chit_strong", "chit_tiny", "chit_train_txt"]}
+{"configs": ["chit_assistant_cpu", "chit_cpu_learning", "chit_strong", "chit_tiny", "chit_train_txt"]}
 ```
 
 ### POST /train
@@ -489,13 +532,14 @@ with the job and a `Location: /train/{id}` header.
 
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `config` | string | `chit_cpu_learning` | Name of the preset in `configs/` (letters, digits, `_` and `-`, up to 64). |
+| `config` | string | `chit_cpu_learning` | Name of the preset in `configs/` (letters, digits, `_` and `-`, up to 64). Use `chit_assistant_cpu` for the new assistant-style corpus. |
 | `seed` | integer | the config's | Random seed, for repeatable runs. |
 | `device` | `auto`, `cpu` or `cuda` | the config's | Where to train. `cuda` fails with `422` if the server has no GPU. |
 | `init` | `scratch`, `current` or `auto` | `scratch` | Starting weights. See below. |
 | `model` | object | none | Override model size, see the table below. |
 | `training` | object | none | Override training settings, see the table below. |
-| `promote` | boolean | `true` | If true, a successful job becomes the served model. If false, it is trained and kept but not served. |
+| `promote` | boolean | `false` | Legacy promotion request; `true` returns `422` unless `force_promote` is also true. |
+| `force_promote` | boolean | `false` | Explicitly install the successful candidate as served, bypassing automated evaluation gates. The previous checkpoint is archived. |
 
 **`init` values**
 
@@ -569,7 +613,7 @@ All job fields are described under [The job object](#the-job-object).
 `422` an override is out of range, a data file is missing or too small, or `init` is not possible.
 `500` the config file itself is invalid.
 
-**Recommended.** Start with `{"config": "chit_strong", "init": "scratch"}`. Run `GET /data?config=...` first to
+**Recommended.** Start with `{"config": "chit_assistant_cpu", "init": "scratch"}`. Run `GET /data?config=...` first to
 confirm the files are ready. Poll `GET /train/{id}` every few seconds. For a quick test add
 `"training": {"max_steps": 60}`.
 
@@ -681,7 +725,7 @@ become `trained`.
 | `kind` | `text`, `qa` or `reasoning` | required | — | Selects the shape of the item. |
 | `tags` | array of strings | `[]` | up to 20; each 1–50 characters of letters, digits and `._:/-` | Labels for filtering and selecting what to train on. |
 | `source` | string or null | `null` | up to 200 characters | Where it came from, for your own records. |
-| `remember` | boolean | `false` | — | Also store it as a memory, so `/chat` can use it right away, before any training. |
+| `remember` | boolean | `false` | — | Also store it as a memory, so assistant-mode `/generate` and `/chat` can use it before training. |
 
 **Fields by `kind`**
 
@@ -740,7 +784,7 @@ curl -X POST $BASE/knowledge -H "X-API-Key: $KEY" -H "Content-Type: application/
 | `items[]` | array | One [knowledge entry](#the-knowledge-entry) per item you sent, in order, plus `created` (new or not) and `memory_id` (the memory made when `remember` was true, otherwise `null`). |
 
 **Recommended.** Use `qa` only if the model is trained on and prompted with `User:` / `Chit:`; use `text` for plain
-sentences. Write the same fact in several wordings (several items), because a small model learns wordings, not meaning.
+sentences. Write the same fact in several wordings (several items), because varied examples help Chit use facts in new requests.
 
 ### GET /knowledge
 
@@ -895,12 +939,14 @@ curl -H "X-API-Key: $KEY" "$BASE/data?config=chit_strong"
 | `checks.train_repeated_lines` | Lines repeated inside train (informational; repeating is sometimes intentional). |
 | `warnings` | Plain-language problems: a missing file, eval under 1 KB (noisy loss), eval under 2% of train, or high overlap. |
 | `ready_to_train` | `true` when both files exist and are larger than `block_size`. |
+| `training_sources` | Present for source-aware configs; reports each configured stream's weight, file information, and readiness. Every source must fit the context. |
 | `sources` | Up to 100 `.txt` and `.md` files in the data folder that `POST /data/split` can read. |
 
 ### POST /data/split
 
 **Purpose.** Split one corpus file from the server's data folder into the config's train and eval files, with no
-line in both. **Access:** training.
+line in both. **Access:** training. This returns `422` for source-aware configs because writing
+`data.train_file` would not change their configured `data.sources` streams.
 
 **Request body**
 
@@ -977,6 +1023,7 @@ Errors are JSON with a `detail` field. The shape of `detail` depends on the caus
 | `404` | Unknown job, session, memory, knowledge entry, config or source | a short string such as `"session not found"` |
 | `409` | A job is already running, or a file would be overwritten | an object, see below |
 | `422` | The request is invalid | a list; see below |
+| `429` | Inference queue is full or queue wait expires | object with `code: "inference_overloaded"`; includes `Retry-After: 1` |
 | `500` | A server-side problem such as an invalid config file or an unwritable folder | a string |
 | `503` | No model is loaded yet | a string such as `"checkpoint not found: checkpoints/latest.pt (train first)"` |
 
@@ -1012,18 +1059,18 @@ On `503`, wait and call `GET /health`. On `422`, show `detail` to the user: it n
 
 ## 12. Recommended workflows
 
-**A. Train on your own text and generate** (plain sentences)
+**A. Train the assistant preset and generate a response**
 
 1. Put `train.txt` and `eval.txt` in the data folder (or `POST /data/split` from one `corpus.txt`).
-2. `GET /data?config=chit_strong` → `ready_to_train` is `true`.
-3. `POST /train` with `{"config": "chit_strong", "init": "scratch"}` → save `id`.
+2. `GET /data?config=chit_assistant_cpu` → `ready_to_train` is `true`.
+3. `POST /train` with `{"config": "chit_assistant_cpu", "init": "scratch"}` → save `id`.
 4. Poll `GET /train/{id}` until `state` is `succeeded` and `promoted` is `true`.
-5. `POST /generate` with `{"prompt": "<start of a sentence>", "temperature": 0, "stop": ["\n"]}`.
+5. `POST /generate` with `{"prompt": "Explain a topic or make something", "temperature": 0}`.
 
 **B. Teach new facts without editing files**
 
-1. `POST /knowledge` with `text` items (several wordings per fact). Add `"remember": true` to make them usable in `/chat` immediately.
-2. `POST /knowledge/train` with `{"config": "chit_strong", "repeat": 20}` and poll the job.
+1. `POST /knowledge` with `text` items (several wordings per fact). Add `"remember": true` to make them available to assistant-mode `/generate` and `/chat` immediately.
+2. `POST /knowledge/train` with `{"config": "chit_assistant_cpu", "repeat": 20}` and poll the job.
 3. `GET /knowledge/stats` shows them move from `pending` to `trained`.
 
 **C. A multi-turn chat client**
@@ -1044,7 +1091,7 @@ import os, time, requests
 BASE = "https://api.chitt.online"
 H = {"X-API-Key": os.environ["CHIT_API_KEY"]}
 
-job = requests.post(f"{BASE}/train", headers=H, json={"config": "chit_strong", "init": "scratch"}).json()
+job = requests.post(f"{BASE}/train", headers=H, json={"config": "chit_assistant_cpu", "init": "scratch"}).json()
 while True:
     j = requests.get(f"{BASE}/train/{job['id']}", headers=H).json()
     print(j["state"], j["step"], "/", j["max_steps"])
@@ -1053,7 +1100,7 @@ while True:
     time.sleep(3)
 
 r = requests.post(f"{BASE}/generate", headers=H,
-                  json={"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]})
+                  json={"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0})
 print(r.json()["text"])
 ```
 
@@ -1072,10 +1119,64 @@ Set as environment variables on the server (not request parameters).
 | `CHIT_JOBS_DIR` | `checkpoints/jobs` | Where each job's files are written. |
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Upper limit for `training.max_steps`. |
 | `CHIT_MAX_DATASET_MB` | `200` | Upper limit for a generated dataset or a split source. |
-| `CHIT_MEMORY_PATH` | `data/memory.json` | Memory file. |
+| `CHIT_MEMORY_PATH` | `data/memory.json` | Legacy memory JSON import and recovery source. |
+| `CHIT_MEMORY_DB` | `data/memory.db` | Canonical SQLite memory database. |
+| `CHIT_INFERENCE_QUEUE_SIZE` | `32` | Maximum waiting inference requests. |
+| `CHIT_INFERENCE_QUEUE_TIMEOUT` | `30` seconds | Maximum time waiting before inference starts. |
+| `CHIT_EMBEDDING_MODEL_PATH` | unset | Local Sentence-Transformers model directory; optional hybrid retrieval. |
+| `CHIT_EMBEDDING_MODEL_VERSION` | asset fingerprint | Stable ID for vectors from this embedding model. |
+| `CHIT_EMBEDDING_SEMANTIC_THRESHOLD` | unset | Optional threshold calibrated using retrieval evaluation. |
 | `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database. |
 | `CHIT_SESSIONS_DB` | `data/sessions.db` | Session database. |
 | `CHIT_SESSION_TTL_DAYS` | `30` | Idle sessions older than this are deleted at start-up. `0` keeps them forever. |
 | `CHIT_MAX_SESSION_TURNS` | `200` | Messages kept per session. |
 | `CHIT_HISTORY_TURNS` | `8` | Most recent session messages offered to the model as context. |
 | `CHIT_DATA_DIR` | `data` | Folder that `POST /data/split` reads corpus files from. |
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**Request**
+```http
+GET /candidates HTTP/1.1
+```
+
+**Response (200 OK)**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "4a71f01c87d4469eb070ad68832a875d",
+      "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00",
+      "job_manifest": {
+        "id": "4a71f01c87d4469eb070ad68832a875d",
+        "state": "succeeded",
+        "config_name": "chit_assistant_cpu"
+      },
+      "evaluation": {
+        "behavioral_gate": {
+          "gate_pass": true,
+          "case_ratings": []
+        }
+      }
+    }
+  ]
+}
+```
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

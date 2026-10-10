@@ -25,7 +25,8 @@ Reports the train and eval files that config uses, as they are on the server rig
 - Run it after mounting or editing files, before training. `sha256` and `modified_at` show
   whether a file changed.
 - `ready_to_train` is false when a file is missing or not larger than `model.block_size`
-  (the same rule `POST /train` enforces).
+  (the same rule `POST /train` enforces). For source-aware presets, `training_sources` lists each
+  configured stream, weight, file information, and readiness; every stream must fit the context.
 - `eval_lines_also_in_train` counts distinct eval lines that also occur in train. A high share means
   the eval loss looks better than the model really is. Repeated answers such as
   `Chit: I do not know.` are normal and expected to overlap.
@@ -34,7 +35,8 @@ Reports the train and eval files that config uses, as they are on the server rig
 ## `POST /data/split`
 
 Splits one corpus file from the data folder into the config's `data.train_file` and
-`data.eval_file`.
+`data.eval_file`. Source-aware presets reject this operation because writing `train_file` would not
+change their configured `data.sources` streams.
 
 ```json
 {"source": "corpus.txt", "config": "chit_train_txt", "by": "line",

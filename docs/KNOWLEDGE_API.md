@@ -6,7 +6,9 @@ Teaching is two steps, on purpose:
    the model changes yet. Entries start as `pending`.
 2. **Train when you say so** – `POST /knowledge/train` builds a dataset from the
    stored knowledge and starts a background training job. When the job succeeds
-   and is promoted, the new model is served and its entries become `trained`.
+   and is evaluated. Training creates a candidate; entries remain pending until
+   the candidate passes reviewed evaluation and is promoted through the
+   operator workflow documented in `TRAINING_API.md`.
 
 This follows Chit's own design rule: an experience is stored first, and the
 weights change only when a deliberate training run is started.
@@ -76,7 +78,7 @@ fields are accepted (`config`, `seed`, `device`, `model`, `training`,
 | `include_base` | `true` | mix in the config's `train_file` corpus |
 | `repeat` | `3` | times the knowledge appears in the dataset (1–100) |
 
-**Why `select: all` is the default.** A small model fine-tuned only on new
+**Why `select: all` is the default.** Fine-tuning only on new
 facts tends to forget older ones. Retraining on everything (plus the base
 corpus) avoids that; use `pending` for quick top-ups.
 

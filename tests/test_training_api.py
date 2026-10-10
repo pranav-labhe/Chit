@@ -4,8 +4,9 @@ from conftest import H, train_body as body, wait_job as wait
 from pranav.chit import api
 
 
-def test_train_promotes_and_serves_new_model(client):
+def test_train_creates_candidate_without_serving_it(client):
     assert client.get("/health").json()["model_loaded"] is False
+    assert client.get("/ready", headers=H).status_code == 503
     r = client.post("/train", json=body(), headers=H)
     assert r.status_code == 202
     assert r.headers["Location"] == f"/train/{r.json()['id']}"
@@ -13,13 +14,20 @@ def test_train_promotes_and_serves_new_model(client):
     job = wait(client, r.json()["id"])
     assert job["state"] == "succeeded", job["error"]
     assert job["step"] == 6 and job["progress"] == 1.0
-    assert job["promoted"] is True
+    assert job["promoted"] is False
+    assert len(job["evaluations"]) == 2
+    assert job["final_evaluation"].endswith("evaluation.json")
     assert [p["step"] for p in job["history"]] == [1, 3, 6]
 
-    assert client.get("/health").json()["model_loaded"] is True
-    g = client.post("/generate", json={"prompt": "Chit", "tokens": 5}, headers=H)
-    assert g.status_code == 200
+    assert client.get("/health").json()["model_loaded"] is False
+    assert client.get("/ready", headers=H).status_code == 503
+    assert client.post("/generate", json={"prompt": "Chit", "tokens": 5}, headers=H).status_code == 503
     assert job["id"] in [j["id"] for j in client.get("/train", headers=H).json()["jobs"]]
+
+
+def test_unevaluated_direct_promotion_is_rejected(client):
+    r = client.post("/train", json={**body(), "promote": True}, headers=H)
+    assert r.status_code == 422 and "reviewed gates" in r.text
 
 
 def test_promote_false_keeps_served_model(client):
@@ -29,7 +37,7 @@ def test_promote_false_keeps_served_model(client):
 
 
 def test_cancel_and_single_active_job(client):
-    first = client.post("/train", json=body(max_steps=100_000), headers=H).json()
+    first = client.post("/train", json=body(max_steps=100_000, checkpoint_interval=1000), headers=H).json()
     second = client.post("/train", json=body(), headers=H)
     assert second.status_code == 409
     assert second.json()["detail"]["active_job"] == first["id"]
@@ -57,6 +65,11 @@ def test_unknown_config_and_job(client):
     assert client.post("/train", json={"config": "nope"}, headers=H).status_code == 404
     assert client.get("/train/does-not-exist", headers=H).status_code == 404
     assert client.get("/train/configs", headers=H).json() == {"configs": ["test"]}
+
+
+def test_training_requests_keep_the_existing_default_preset():
+    from pranav.chit.api import TrainRequest
+    assert TrainRequest().config == "chit_cpu_learning"
 
 
 def test_training_requires_auth(client, monkeypatch):

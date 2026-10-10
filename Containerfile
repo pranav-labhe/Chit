@@ -19,12 +19,20 @@ COPY configs/ configs/
 COPY data/ data/
 COPY pyproject.toml README.md ./
 
+ARG CHIT_WITH_EMBEDDINGS=0
+RUN if [ "$CHIT_WITH_EMBEDDINGS" = "1" ]; then pip install '.[embeddings]'; fi
+
+# FAISS CPU publishes Linux aarch64 wheels for the Python/glibc runtime used
+# here. Keep it out of the portable Windows requirements; SQLite remains the
+# canonical store and exact-search fallback if the optional package is absent.
+RUN pip install '.[ann]'
+
 # Paths in the configs (data/train.txt, checkpoints/...) are relative to /app.
 # compose.yaml mounts data/ and checkpoints/ from the host so they persist.
-EXPOSE 8000
+EXPOSE 8000 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=4)" || exit 1
 
 # Single worker on purpose: model state and the training-job registry live in this process.
-CMD ["uvicorn", "pranav.chit.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "pranav.chit.ui"]

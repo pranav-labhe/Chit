@@ -32,12 +32,14 @@ model and allow N concurrent training runs.
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 import os
 import re
 import secrets
 import shutil
 import threading
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -45,17 +47,22 @@ from typing import Annotated, Literal, Union
 
 import torch
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__, datasets
 from .bridge import Bridge, Context
-from .config import ChitConfig, ConfigError, ModelConfig, load_config
+from .config import ChitConfig, ConfigError, DataSourceConfig, ModelConfig, load_config
+from .embeddings import SentenceTransformerProvider
 from .jobs import JobConflict, JobFinished, JobNotFound, TrainingJobManager
 from .knowledge import KnowledgeError, KnowledgeStore, build_dataset
-from .memory import MemoryStore
+from .inference import InferenceManager, InferenceOverloaded
+from .memory import SQLiteMemoryStore
+from .promotion_state import recover_promotion
 from .runtime import ChitRuntime
 from .sessions import SessionNotFound, SessionStore
-from .tokenizer import ByteTokenizer
+from .summarization import SessionSummaryWorker
+from .tokenizer import ByteTokenizer, create_tokenizer
 from .training import ARCHITECTURE_KEYS
 
 log = logging.getLogger(__name__)
@@ -66,6 +73,10 @@ CONFIG_DIR = os.environ.get("CHIT_CONFIG_DIR", "configs")
 JOBS_DIR = os.environ.get("CHIT_JOBS_DIR", "checkpoints/jobs")
 MAX_TRAIN_STEPS = int(os.environ.get("CHIT_MAX_TRAIN_STEPS", "100000"))
 MEMORY_PATH = os.environ.get("CHIT_MEMORY_PATH", "data/memory.json")
+MEMORY_DB = os.environ.get("CHIT_MEMORY_DB")
+EMBEDDING_MODEL_PATH = os.environ.get("CHIT_EMBEDDING_MODEL_PATH")
+EMBEDDING_MODEL_VERSION = os.environ.get("CHIT_EMBEDDING_MODEL_VERSION")
+EMBEDDING_SEMANTIC_THRESHOLD = os.environ.get("CHIT_EMBEDDING_SEMANTIC_THRESHOLD")
 KNOWLEDGE_DB = os.environ.get("CHIT_KNOWLEDGE_DB", "data/knowledge.db")
 MAX_DATASET_BYTES = int(float(os.environ.get("CHIT_MAX_DATASET_MB", "200")) * 1024 * 1024)
 ALLOW_UNAUTHENTICATED_TRAINING = os.environ.get("CHIT_ALLOW_UNAUTHENTICATED_TRAINING") == "1"
@@ -77,9 +88,10 @@ MAX_SESSION_TURNS = int(os.environ.get("CHIT_MAX_SESSION_TURNS", "200"))
 HISTORY_TURNS = int(os.environ.get("CHIT_HISTORY_TURNS", "8"))
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
 
-_state: dict = {"runtime": None, "bridge": None, "error": None, "jobs": None, "memory": None, "knowledge": None, "sessions": None}
+_state: dict = {"runtime": None, "bridge": None, "error": None, "jobs": None, "memory": None, "knowledge": None, "sessions": None, "summarizer": None, "inference": None}
 _data_lock = threading.Lock()  # one data split at a time
-_lock = threading.Lock()  # one generation at a time; the model is not built for parallel calls
+INFERENCE_QUEUE_SIZE = int(os.environ.get("CHIT_INFERENCE_QUEUE_SIZE", "32"))
+INFERENCE_QUEUE_TIMEOUT = float(os.environ.get("CHIT_INFERENCE_QUEUE_TIMEOUT", "30"))
 
 
 def _load_served_model() -> None:
@@ -87,6 +99,15 @@ def _load_served_model() -> None:
         _state.update(runtime=None, bridge=None, error=f"checkpoint not found: {CHECKPOINT} (train first)")
         return
     try:
+        manifest_path = Path(CHECKPOINT).parent / "champion.json"
+        if manifest_path.exists():
+            champion = json.loads(manifest_path.read_text(encoding="utf-8"))
+            expected = champion.get("current", {}).get("sha256")
+            if expected:
+                from .promotion_state import file_sha256
+                actual = file_sha256(Path(CHECKPOINT))
+                if actual != expected:
+                    raise ValueError("served checkpoint hash does not match champion manifest")
         rt = ChitRuntime.from_checkpoint(CHECKPOINT, memory=_state["memory"])
         _state.update(runtime=rt, bridge=Bridge(rt), error=None)
     except Exception as e:  # bad/incompatible checkpoint: stay up, report via /health
@@ -96,27 +117,84 @@ def _load_served_model() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    inference = InferenceManager(INFERENCE_QUEUE_SIZE, INFERENCE_QUEUE_TIMEOUT)
+    await inference.start()
+    memory_db = MEMORY_DB or str(Path(MEMORY_PATH).with_suffix(".db"))
+    embedding_provider = None
+    if EMBEDDING_MODEL_PATH:
+        try:
+            embedding_provider = SentenceTransformerProvider(
+                EMBEDDING_MODEL_PATH, model_version=EMBEDDING_MODEL_VERSION)
+        except Exception:
+            log.exception("could not load local embedding model; using keyword retrieval")
+    threshold = float(EMBEDDING_SEMANTIC_THRESHOLD) if EMBEDDING_SEMANTIC_THRESHOLD else None
+    memory = SQLiteMemoryStore(memory_db, seed_path=None,
+                               embedding_provider=embedding_provider, semantic_threshold=threshold)
+    legacy_memory = Path(MEMORY_PATH)
+    if Path(memory_db).resolve() == legacy_memory.resolve():
+        raise RuntimeError("CHIT_MEMORY_DB and CHIT_MEMORY_PATH must point to different files")
+    if memory.count() == 0:
+        if legacy_memory.exists():
+            backup = legacy_memory.with_name(f"{legacy_memory.name}.pre-sqlite")
+            if not backup.exists():
+                shutil.copy2(legacy_memory, backup)
+            memory.import_json(legacy_memory)
+        elif Path("data/memory_seed.json").exists():
+            memory.import_json("data/memory_seed.json")
+    sessions = SessionStore(SESSIONS_DB, max_turns=MAX_SESSION_TURNS)
+    summarizer = SessionSummaryWorker(sessions)
+    for pending_session in sessions.pending_summary_sessions():
+        summarizer.submit(pending_session)
     _state.update(runtime=None, bridge=None, error=None, jobs=None,
-                  memory=MemoryStore(MEMORY_PATH), knowledge=KnowledgeStore(KNOWLEDGE_DB),
-                  sessions=SessionStore(SESSIONS_DB, max_turns=MAX_SESSION_TURNS))
+                  memory=memory, knowledge=KnowledgeStore(KNOWLEDGE_DB),
+                  sessions=sessions, summarizer=summarizer, inference=inference)
     if SESSION_TTL_DAYS > 0:
         removed = _state["sessions"].prune(SESSION_TTL_DAYS)
         if removed:
             log.info("pruned %d session(s) idle for more than %g days", removed, SESSION_TTL_DAYS)
+    try:
+        recovered = recover_promotion(Path(CHECKPOINT))
+        if recovered:
+            log.warning("resolved interrupted checkpoint transaction: %s", recovered["state"])
+    except Exception:
+        log.exception("failed to recover checkpoint promotion transaction")
+        raise
     _load_served_model()
-    _state["jobs"] = TrainingJobManager(JOBS_DIR, on_success=promote_checkpoint)
+    # Training always writes a candidate. Promotion is a separate evaluated
+    # operator action; the serving process never auto-installs raw job output.
+    _state["jobs"] = TrainingJobManager(JOBS_DIR)
     try:
         yield
     finally:
         _state["jobs"].shutdown()
+        summarizer.close()
+        await inference.close()
 
 
 app = FastAPI(title="Chit API", version=__version__, lifespan=lifespan)
 
 
-# --------------------------------------------------------------------------- auth & deps
-ALLOW_UNAUTHENTICATED_TRAINING=1
+@app.middleware("http")
+async def request_observability(request, call_next):
+    request_id = request.headers.get("X-Request-ID", "")
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", request_id):
+        request_id = uuid.uuid4().hex
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        log.info(json.dumps({"event": "http_request", "request_id": request_id,
+                             "method": request.method, "path": request.url.path,
+                             "status_code": status,
+                             "duration_ms": round((time.perf_counter() - started) * 1000, 3)},
+                            separators=(",", ":")))
 
+
+# --------------------------------------------------------------------------- auth & deps
 def require_key(x_api_key: str | None = Header(default=None)):
     if API_KEY and not (x_api_key and secrets.compare_digest(x_api_key, API_KEY)):
         raise HTTPException(status_code=401, detail="invalid or missing API key")
@@ -137,7 +215,7 @@ def get_runtime() -> ChitRuntime:
     return _state["runtime"]
 
 
-def get_memory() -> MemoryStore:
+def get_memory() -> SQLiteMemoryStore:
     if _state["memory"] is None:
         raise HTTPException(status_code=503, detail="memory not initialised")
     return _state["memory"]
@@ -167,6 +245,9 @@ def get_jobs() -> TrainingJobManager:
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1, max_length=2000)
+    mode: Literal["assistant", "continue"] = Field(
+        default="assistant",
+        description="assistant formats the request with memory; continue preserves raw text continuation")
     tokens: int = Field(default=100, ge=1, le=500)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="0 = greedy")
     top_k: int = Field(default=50, ge=1, le=256)
@@ -176,8 +257,10 @@ class GenerateRequest(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=2000)
-    task: str = Field(default="chat", max_length=50, description='"chat" (Q&A-trained model) or "continue" (plain-text model)')
+    task: str = Field(default="chat", max_length=50, description='"chat" formats a request; "continue" performs raw text continuation')
     temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="default: the Bridge's own (0.7)")
+    tokens: int | None = Field(default=None, ge=1, le=500,
+                               description="maximum new tokens; byte-tokenizer models use one token per UTF-8 byte")
     session_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$", description=(
         "continue this conversation; omit to start a new one (its id is returned)"))
 
@@ -193,6 +276,34 @@ class MemoryIn(BaseModel):
     tags: list[Tag] = Field(default_factory=list, max_length=20)
 
 
+
+@app.get("/sys_metrics", dependencies=[Depends(require_key)])
+def system_metrics():
+    import shutil
+    try:
+        import psutil
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+    except Exception:
+        cpu = 0.0
+        mem = 0.0
+        
+    try:
+        disk = shutil.disk_usage("/")
+        disk_pct = (disk.used / disk.total) * 100 if disk.total else 0.0
+    except Exception:
+        try:
+            disk = shutil.disk_usage(Path.cwd().anchor or ".")
+            disk_pct = (disk.used / disk.total) * 100 if disk.total else 0.0
+        except Exception:
+            disk_pct = 0.0
+    
+    return {
+        "cpu": round(float(cpu), 1),
+        "mem": round(float(mem), 1),
+        "disk": round(float(disk_pct), 1)
+    }
+
 @app.get("/health")
 def health():
     jobs = _state["jobs"]
@@ -200,44 +311,106 @@ def health():
             "version": __version__,
             "model_loaded": _state["runtime"] is not None,
             "error": _state["error"],
-            "training_job": jobs.active_id() if jobs else None}
+            "training_job": jobs.active_id() if jobs else None,
+            "inference": _state["inference"].stats if _state["inference"] else None,
+            "memory_search": _memory_search_status()}
+
+
+def _memory_search_status() -> dict | None:
+    memory = _state["memory"]
+    if memory is None:
+        return None
+    try:
+        return memory.embedding_status()
+    except Exception as exc:
+        log.exception("could not read memory-store status")
+        return {"mode": "unavailable", "error": type(exc).__name__}
+
+
+@app.get("/ready", dependencies=[Depends(require_key)])
+def readiness():
+    memory_status = _memory_search_status()
+    checks = {"model": _state["runtime"] is not None,
+              "memory": bool(memory_status and memory_status.get("mode") != "unavailable"),
+              "knowledge": _state["knowledge"] is not None, "sessions": _state["sessions"] is not None,
+              "inference": bool(_state["inference"] and _state["inference"].stats["accepting"])}
+    body = {"status": "ready" if all(checks.values()) else "not_ready", "checks": checks,
+            "error": _state["error"]}
+    if not all(checks.values()):
+        return JSONResponse(content=body, status_code=503)
+    return body
 
 
 @app.get("/model", dependencies=[Depends(require_key)])
 def model_info():
     rt = get_runtime()
+    import os, datetime
+    ckpt_path = Path(CHECKPOINT)
+    mtime = ckpt_path.stat().st_mtime if ckpt_path.exists() else None
+    timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat() if mtime else None
     return {"model_config": rt.model_config, "parameters": rt.model.num_parameters(),
-            "device": str(rt.device), "checkpoint": rt.checkpoint_meta}
+            "device": str(rt.device), "checkpoint": rt.checkpoint_meta, "checkpoint_timestamp": timestamp,
+            "tokenizer": {"name": rt.tokenizer.name, "vocab_size": rt.tokenizer.vocab_size,
+                          "sha256": getattr(rt.tokenizer, "asset_sha256", None)},
+            "memory_search": _memory_search_status(),
+            "inference": {"queue_capacity": INFERENCE_QUEUE_SIZE,
+                          "queue_timeout_seconds": INFERENCE_QUEUE_TIMEOUT,
+                          "batching": False}}
 
 
 @app.post("/generate", dependencies=[Depends(require_key)])
-def generate(r: GenerateRequest):
-    rt = get_runtime()
-    with _lock:
-        text = rt.generate(r.prompt, r.tokens, r.temperature, r.top_k, stop=r.stop)
+async def generate(r: GenerateRequest):
+    get_runtime()
+    bridge = _state["bridge"]
+    try:
+        if r.mode == "continue":
+            runtime = _state["runtime"]
+            text = await _state["inference"].run(
+                lambda: runtime.generate(r.prompt, r.tokens, r.temperature, r.top_k, stop=r.stop))
+        else:
+            decision = await _state["inference"].run(lambda: bridge.process(
+                Context(user_input=r.prompt, task="chat"), r.temperature,
+                max_new_tokens=r.tokens, top_k=r.top_k, stop=r.stop or None))
+            text = decision.text
+    except InferenceOverloaded as exc:
+        raise HTTPException(status_code=429, detail={"code": "inference_overloaded", "message": str(exc)},
+                            headers={"Retry-After": "1"}) from exc
     return {"text": text}
 
 
 @app.post("/chat", dependencies=[Depends(require_key)])
-def chat(r: ChatRequest):
+async def chat(r: ChatRequest):
     get_runtime()
     sessions = get_sessions()
     use_session = r.task != "continue"  # a plain-text continuation has no conversation to remember
     if not use_session and r.session_id:
         raise HTTPException(status_code=422, detail=["sessions are not used with task 'continue'"])
     history: list[dict] = []
+    session_context = None
     if use_session and r.session_id:
         try:
+            session_context = sessions.get(r.session_id)
             history = sessions.history(r.session_id, HISTORY_TURNS)
         except SessionNotFound:
             raise HTTPException(status_code=404, detail="session not found")
-    with _lock:
-        d = _state["bridge"].process(Context(user_input=r.message, task=r.task, history=history), r.temperature)
+    bridge = _state["bridge"]
+    try:
+        d = await _state["inference"].run(lambda: bridge.process(
+            Context(user_input=r.message, task=r.task, history=history,
+                    facts=(session_context["facts"] if session_context and session_context["facts_enabled"] else []),
+                    summary=(session_context["summary"] if session_context and
+                             session_context["summary_enabled"] else "")),
+            r.temperature, max_new_tokens=r.tokens))
+    except InferenceOverloaded as exc:
+        raise HTTPException(status_code=429, detail={"code": "inference_overloaded", "message": str(exc)},
+                            headers={"Retry-After": "1"}) from exc
     session_id = None
     if use_session:
         try:
             session_id = r.session_id or sessions.create()["id"]
             sessions.append(session_id, [("user", r.message), ("assistant", d.text)])
+            if sessions.summary_needed(session_id):
+                _state["summarizer"].submit(session_id)
         except SessionNotFound:  # deleted while the reply was being generated
             raise HTTPException(status_code=404, detail="session not found")
     return {"text": d.text, "session_id": session_id, "metadata": d.metadata}
@@ -273,6 +446,85 @@ def get_session(session_id: str, limit: int | None = Query(default=None, ge=1, l
     return {**session, "messages": get_sessions().history(session_id, limit)}
 
 
+class SessionFactsSetting(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
+class SessionSummarySetting(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
+@app.get("/sessions/{session_id}/facts", dependencies=[Depends(require_key)])
+def get_session_facts(session_id: str):
+    _session_or_404(session_id)
+    return get_sessions().facts(session_id)
+
+
+@app.patch("/sessions/{session_id}/facts", dependencies=[Depends(require_key)])
+def configure_session_facts(session_id: str, setting: SessionFactsSetting):
+    _session_or_404(session_id)
+    return get_sessions().set_facts_enabled(session_id, setting.enabled)
+
+
+@app.post("/sessions/{session_id}/facts/refresh", dependencies=[Depends(require_key)])
+def refresh_session_facts(session_id: str):
+    _session_or_404(session_id)
+    try:
+        return get_sessions().refresh_facts(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.delete("/sessions/{session_id}/facts", dependencies=[Depends(require_key)])
+def clear_session_facts(session_id: str):
+    _session_or_404(session_id)
+    return get_sessions().clear_facts(session_id)
+
+
+@app.get("/sessions/{session_id}/summary", dependencies=[Depends(require_key)])
+def get_session_summary(session_id: str):
+    session = _session_or_404(session_id)
+    return {"session_id": session_id, "enabled": session["summary_enabled"],
+            "summary": session["summary"], "status": session["summary_status"],
+            "error": session["summary_error"], "through_turn_seq": session["summary_through_seq"],
+            "updated_at": session["context_updated_at"]}
+
+
+@app.patch("/sessions/{session_id}/summary", dependencies=[Depends(require_key)])
+def configure_session_summary(session_id: str, setting: SessionSummarySetting):
+    try:
+        session = get_sessions().set_summary_enabled(session_id, setting.enabled)
+        if setting.enabled and get_sessions().summary_needed(session_id):
+            _state["summarizer"].submit(session_id)
+        return {"session_id": session_id, "enabled": session["summary_enabled"],
+                "summary": session["summary"], "status": session["summary_status"]}
+    except SessionNotFound:
+        raise HTTPException(status_code=404, detail="session not found")
+
+
+@app.post("/sessions/{session_id}/summary/refresh", dependencies=[Depends(require_key)])
+def refresh_session_summary(session_id: str):
+    try:
+        if not get_sessions().summary_needed(session_id):
+            return get_session_summary(session_id)
+        _state["summarizer"].submit(session_id)
+        return {"session_id": session_id, "status": "pending"}
+    except SessionNotFound:
+        raise HTTPException(status_code=404, detail="session not found")
+
+
+@app.delete("/sessions/{session_id}/summary", dependencies=[Depends(require_key)])
+def clear_session_summary(session_id: str):
+    try:
+        session = get_sessions().clear_summary(session_id)
+        return {"session_id": session_id, "summary": session["summary"],
+                "status": session["summary_status"]}
+    except SessionNotFound:
+        raise HTTPException(status_code=404, detail="session not found")
+
+
 @app.delete("/sessions/{session_id}", status_code=204, dependencies=[Depends(require_key)])
 def delete_session(session_id: str):
     _session_or_404(session_id)
@@ -300,36 +552,16 @@ def delete_memory(memory_id: str):
 # --------------------------------------------------------------------------- training
 
 
-def promote_checkpoint(job_checkpoint: Path) -> None:
-    """Make a finished job's checkpoint the served model.
-
-    The checkpoint is loaded first, so a file that cannot be served is never
-    promoted. It is then copied over CHECKPOINT atomically and swapped in under
-    the generation lock, so no request ever sees a half-loaded model.
-    """
-    rt = ChitRuntime.from_checkpoint(job_checkpoint, memory=_state["memory"])
-    target = Path(CHECKPOINT)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f"{target.name}.tmp-{os.getpid()}")
-    try:
-        shutil.copyfile(job_checkpoint, tmp)
-        os.replace(tmp, target)
-    finally:
-        if tmp.exists():
-            tmp.unlink()
-    rt.checkpoint_meta["path"] = str(target)
-    with _lock:
-        _state.update(runtime=rt, bridge=Bridge(rt), error=None)
-    log.info("promoted %s -> %s and reloaded the model", job_checkpoint, target)
-
-
 class ModelOverrides(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    vocab_size: int | None = Field(default=None, ge=1, le=50_000)
     block_size: int | None = Field(default=None, ge=8, le=2048)
     n_layer: int | None = Field(default=None, ge=1, le=48)
     n_head: int | None = Field(default=None, ge=1, le=64)
     n_embd: int | None = Field(default=None, ge=8, le=4096)
     dropout: float | None = Field(default=None, ge=0.0, lt=1.0)
+    position_encoding: Literal["absolute", "rope"] | None = None
+    rope_theta: float | None = Field(default=None, gt=0)
 
 
 class TrainingOverrides(BaseModel):
@@ -345,6 +577,7 @@ class TrainingOverrides(BaseModel):
     warmup_steps: int | None = Field(default=None, ge=0)
     lr_schedule: Literal["constant", "cosine"] | None = None
     min_lr_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    context_curriculum: list[int] | None = None
 
 
 InitMode = Literal["scratch", "current", "auto"]
@@ -361,7 +594,8 @@ class TrainRequest(BaseModel):
         "auto: current if a compatible model is served, otherwise scratch."))
     model: ModelOverrides = Field(default_factory=ModelOverrides)
     training: TrainingOverrides = Field(default_factory=TrainingOverrides)
-    promote: bool = Field(default=True, description="serve the new model when training succeeds")
+    promote: bool = Field(default=False, description="deprecated; candidates require evaluation and explicit promotion")
+    force_promote: bool = Field(default=False, description="force-install this candidate after successful training, bypassing evaluation and reviewer gates")
 
 
 def _overrides(m: BaseModel) -> dict:
@@ -404,7 +638,17 @@ def resolve_init(r: TrainRequest, cfg: ChitConfig) -> tuple[ChitConfig, Path | N
         model = dataclasses.replace(ModelConfig(**served), **_overrides(r.model))
     except (ConfigError, TypeError) as e:
         raise HTTPException(status_code=422, detail=[f"served model config is unusable: {e}"])
-    changed = [k for k in ARCHITECTURE_KEYS if getattr(model, k) != served.get(k)]
+    defaults = {"position_encoding": "absolute", "rope_theta": 10000.0}
+    changed = [k for k in ARCHITECTURE_KEYS if getattr(model, k) != served.get(k, defaults.get(k))]
+    if rt.tokenizer.name != cfg.tokenizer.name:
+        changed.append("tokenizer")
+    elif cfg.tokenizer.name != ByteTokenizer.name:
+        try:
+            candidate = create_tokenizer(cfg.tokenizer.name, cfg.tokenizer.model_file)
+            if candidate.asset_sha256 != getattr(rt.tokenizer, "asset_sha256", None):
+                changed.append("tokenizer assets")
+        except (ValueError, RuntimeError, OSError):
+            changed.append("tokenizer assets")
     if changed:
         if r.init == "current":
             raise HTTPException(status_code=422, detail=[
@@ -415,18 +659,36 @@ def resolve_init(r: TrainRequest, cfg: ChitConfig) -> tuple[ChitConfig, Path | N
 
 def validate_config(cfg: ChitConfig) -> None:
     problems = []
-    if cfg.model.vocab_size != ByteTokenizer.vocab_size:
-        problems.append(f"model.vocab_size must be {ByteTokenizer.vocab_size} (byte tokenizer)")
+    try:
+        tokenizer = create_tokenizer(cfg.tokenizer.name, cfg.tokenizer.model_file)
+        if cfg.model.vocab_size != tokenizer.vocab_size:
+            problems.append(f"model.vocab_size must equal tokenizer vocab ({tokenizer.vocab_size})")
+    except (ValueError, RuntimeError, OSError) as exc:
+        problems.append(f"tokenizer configuration is unusable: {exc}")
+        tokenizer = None
     if cfg.training.max_steps > MAX_TRAIN_STEPS:
         problems.append(f"training.max_steps must be <= {MAX_TRAIN_STEPS}")
     if cfg.device == "cuda" and not torch.cuda.is_available():
         problems.append("device 'cuda' requested but CUDA is not available on this server")
-    for name in ("train_file", "eval_file"):
-        f = Path(getattr(cfg.data, name))
+    data_files = [(f"data.{name}", Path(getattr(cfg.data, name)))
+                  for name in ("train_file", "eval_file")]
+    data_files.extend((f"data.sources[{i}].path", Path(source.path))
+                      for i, source in enumerate(cfg.data.sources))
+    for name, f in data_files:
         if not f.is_file():
-            problems.append(f"data.{name} not found on server")
+            problems.append(f"{name} not found on server")
         elif f.stat().st_size <= cfg.model.block_size:
-            problems.append(f"data.{name} must be larger than model.block_size ({cfg.model.block_size} bytes)")
+            problems.append(f"{name} must be larger than model.block_size")
+        elif tokenizer is not None and tokenizer.name != ByteTokenizer.name:
+            try:
+                # Read a bounded prefix: validation only needs to establish that
+                # the file has at least one complete model window.
+                with f.open("r", encoding="utf-8") as source:
+                    sample = source.read(256 * 1024)
+                if len(tokenizer.encode(sample)) <= cfg.model.block_size:
+                    problems.append(f"{name} must contain more than model.block_size tokens")
+            except (UnicodeError, OSError) as exc:
+                problems.append(f"{name} cannot be tokenized: {exc}")
     if problems:
         raise HTTPException(status_code=422, detail=problems)
 
@@ -442,10 +704,65 @@ def _snapshot_init(init: Path | None, job_dir: Path) -> Path | None:
 
 
 def _submit(cfg: ChitConfig, r: TrainRequest, job_id: str, init: Path | None, **kw) -> dict:
+    if r.promote and not r.force_promote:
+        raise HTTPException(status_code=422, detail=(
+            "direct training promotion is disabled; evaluate the candidate with eval_runner.py "
+            "and promote it with promote_candidate.py after it passes the reviewed gates; "
+            "set force_promote=true to bypass those gates"))
     try:
-        return get_jobs().submit(cfg, promote=r.promote, job_id=job_id, init_checkpoint=init, **kw)
+        callback = kw.pop("after_success", None)
+        metadata = dict(kw.pop("metadata", {}) or {})
+        metadata["force_promote"] = r.force_promote
+        if r.force_promote:
+            def after_success(snapshot: dict) -> None:
+                _force_promote_candidate(snapshot)
+                snapshot["promoted"] = True
+                if callback:
+                    callback(snapshot)
+        else:
+            after_success = callback
+        return get_jobs().submit(cfg, promote=r.force_promote, job_id=job_id,
+                                 init_checkpoint=init, metadata=metadata,
+                                 after_success=after_success, **kw)
     except JobConflict as e:
         raise HTTPException(status_code=409, detail={"message": str(e), "active_job": e.active_id})
+
+
+def _force_promote_candidate(snapshot: dict) -> None:
+    """Install a successfully trained candidate without evaluation/reviewer gates."""
+    import shutil
+    from datetime import datetime, timezone
+    from .promotion_state import file_sha256, install_checkpoint
+
+    candidate = Path(snapshot["checkpoint"])
+    target = Path(CHECKPOINT)
+    # Load first so a corrupt/incompatible checkpoint cannot replace the live file.
+    candidate_runtime = ChitRuntime.from_checkpoint(candidate, memory=_state["memory"])
+    current_runtime = _state.get("runtime")
+    if current_runtime and candidate_runtime.tokenizer.name != current_runtime.tokenizer.name:
+        raise ValueError("force promotion does not bypass tokenizer compatibility")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    archive = target.parent / "champions"
+    archive.mkdir(exist_ok=True)
+    old_hash, candidate_hash = file_sha256(target), file_sha256(candidate)
+    old_archive, new_archive = archive / f"{old_hash}.pt", archive / f"{candidate_hash}.pt"
+    if not old_archive.exists():
+        shutil.copy2(target, old_archive)
+    if not new_archive.exists():
+        shutil.copy2(candidate, new_archive)
+    manifest_path = target.parent / "champion.json"
+    previous = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    now = datetime.now(timezone.utc).isoformat()
+    manifest = {"schema_version": 1, "updated_at": now,
+                "current": {"sha256": candidate_hash, "checkpoint": str(new_archive),
+                            "evaluation": snapshot.get("final_evaluation")},
+                "previous": {"sha256": old_hash, "checkpoint": str(old_archive)},
+                "decision": {"mode": "forced_training_promotion", "evaluation_gates_bypassed": True},
+                "history": previous.get("history", []) + [{"at": now, "from": old_hash,
+                    "to": candidate_hash, "reason": "explicit force_promote API option"}]}
+    install_checkpoint(target, new_archive, source_sha256=candidate_hash,
+                       previous_sha256=old_hash, previous_archive=old_archive, manifest=manifest)
+    _state.update(runtime=candidate_runtime, bridge=Bridge(candidate_runtime), error=None)
 
 
 def _ensure_idle() -> None:
@@ -468,7 +785,7 @@ def start_training(r: TrainRequest, response: Response):
     job_id = uuid.uuid4().hex
     job_dir = Path(JOBS_DIR) / job_id
     try:
-        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init})
+        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init, "config_name": r.config})
     except BaseException:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
@@ -632,7 +949,13 @@ def train_on_knowledge(r: KnowledgeTrainRequest, response: Response):
                                max_bytes=MAX_DATASET_BYTES)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=[str(e)])
-        cfg = dataclasses.replace(cfg, data=dataclasses.replace(cfg.data, train_file=str(ds.train_file)))
+        # Preserve source-aware curricula while adding the knowledge dataset as
+        # its own stream. Without this, train() would prefer the configured
+        # sources and silently ignore the generated knowledge file.
+        sources = ([*cfg.data.sources, DataSourceConfig(path=str(ds.train_file), weight=1.0)]
+                   if cfg.data.sources else [])
+        cfg = dataclasses.replace(cfg, data=dataclasses.replace(
+            cfg.data, train_file=str(ds.train_file), sources=sources))
         validate_config(cfg)
 
         ids = ds.entry_ids
@@ -693,7 +1016,22 @@ def data_status(config: str = Query("chit_cpu_learning", pattern=r"^[A-Za-z0-9_-
     """
     cfg, train_path, eval_path = _data_paths(config)
     report = datasets.analyze(train_path, eval_path, cfg.model.block_size, MAX_DATASET_BYTES)
+    training_sources = []
+    source_warnings = []
+    for i, source in enumerate(cfg.data.sources):
+        info = datasets.file_info(source.path)
+        ready = bool(info and info["bytes"] > cfg.model.block_size)
+        training_sources.append({"weight": source.weight, "file": info,
+                                 "ready": ready, "missing_path": source.path if info is None else None})
+        if not ready:
+            source_warnings.append(
+                f"data.sources[{i}] is missing or not larger than model.block_size ({cfg.model.block_size} bytes): "
+                f"{source.path}")
+    if source_warnings:
+        report["warnings"].extend(source_warnings)
+        report["ready_to_train"] = False
     return {"config": config, "block_size": cfg.model.block_size, **report,
+            "training_sources": training_sources,
             "sources": datasets.list_sources(DATA_DIR)}
 
 
@@ -701,6 +1039,9 @@ def data_status(config: str = Query("chit_cpu_learning", pattern=r"^[A-Za-z0-9_-
 def split_data(r: SplitRequest):
     """Split a corpus file from the data folder into the config's train and eval files."""
     cfg, train_path, eval_path = _data_paths(r.config)
+    if cfg.data.sources:
+        raise HTTPException(status_code=422, detail=[
+            "this config trains from data.sources; split each configured source separately instead of writing train_file"])
     source = _resolve_source(r.source)
     _ensure_idle()
     try:
@@ -747,3 +1088,156 @@ def split_data(r: SplitRequest):
             raise HTTPException(status_code=500, detail=f"could not write {e.filename or 'the data files'}: "
                                                         f"{e.strerror or e} (is the folder mounted read-only?)")
     return {**report, "written": True, "backups": backups}
+
+import asyncio
+import subprocess
+from fastapi import BackgroundTasks
+
+@app.get("/candidates")
+async def list_candidates():
+    """List finished training jobs and their evaluation status."""
+    jobs_dir = Path(JOBS_DIR)
+    if not jobs_dir.is_dir():
+        return {"candidates": []}
+    
+    candidates = []
+    for p in jobs_dir.iterdir():
+        if not p.is_dir():
+            continue
+        manifest_path = p / "job.json"
+        if not manifest_path.is_file():
+            continue
+        try:
+            job_data = json.loads(manifest_path.read_text())
+        except Exception:
+            continue
+            
+        if job_data.get("state") not in ("success", "succeeded"):
+            continue
+            
+        eval_path = p / "evaluation-golden.json"
+        eval_data = None
+        if eval_path.is_file():
+            try:
+                eval_data = json.loads(eval_path.read_text())
+            except Exception:
+                pass
+                
+        ckpt_path = p / "latest.pt"
+        ckpt_timestamp = None
+        if ckpt_path.is_file():
+            import datetime
+            mtime = ckpt_path.stat().st_mtime
+            ckpt_timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+            
+        candidates.append({
+            "job_id": p.name,
+            "checkpoint_timestamp": ckpt_timestamp,
+            "job_manifest": job_data,
+            "evaluation": eval_data
+        })
+    return {"candidates": candidates}
+
+def _run_eval_background(job_id: str):
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        log.error(f"Cannot evaluate {job_id}: checkpoint missing")
+        return
+        
+    try:
+        # Run eval_runner via subprocess to avoid blocking the main worker thread
+        # and to cleanly load/unload the heavy evaluation model.
+        eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+        subprocess.run(
+            ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path), "--output", str(eval_path)],
+            check=True,
+            capture_output=True
+        )
+        
+        from pranav.chit.tools.auto_rate import auto_rate
+        golden_path = Path("data/golden_set.json")
+        ratings_path = Path(JOBS_DIR) / job_id / "ratings.json"
+        
+        if eval_path.exists() and golden_path.exists():
+            auto_rate(golden_path, eval_path, ratings_path)
+            subprocess.run(
+                ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path), "--output", str(eval_path), "--ratings", str(ratings_path)],
+                check=True,
+                capture_output=True
+            )
+    except subprocess.CalledProcessError as e:
+        log.error(f"Evaluation failed for {job_id}: {e.stderr.decode('utf-8', errors='ignore')}")
+    except Exception as e:
+        log.error(f"Evaluation exception for {job_id}: {e}")
+
+@app.post("/candidates/{job_id}/evaluate")
+async def evaluate_candidate(job_id: str, background_tasks: BackgroundTasks):
+    """Trigger the Golden Gate evaluation for a candidate in the background."""
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        raise HTTPException(status_code=404, detail="Candidate checkpoint not found")
+        
+    eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+    if eval_path.is_file():
+        return {"status": "already_evaluated", "job_id": job_id}
+        
+    background_tasks.add_task(_run_eval_background, job_id)
+    return {"status": "evaluating", "job_id": job_id}
+
+@app.post("/candidates/{job_id}/promote")
+async def promote_candidate_route(job_id: str):
+    """Promote a candidate to Champion safely if it passes the Golden Gate."""
+    from pranav.chit.tools.promote_candidate import promote
+    
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+    
+    if not ckpt_path.is_file() or not eval_path.is_file():
+        raise HTTPException(status_code=400, detail="Candidate checkpoint or evaluation report missing.")
+        
+    champion_eval_path = Path(CHECKPOINT).parent / "champion_evaluation.json"
+    if not champion_eval_path.exists():
+        # Fallback if there is no current champion evaluation to compare against
+        # The script will handle bootstrap mode if incumbent fails.
+        champion_eval_path = Path(JOBS_DIR) / job_id / "evaluation-step_1.json"
+        
+    target_path = Path(CHECKPOINT)
+    
+    try:
+        # promote validates all safety gates (lift, score, hashes)
+        promote(ckpt_path, eval_path, champion_eval_path, target_path)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=f"Golden Gate promotion failed: {e}")
+    except Exception as e:
+        log.exception("Promotion error")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    # Hot-swap the runtime using existing safe reload logic
+    _load_served_model()
+    return {"status": "promoted", "job_id": job_id}
+
+
+
+@app.post("/admin/rollback")
+async def rollback_champion_route(to_sha256: str):
+    """Rollback the active champion to a previous version."""
+    from pranav.chit.tools.rollback_champion import rollback
+    target_path = Path(CHECKPOINT)
+    try:
+        manifest = rollback(target_path, to_sha256)
+    except Exception as e:
+        log.exception("Rollback error")
+        raise HTTPException(status_code=500, detail=str(e))
+    _load_served_model()
+    return manifest
+
+@app.post("/admin/reload")
+async def reload_champion_route():
+    """Reload the active champion from disk into memory."""
+    try:
+        _load_served_model()
+        return {"status": "reloaded"}
+    except Exception as e:
+        log.exception("Reload error")
+        raise HTTPException(status_code=500, detail=str(e))
+

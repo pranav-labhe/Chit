@@ -13,6 +13,8 @@ class Context:
     current_state: dict = field(default_factory=dict)
     task: str = "chat"
     history: list[dict] = field(default_factory=list)  # earlier turns of this session, oldest first
+    facts: list[dict] = field(default_factory=list)  # explicit user statements; latest correction active
+    summary: str = ""  # derived context, never a replacement for the retained transcript
 
 
 @dataclass
@@ -25,22 +27,31 @@ class ChitDecision:
 
 
 class Bridge:
-    STOP = ["\nUser:", "\nChit:", "\nTask:", "\n\n"]
+    # Stop at actual conversation boundaries. A blank line is valid Markdown
+    # (paragraphs, lists and fenced examples often use it), so it must not end
+    # assistant output by itself.
+    STOP = ["\nUser:", "\nChit:", "\nTask:"]
 
-    def __init__(self, runtime, max_memories: int = 5, max_new_tokens: int = 120, temperature: float = 0.7):
+    def __init__(self, runtime, max_memories: int = 5, max_new_tokens: int = 256, temperature: float = 0.7):
         self.runtime = runtime
         self.max_memories = max_memories
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
 
-    def process(self, c: Context, temperature: float | None = None) -> ChitDecision:
+    def process(self, c: Context, temperature: float | None = None, *,
+                max_new_tokens: int | None = None, top_k: int | None = 50,
+                stop: list[str] | None = None) -> ChitDecision:
         t = self.temperature if temperature is None else temperature
+        n_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
         if c.task == "continue":  # plain-text model: the message is the start of a sentence, no chat wrapper
-            text = self.runtime.generate(c.user_input, self.max_new_tokens, t, stop=["\n"])
+            text = self.runtime.generate(c.user_input, n_tokens, t, top_k,
+                                         stop=stop if stop is not None else ["\n"])
             return ChitDecision(text, metadata={"task": c.task, "memory_ids": []})
         memories = (c.memories or self.runtime.recall(c.user_input, self.max_memories))[: self.max_memories]
         context = (getattr(self.runtime, "model_config", None) or {}).get("block_size")
         prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
-                                    history=c.history, max_bytes=context)
-        text = self.runtime.generate(prompt, self.max_new_tokens, t, stop=self.STOP).strip()
+                                    history=c.history, max_tokens=context, tokenizer=self.runtime.tokenizer,
+                                    facts=c.facts, summary=c.summary)
+        text = self.runtime.generate(prompt, n_tokens, t, top_k,
+                                     stop=stop if stop is not None else self.STOP).strip()
         return ChitDecision(text, metadata={"task": c.task, "memory_ids": [m.get("id") for m in memories]})

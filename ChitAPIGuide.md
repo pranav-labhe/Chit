@@ -108,13 +108,14 @@ for POST requests, the **body** (the JSON you send). Here is how to actually sen
 
 In the examples I write `YOUR_KEY` for your API key. Replace it with your real key.
 
-### Way 1 — The built-in web page (easiest, nothing to install)
-1. Open `https://api.chitt.online/docs` in your browser.
-2. Click an endpoint, for example **POST /generate**. It opens.
-3. Click **Try it out**.
-4. Type your key into the `x-api-key` box.
-5. If there is a body box, replace the example text with your own JSON.
-6. Click **Execute**. The answer appears below, under **Server response**.
+### Way 1 — The browser console (easiest, nothing to install)
+1. Open `https://api.chitt.online/console` (deployed) or `http://127.0.0.1:8001/` (local).
+2. Enter your API key once. The console keeps it server-side for this browser session.
+3. Use Chat or Generate for model requests, or choose an operation under **All API routes**.
+4. Replace the sample values as needed. The console asks before deleting, cancelling work, training, or writing split files.
+
+The interactive FastAPI reference remains at `https://api.chitt.online/docs`. In Swagger, click an endpoint,
+choose **Try it out**, enter your key in the `x-api-key` box, and click **Execute**.
 
 ### Way 2 — curl (Mac, Linux, or "Git Bash" on Windows)
 ```bash
@@ -151,19 +152,21 @@ Use `http://127.0.0.1:8000` instead of `https://api.chitt.online`.
 
 Please read this part. It saves a lot of frustration.
 
-**Chit is a very small text-writing model.** It has about 125 thousand adjustable numbers. A big public model
-such as ChatGPT has billions. Chit learned only from the few pages of text you gave it.
+**चित् (Chit) is Atmini's neural brain, trained from scratch.** The current assistant preset has about
+0.9 million adjustable parameters and a 512-byte context. It uses learned weights, relevant memory,
+and conversation history to respond; training data and available compute determine what it can learn.
 
-**What Chit is good at:** finishing a sentence that starts like something it has seen before.
-Give it `Memory lets Atmini keep` and it finishes `an experience while the model stays the same.`
+**What Chit is being trained to do:** respond to requests using examples in its training format, including
+answers, explanations, translations, summaries, new writing, and guided problem solving. Its reliability
+depends on the examples it has learned and the context available for each conversation.
 
-**What Chit cannot do:**
-- It cannot answer a question about something it never saw. It will write nonsense that looks like text.
-- It cannot look things up, think things through, or understand meaning the way a person does.
-- It does not "know" it is wrong. It will confidently write a wrong sentence.
+**Current limits:**
+- It has no external lookup service; answers rely on training examples and context supplied in the request.
+- It may fail to combine familiar facts reliably or follow complex instructions, especially when important context is missing.
+- It can produce confident errors, so check important answers.
 
-**So how do you get good results?** Teach it the exact things you want, in several different wordings,
-and ask using the start of those same sentences. Section 9 has tips.
+**How to improve results:** add varied request-and-response examples to the reviewed corpus, then train and
+check held-out requests. Matching the request language and task to the examples helps. Section 9 has tips.
 
 ---
 
@@ -175,14 +178,15 @@ Four things sound alike but are different. Understanding them makes everything e
 | --- | --- | --- | --- |
 | **The model** (its "weights") | The model's brain: a big list of numbers. It is what actually writes the text. | — | A file on the server |
 | **Training data** (`train.txt`, `eval.txt`) | The text the model studies. `train.txt` is the textbook. `eval.txt` is the **exam** the model has not studied from. | Only after training | Two text files |
-| **Memory** | A notebook of facts. When you chat, Chit looks in the notebook and shows matching notes to the model. | **No** | A small file |
+| **Memory** | A notebook of facts. Assistant-mode `/generate` and `/chat` can include matching notes in the prompt. | **No** | A small file |
 | **Knowledge** | A pile of lessons waiting to be studied. You add lessons now; they only change the model after you run training. | Only after training | A small database |
 
 ### Which one should I use?
 
 | I want to… | Use | Why |
 | --- | --- | --- |
-| Make Chit finish a sentence | `POST /generate` | Simple and direct. |
+| Ask Chit to answer or create something | `POST /generate` or `/chat` | `/chat` also uses memory and session history. |
+| Continue raw text | `POST /generate` with `mode: "continue"` | No assistant request wrapper. |
 | Give Chit a fact **right now** | `POST /memory` | Works immediately, no waiting. |
 | Teach Chit something for good | `POST /knowledge`, then `POST /knowledge/train` | Studied into the model. |
 | Replace everything Chit studies | Change `train.txt`, then `POST /train` | Full retraining. |
@@ -192,7 +196,7 @@ Four things sound alike but are different. Understanding them makes everything e
 
 ## 5. Quick start: five steps
 
-This takes about five minutes. The example uses the preset called `chit_strong`.
+This takes several minutes or longer on CPU. The example uses `chit_assistant_cpu`, the assistant-style preset.
 
 ### Step 1 — Is the server alive?
 `GET /health` (no key needed)
@@ -201,14 +205,14 @@ You should see `"status": "ok"`. If you see `"status": "no_model"`, there is no 
 fine, you will make one in step 3.
 
 ### Step 2 — Are the training files ready?
-`GET /data?config=chit_strong`
+`GET /data?config=chit_assistant_cpu`
 
 Look for `"ready_to_train": true`. If it says `false`, read the `warnings` list. It tells you what to fix.
 
 ### Step 3 — Start training
 `POST /train` with this body:
 ```json
-{"config": "chit_strong", "init": "scratch"}
+{"config": "chit_assistant_cpu", "init": "scratch"}
 ```
 The answer has an `"id"`. **Copy it.** This is your training job. It starts running in the background.
 
@@ -216,17 +220,19 @@ The answer has an `"id"`. **Copy it.** This is your training job. It starts runn
 `GET /train/PASTE_THE_ID_HERE`
 
 Repeat every few seconds. Watch two fields: `"state"` and `"progress"` (0 to 1). When `"state"` is
-`"succeeded"` and `"promoted"` is `true`, the new model is already live. On a small test computer a full
-run took about two minutes; your server may be faster or slower.
+`"succeeded"` means training finished. By default the result remains a candidate and `"promoted"` is
+`false`; use the reviewed promotion workflow to serve it. To explicitly bypass those review gates, send
+`"force_promote": true` with `POST /train`. On a small test computer a full run took about two minutes;
+your server may be faster or slower.
 
 ### Step 5 — Ask the model
 `POST /generate` with this body:
 ```json
-{"prompt": "Memory lets Atmini keep", "tokens": 100, "temperature": 0, "stop": ["\n"]}
+{"prompt": "Explain how memory helps an assistant.", "tokens": 100, "temperature": 0}
 ```
 You get back:
 ```json
-{"text": " an experience while the model stays the same."}
+{"text": "..."}
 ```
 Done. You trained a model and asked it a question.
 
@@ -274,6 +280,20 @@ out, the **Default** is used.
 
 ---
 
+### `GET /sys_metrics`
+Shows the real-time health of the server hardware running Chit.
+
+**You send:** Nothing.
+**You get:**
+```json
+{
+  "cpu": 12.5,
+  "mem": 45.2,
+  "disk": 80.1
+}
+```
+**What happens:** The server returns the CPU load, Memory usage, and Disk storage usage as percentages (0-100). The Studio UI uses this to display a live traffic-light badge in the header.
+
 ### `GET /model`
 **What it does.** Describes the model that is currently live: its size and how it was trained.
 **Key needed:** yes.
@@ -297,7 +317,8 @@ out, the **Default** is used.
     "last_eval": {"step": 3000, "train_loss": 0.0934, "eval_loss": 2.9523},
     "metadata": {},
     "path": "checkpoints/latest.pt"
-  }
+  },
+  "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00"
 }
 ```
 
@@ -313,10 +334,11 @@ out, the **Default** is used.
 | `checkpoint.init_from` | If it started from an older model, the file name. `null` means it started from nothing. |
 | `checkpoint.best_eval_loss` | The best exam score it reached during training. **Lower is better.** |
 | `checkpoint.last_eval` | The scores at the very end: `train_loss` (on the textbook) and `eval_loss` (on the exam). |
+| `checkpoint_timestamp` | The date and time the current active checkpoint file was saved on disk (`st_mtime` of `checkpoints/latest.pt`). |
 
 **Reading the scores.** If `train_loss` is tiny (like 0.09) but `eval_loss` is much larger (like 2.95), the model
-**memorized** its textbook. It can repeat what it studied but is weak on new wording. That is normal for a
-small model with little data.
+**memorized** its textbook. It can repeat what it studied but is weak on new wording. Add varied data and
+review held-out replies before promoting the checkpoint.
 
 **Common problems.** `503` means no model yet. Train one.
 
@@ -325,42 +347,43 @@ small model with little data.
 ## 6.2 Write text
 
 ### `POST /generate`
-**What it does.** You send the beginning of some text. Chit writes what comes next.
+**What it does.** You send a request and Chit writes a response. Set `mode` to `continue` to pass raw text directly.
 **Key needed:** yes.
-**When to use it.** This is the main endpoint. Use it to finish sentences.
+**When to use it.** Use it for a single request to answer, explain, translate, summarize, or create content.
 
 **What you send**
 
 | Field | Required | Default | Allowed | What it means in simple words |
 | --- | --- | --- | --- | --- |
-| `prompt` | **Yes** | — | 1 to 2000 letters | The start of the text. Chit continues from here. Write it like the **beginning of a sentence it learned**. |
+| `prompt` | **Yes** | — | 1 to 2000 characters | Your request in the default assistant mode, or a raw text prefix when `mode` is `continue`. Markdown headings, lists, tables, quotes, and code fences are kept in the request. |
+| `mode` | No | `assistant` | `assistant` or `continue` | Assistant mode formats the request like `/chat` and adds matching memory. Continue mode sends the prompt directly. |
 | `tokens` | No | 100 | 1 to 500 | The most new letters Chit may write. (A "token" is about one letter.) 60 to 120 is enough for a sentence. |
 | `temperature` | No | 0.7 | 0 to 2 | How adventurous Chit is. **0** = always the safest choice, so you get the same answer every time. Higher = more random and more mistakes. |
 | `top_k` | No | 50 | 1 to 256 | Chit picks each letter from its top few guesses. This sets how many. It does nothing when `temperature` is 0. |
-| `stop` | No | none | up to 8 pieces of text | If Chit writes any of these, it stops right there. `["\n"]` means "stop at the end of the line". The stop text is not included in the answer. |
+| `stop` | No | assistant turn markers | up to 8 pieces of text | Optional custom stop text. `mode: "continue"` applies only the stop strings you provide. |
 
-**Best settings for steady answers:** `"temperature": 0` and `"stop": ["\n"]`.
+**Best settings for steady answers:** `"temperature": 0`. Assistant mode uses chat-turn stop markers by default.
 
 **What you send (example)**
 ```json
-{"prompt": "Memory lets Atmini keep", "tokens": 100, "temperature": 0, "stop": ["\n"]}
+{"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}
 ```
 
 **What you get back**
 ```json
-{"text": " an experience while the model stays the same."}
+{"text": "Relevant memories can be included in the request context. Saving a memory does not change model weights."}
 ```
 
 | Field | What it means |
 | --- | --- |
-| `text` | The new text only. **Your prompt is not repeated.** Put your prompt and this together to read the whole sentence. Note the space at the start. |
+| `text` | The generated response only. **Your prompt is not repeated.** |
 
 **Common problems**
 
 | You see | Why | Fix |
 | --- | --- | --- |
-| Gibberish | The prompt does not look like anything Chit studied. | Start like a sentence in `train.txt`. Use `temperature` 0. |
-| It keeps writing more lines | There is no `stop`. | Add `"stop": ["\n"]`. |
+| Gibberish | The request or language is not well represented in training. | Add varied examples for that task and language; use `temperature` 0 for steadier output. |
+| It keeps writing more lines | The answer format does not match learned turn markers. | Train on `Task: chat` / `User:` / `Chit:` examples or supply a stop string. |
 | Slightly different answer each time | `temperature` is above 0. | Set it to 0. |
 | `422` | A value is out of range, or `prompt` is empty. | Check the table above. |
 | `503` | No model yet. | Train first (section 5). |
@@ -368,20 +391,19 @@ small model with little data.
 ---
 
 ### `POST /chat`
-**What it does.** A "chat" style call. It builds a special message for the model that includes useful notes from
-memory and the last messages of the conversation, asks the model to continue it, and **saves** the exchange in a
-conversation (a "session").
+**What it does.** A request-response call. It builds a message for the model using relevant memory and recent
+conversation history, then **saves** the exchange in a conversation (a "session").
 **Key needed:** yes.
-**When to use it.** When you want a back-and-forth conversation. For a plain sentence-finishing model, use the
-`continue` task described below.
+**When to use it.** When you want a back-and-forth conversation with memory and session history.
 
 **What you send**
 
 | Field | Required | Default | Allowed | What it means in simple words |
 | --- | --- | --- | --- | --- |
 | `message` | **Yes** | — | 1 to 2000 letters | What the user says. |
-| `task` | No | `chat` | up to 50 letters | `chat` = the full chat style. `continue` = send the message straight to the model as the start of a sentence, like `/generate`. |
+| `task` | No | `chat` | up to 50 letters | The task label used in the request prompt. `continue` = send the message straight to the model as a raw text prefix. |
 | `temperature` | No | server's own (0.7) | 0 to 2 | Same as in `/generate`. Use 0 for steady answers. |
+| `tokens` | No | server's default (256) | 1 to 500 | Maximum new bytes to generate. |
 | `session_id` | No | none | the 32-character ID of a conversation | To continue an old conversation, send its ID. **Leave it out to start a new one**: the server makes one and returns its ID. Not allowed with `task: "continue"`. |
 
 **How the chat message is built.** In `chat` mode the model is shown this, filled in:
@@ -394,11 +416,12 @@ User: (your message)
 Chit:
 ```
 Then Chit writes what comes after `Chit:`. If the whole thing is too long for the model's `block_size`, the oldest
-messages are dropped first, then the least matching notes. **Your new message is never dropped.** Every message is
-still saved in full.
+messages are dropped first, then the least matching notes. If the current request still does not fit, its end is
+truncated for generation. Every message is saved in full. Markdown structure is preserved unless it falls beyond
+the context limit.
 
-**Important.** `chat` mode only works well if the model was trained on text written in exactly this style
-(`User:` and `Chit:` lines). If your model was trained on plain sentences, use `"task": "continue"`.
+**Important.** The model works best when training examples use this same request style (`Task:`, `User:`, and
+`Chit:` lines). `task: "continue"` remains available for raw text continuation and does not create a session.
 
 **Example 1: start a conversation**
 ```json
@@ -417,7 +440,7 @@ Response:
 {"message": "I learn", "session_id": "eefa8d7646ca4a99bf1ef6b514cf75c5", "temperature": 0}
 ```
 
-**Example 2: plain sentence finishing (no conversation saved)**
+**Example 2: raw text continuation (no conversation saved)**
 ```json
 {"message": "Chit is the", "task": "continue", "temperature": 0}
 ```
@@ -544,7 +567,7 @@ Replace `{session_id}` with the real ID: `/sessions/eefa8d7646ca4a99bf1ef6b514cf
 
 ## 6.4 Memory
 
-Memory is a notebook of short facts. You write a fact once, and Chit can find it later when someone chats.
+Memory is a notebook of short facts. You write a fact once, and assistant-mode `/generate` and `/chat` can find it later.
 **Putting a fact in memory does not change the model.** It is instant.
 
 ### `POST /memory`
@@ -597,7 +620,7 @@ Example address: `/memory/search?q=Pranav&limit=3`
 
 **How the search works.** It matches **whole words**. It ignores capital letters, punctuation, and very common
 words such as "is" and "the". Notes with more matching words come first, then the more important ones, then the
-newer ones. **It does not understand meaning.** Searching `city` will not find a note that only says `Nagpur`.
+newer ones. **This search uses keyword overlap rather than semantic matching.** Searching `city` will not find a note that only says `Nagpur`.
 Use the same words in the note and in the search.
 
 **What you get back**
@@ -624,8 +647,9 @@ No matches gives `{"results": []}`.
 ## 6.5 Training
 
 **Training** is how the model learns. It reads `train.txt` over and over and slowly improves. It runs in the
-**background**: you start it, get a job ID, and check on it as often as you like. When it finishes well, the
-new model goes live automatically, with no restart.
+**background**: you start it, get a job ID, and check on it as often as you like. By default it creates a
+candidate and leaves the served model unchanged. Set `force_promote: true` in the `POST /train` body to
+install a successful candidate while bypassing automated evaluation gates; the previous checkpoint is archived.
 
 **Only one training job can run at a time.**
 
@@ -637,7 +661,7 @@ one job by adding them to your request (see the tables below).
 ### `GET /train/configs`
 **What it does.** Lists the preset names you can use. **Key needed:** yes (training). **What you send:** nothing.
 ```json
-{"configs": ["chit_cpu_learning", "chit_strong", "chit_tiny", "chit_train_txt"]}
+{"configs": ["chit_assistant_cpu", "chit_cpu_learning", "chit_strong", "chit_tiny", "chit_train_txt"]}
 ```
 
 ### `POST /train`
@@ -649,13 +673,14 @@ one job by adding them to your request (see the tables below).
 
 | Field | Default | Allowed | What it means in simple words |
 | --- | --- | --- | --- |
-| `config` | `chit_cpu_learning` | a name from `/train/configs` | Which preset to use. **Always name it.** The default gives poor results on small text. `chit_strong` worked well in testing. |
+| `config` | `chit_cpu_learning` | a name from `/train/configs` | Which preset to use. Pass `chit_assistant_cpu` for the 512-byte context and assistant-style examples. |
 | `seed` | the preset's | a whole number | A number that fixes the "luck" in training. The same seed gives repeatable results. |
 | `device` | the preset's | `auto`, `cpu`, `cuda` | Which chip trains the model. `cuda` is a graphics card and fails if the server has none. |
 | `init` | `scratch` | `scratch`, `current`, `auto` | Where learning starts. See the box below. |
 | `model` | none | see the model table | Change the model's size for this job only. |
 | `training` | none | see the training table | Change training settings for this job only. |
-| `promote` | `true` | `true` or `false` | `true` = if it succeeds, it becomes the live model. `false` = train and keep the result but do not switch to it. |
+| `promote` | `false` | `true` or `false` | Legacy promotion request. `true` is rejected with `422` unless `force_promote` is also true. |
+| `force_promote` | `false` | `true` or `false` | Explicitly install the successful candidate as the live model, bypassing automated evaluation gates. The prior checkpoint is archived. |
 
 **`init`: where does learning start?**
 
@@ -681,7 +706,7 @@ one job by adding them to your request (see the tables below).
 | --- | --- | --- |
 | `max_steps` | 1 or more (server limit 100000) | How many study steps. More steps = longer training. For a quick test use 60. |
 | `batch_size` | 1 to 1024 | How many pieces of text are studied in each step. |
-| `learning_rate` | above 0 up to 1 | How big each learning step is. Too big = unstable. Too small = very slow. `0.003` worked for the small model. |
+| `learning_rate` | above 0 up to 1 | How big each learning step is. Too big = unstable. Too small = very slow. `0.003` worked for the earlier CPU preset. |
 | `weight_decay` | 0 to 1 | A gentle brake that keeps the numbers from growing too large. Usually leave it. |
 | `eval_interval` | 1 or more | How often (in steps) to take the "exam" on `eval.txt`. |
 | `eval_steps` | 1 to 1000 | How many exam questions in each check. |
@@ -699,6 +724,12 @@ one job by adding them to your request (see the tables below).
 ```json
 {"config": "chit_strong", "init": "scratch", "training": {"max_steps": 60}}
 ```
+
+**Example (explicitly bypass review and force promotion)**
+```json
+{"config":"chit_strong","init":"scratch","promote":true,"force_promote":true}
+```
+Use this only when accepting an unreviewed candidate. The server still checks that it can load the checkpoint and that its tokenizer family matches the served model.
 
 **Checks done before it starts** (a failed check gives a `422` with a list of reasons):
 - The files `train.txt` and `eval.txt` must exist.
@@ -811,7 +842,7 @@ go live, for example if you set `promote` to `false`. If it did not go live beca
 - `eval_loss` is the score on the **exam** (`eval.txt`), which the model never studies from.
 
 A new model starts near **5.5** (pure guessing). A good run drives `train_loss` below 0.2.
-If `train_loss` keeps falling but `eval_loss` goes **up**, the model is memorizing. For a small model that is normal.
+If `train_loss` keeps falling but `eval_loss` goes **up**, the model is memorizing. That signals the corpus or training run needs review.
 It will repeat what it studied but struggle with new wording. The fix is more varied text.
 
 ### `POST /train/{job_id}/cancel`
@@ -847,7 +878,7 @@ It is all or nothing: if a single lesson is invalid, **none** are saved.
 | `kind` | **Yes** | — | `text`, `qa` or `reasoning` | The type of lesson. |
 | `tags` | No | none | up to 20 labels; each 1 to 50 characters of letters, digits and `. : / _ -` | Labels to group lessons. You can choose lessons by tag when training. |
 | `source` | No | none | up to 200 letters | Where it came from. For your own records only. |
-| `remember` | No | `false` | `true` or `false` | If `true`, the lesson is **also** saved as a memory note, so `/chat` can use it immediately without waiting for training. |
+| `remember` | No | `false` | `true` or `false` | If `true`, the lesson is **also** saved as memory, so assistant-mode `/generate` and `/chat` can use it before training. |
 
 **The three kinds of lesson**
 
@@ -906,7 +937,7 @@ It is all or nothing: if a single lesson is invalid, **none** are saved.
 
 The other fields are explained in "A knowledge entry" below.
 
-**Tip.** A small model learns **wordings**, not meaning. Add the same fact several times in different words
+**Tip.** At the current data and training scale, Chit may learn familiar wordings more reliably than new combinations. Add the same fact in different words
 (as separate lessons). That is far more useful than one lesson.
 
 ### `GET /knowledge`
@@ -1043,7 +1074,8 @@ the server). These two endpoints let you check them and prepare them.
 | `checks.eval_lines_also_in_train` | How many exam lines are **also in the textbook**. This should be low. If the exam repeats the textbook, the scores look better than the model really is. (Lines like `I do not know.` repeating is fine.) |
 | `checks.train_repeated_lines` | Lines repeated inside the textbook. Just information. Repeating is sometimes on purpose. |
 | `warnings` | A list of problems in plain sentences: a missing file, an exam under 1 KB (scores will be noisy), an exam under 2% of the textbook, or too much overlap. |
-| `ready_to_train` | **`true` = go ahead.** Both files exist and are longer than `block_size`. |
+| `ready_to_train` | **`true` = go ahead.** Both files exist and are longer than `block_size`; configured source streams must also be ready. |
+| `training_sources` | For a source-aware preset, its configured streams with weights and file readiness. |
 | `sources` | Up to 100 `.txt` or `.md` files in the data folder that `POST /data/split` can use. |
 
 **Tip.** If you replace `train.txt` from outside the API, compare the `sha256` before and after to confirm the new
@@ -1053,6 +1085,7 @@ file really arrived.
 **What it does.** Takes **one big text file** that is already in the server's data folder and cuts it into a
 `train.txt` and an `eval.txt`. No line ends up in both.
 **Key needed:** yes (training).
+This operation is not available for source-aware presets; split or curate the configured source files directly.
 **When to use it.** You have one large collection of text and do not want to divide it by hand.
 
 **What you send**
@@ -1170,11 +1203,11 @@ This means "a training job is already running; here is its ID". Watch that one w
 2. `GET /data?config=chit_strong`. Check `ready_to_train` is `true`.
 3. `POST /train` with `{"config": "chit_strong", "init": "scratch"}`. Copy the `id`.
 4. `GET /train/{id}` every few seconds until `state` is `succeeded` and `promoted` is `true`.
-5. `POST /generate` with `{"prompt": "I am", "tokens": 60, "temperature": 0, "stop": ["\n"]}`.
+5. `POST /generate` with `{"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}`.
 
 ### Recipe B: Teach Chit new facts without touching any files
 1. `POST /knowledge` with several `text` lessons. Write each fact in 3 or 4 different wordings.
-   Add `"remember": true` if you also want `/chat` to know them immediately.
+   Add `"remember": true` if you also want assistant-mode `/generate` and `/chat` to use them immediately.
 2. `POST /knowledge/train` with `{"config": "chit_strong", "repeat": 20}`. Copy the `id`.
 3. Watch `GET /train/{id}` until it succeeds.
 4. `GET /knowledge/stats`. The lessons moved from `pending` to `trained`.
@@ -1206,9 +1239,9 @@ This means "a training job is already running; here is its ID". Watch that one w
 
 ## 9. Tips for better answers
 
-1. **Start like the sentence you taught.** Chit finishes sentences. If you taught `Memory lets Atmini keep an
-   experience...`, the prompt `Memory lets Atmini keep` works. A random question does not.
-2. **Use `temperature: 0` and `stop: ["\n"]`.** Steady, one-line answers.
+1. **Write requests naturally, including Markdown.** Assistant-mode `/generate` and `/chat` keep headings,
+   lists, tables, quotes, and code fences in context. Chit learns how to respond to them from varied examples.
+2. **Use `temperature: 0` for steadier answers.** `stop` is optional; assistant mode stops at a turn marker by default.
 3. **Do not add extra dots or odd words.** `A GPU can..` (two dots) confused the model once. `A GPU can` worked.
 4. **Teach each fact in several wordings.** Four lines saying the same thing in different words beat one line.
 5. **More and varied text is the biggest improvement.** A few pages makes a model that repeats. Hundreds of pages
@@ -1216,8 +1249,9 @@ This means "a training job is already running; here is its ID". Watch that one w
 6. **Keep the exam file different.** `eval.txt` should hold sentences that are **not** in `train.txt`, otherwise its
    score tells you nothing.
 7. **Check your results with a fixed list of prompts** after each training, and add text for the ones that fail.
-8. **Do not expect it to answer new questions.** That needs a much bigger model. For real conversations, use a large
-   public model and let Chit's memory supply the facts.
+8. **Review difficult answers.** The current corpus and training budget can be expanded within the CPU server's limits.
+   Memory and taught knowledge provide context,
+   while `/train` and `/knowledge/train` retain their separate training roles.
 
 ---
 
@@ -1260,7 +1294,8 @@ This means "a training job is already running; here is its ID". Watch that one w
 | --- | --- | --- | --- |
 | Is it alive? | `GET /health` | No | nothing |
 | Which model is live? | `GET /model` | Yes | nothing |
-| Finish some text | `POST /generate` | Yes | `prompt`, and best `temperature: 0`, `stop` |
+| Answer or create from a request | `POST /generate` | Yes | `prompt`, optional `tokens`, `temperature`, `stop` |
+| Continue raw text | `POST /generate` | Yes | `prompt`, `mode: "continue"` |
 | Chat | `POST /chat` | Yes | `message`, optional `session_id`, `task`, `temperature` |
 | Start a conversation | `POST /sessions` | Yes | nothing |
 | List conversations | `GET /sessions` | Yes | optional `limit`, `offset` |
@@ -1285,5 +1320,48 @@ This means "a training job is already running; here is its ID". Watch that one w
 
 \* "Yes*" means the training key rule: the server must have an API key set, and you must send it.
 
-**Remember:** `temperature: 0`, `stop: ["\n"]`, start prompts like a sentence you taught, and wait for
+**Remember:** use `temperature: 0` for steadier answers, and wait for
 `succeeded` **and** `promoted: true` after training.
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**You get:**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "4a71f01c87d4469eb070ad68832a875d",
+      "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00",
+      "job_manifest": {
+        "id": "4a71f01c87d4469eb070ad68832a875d",
+        "state": "succeeded",
+        "config_name": "chit_assistant_cpu"
+      },
+      "evaluation": {
+        "behavioral_gate": {
+          "gate_pass": true,
+          "case_ratings": []
+        }
+      }
+    }
+  ]
+}
+```
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

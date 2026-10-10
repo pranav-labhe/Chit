@@ -11,11 +11,15 @@ sessions idle for longer than a chosen number of days can be pruned.
 from __future__ import annotations
 
 import sqlite3
+import json
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Iterator
+
+from .facts import extract_explicit_facts
+from .summarization import summarize_history
 
 ROLES = ("user", "assistant")
 
@@ -23,7 +27,17 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     id          TEXT PRIMARY KEY,
     created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
+    updated_at  TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    summary_through_seq INTEGER NOT NULL DEFAULT 0,
+    summary_enabled INTEGER NOT NULL DEFAULT 1,
+    summary_status TEXT NOT NULL DEFAULT 'empty',
+    summary_error TEXT,
+    facts_json TEXT NOT NULL DEFAULT '[]',
+    facts_enabled INTEGER NOT NULL DEFAULT 1,
+    facts_through_seq INTEGER NOT NULL DEFAULT 0,
+    context_version INTEGER NOT NULL DEFAULT 1,
+    context_updated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS turns (
     seq         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +67,22 @@ class SessionStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as db:
             db.executescript(_SCHEMA)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
+            migrations = {
+                "summary": "TEXT NOT NULL DEFAULT ''",
+                "summary_through_seq": "INTEGER NOT NULL DEFAULT 0",
+                "summary_enabled": "INTEGER NOT NULL DEFAULT 1",
+                "summary_status": "TEXT NOT NULL DEFAULT 'empty'",
+                "summary_error": "TEXT",
+                "facts_json": "TEXT NOT NULL DEFAULT '[]'",
+                "facts_enabled": "INTEGER NOT NULL DEFAULT 1",
+                "facts_through_seq": "INTEGER NOT NULL DEFAULT 0",
+                "context_version": "INTEGER NOT NULL DEFAULT 1",
+                "context_updated_at": "TEXT",
+            }
+            for name, declaration in migrations.items():
+                if name not in columns:
+                    db.execute(f"ALTER TABLE sessions ADD COLUMN {name} {declaration}")
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -85,14 +115,42 @@ class SessionStore:
             rows.append((role, content))
         now = _now()
         with self._conn() as db:
-            if not db.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone():
+            session = db.execute("SELECT facts_json,facts_enabled FROM sessions WHERE id = ?",
+                                 (session_id,)).fetchone()
+            if not session:
                 raise SessionNotFound(session_id)
-            db.executemany("INSERT INTO turns (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                           [(session_id, role, content, now) for role, content in rows])
+            inserted = []
+            for role, content in rows:
+                cursor = db.execute("INSERT INTO turns (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                                    (session_id, role, content, now))
+                inserted.append((cursor.lastrowid, role, content))
+            facts = {fact["key"]: fact for fact in json.loads(session["facts_json"])}
+            if session["facts_enabled"]:
+                for seq, role, content in inserted:
+                    if role != "user":
+                        continue
+                    for fact in extract_explicit_facts(content):
+                        previous = facts.get(fact["key"])
+                        if previous and previous["value"].casefold() == fact["value"].casefold():
+                            continue
+                        facts[fact["key"]] = {**fact, "source_turn_seq": seq,
+                                               "origin": "explicit_user_statement",
+                                               "confidence": 1.0, "updated_at": now,
+                                               "supersedes_turn_seq": previous.get("source_turn_seq")
+                                               if previous else None}
+                if any(role == "user" for _, role, _ in inserted):
+                    db.execute("UPDATE sessions SET facts_json=?,facts_through_seq=?,context_updated_at=? "
+                               "WHERE id=?", (json.dumps(list(facts.values()), ensure_ascii=False),
+                                               max(seq for seq, _, _ in inserted), now, session_id))
             db.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id))
-            db.execute("DELETE FROM turns WHERE session_id = ? AND seq NOT IN "
-                       "(SELECT seq FROM turns WHERE session_id = ? ORDER BY seq DESC LIMIT ?)",
-                       (session_id, session_id, self.max_turns))
+            total = db.execute("SELECT COUNT(*) FROM turns WHERE session_id=?", (session_id,)).fetchone()[0]
+            if total > self.max_turns:
+                db.execute("UPDATE sessions SET summary_status=CASE WHEN summary_enabled=1 "
+                           "THEN 'pending' ELSE summary_status END WHERE id=?", (session_id,))
+                if not db.execute("SELECT summary_enabled FROM sessions WHERE id=?", (session_id,)).fetchone()[0]:
+                    db.execute("DELETE FROM turns WHERE session_id=? AND seq NOT IN "
+                               "(SELECT seq FROM turns WHERE session_id=? ORDER BY seq DESC LIMIT ?)",
+                               (session_id, session_id, self.max_turns))
         return len(rows)
 
     def delete(self, session_id: str) -> bool:
@@ -109,12 +167,134 @@ class SessionStore:
 
     def get(self, session_id: str) -> dict:
         with self._conn() as db:
-            r = db.execute("SELECT s.id, s.created_at, s.updated_at, "
+            r = db.execute("SELECT s.*, "
                            "(SELECT COUNT(*) FROM turns t WHERE t.session_id = s.id) AS turns "
                            "FROM sessions s WHERE s.id = ?", (session_id,)).fetchone()
         if r is None:
             raise SessionNotFound(session_id)
-        return dict(r)
+        session = dict(r)
+        session["facts"] = json.loads(session.pop("facts_json"))
+        session["facts_enabled"] = bool(session["facts_enabled"])
+        return session
+
+    def facts(self, session_id: str) -> dict:
+        session = self.get(session_id)
+        return {"session_id": session_id, "enabled": session["facts_enabled"],
+                "facts": session["facts"], "through_turn_seq": session["facts_through_seq"],
+                "context_version": session["context_version"],
+                "updated_at": session["context_updated_at"]}
+
+    def set_facts_enabled(self, session_id: str, enabled: bool) -> dict:
+        with self._conn() as db:
+            cursor = db.execute("UPDATE sessions SET facts_enabled=?,context_updated_at=? WHERE id=?",
+                                (int(enabled), _now(), session_id))
+            if not cursor.rowcount:
+                raise SessionNotFound(session_id)
+        return self.facts(session_id)
+
+    def clear_facts(self, session_id: str) -> dict:
+        with self._conn() as db:
+            cursor = db.execute("UPDATE sessions SET facts_json='[]',context_updated_at=? WHERE id=?",
+                                (_now(), session_id))
+            if not cursor.rowcount:
+                raise SessionNotFound(session_id)
+        return self.facts(session_id)
+
+    def summary_needed(self, session_id: str) -> bool:
+        with self._conn() as db:
+            row = db.execute("SELECT s.summary_enabled,s.summary_through_seq,"
+                              "(SELECT COUNT(*) FROM turns t WHERE t.session_id=s.id) AS n "
+                              "FROM sessions s WHERE s.id=?", (session_id,)).fetchone()
+        if row is None:
+            raise SessionNotFound(session_id)
+        return bool(row["summary_enabled"] and row["n"] > self.max_turns)
+
+    def pending_summary_sessions(self) -> list[str]:
+        with self._conn() as db:
+            rows = db.execute("""SELECT s.id FROM sessions s
+                WHERE s.summary_enabled=1 AND
+                (SELECT COUNT(*) FROM turns t WHERE t.session_id=s.id)>? ORDER BY s.updated_at""",
+                              (self.max_turns,)).fetchall()
+        return [row["id"] for row in rows]
+
+    def summarize_overflow(self, session_id: str) -> dict:
+        """Summarize a stable old prefix; only prune it after the summary commits."""
+        with self._conn() as db:
+            session = db.execute("SELECT summary,summary_through_seq,summary_enabled FROM sessions WHERE id=?",
+                                 (session_id,)).fetchone()
+            if session is None:
+                raise SessionNotFound(session_id)
+            if session["summary_enabled"]:
+                rows = db.execute("SELECT seq,role,content FROM turns WHERE session_id=? ORDER BY seq",
+                                  (session_id,)).fetchall()
+                overflow = len(rows) - self.max_turns
+                overflow -= overflow % 2  # keep complete user/assistant exchanges
+                if overflow >= 2:
+                    prefix = rows[:overflow]
+                    covered = int(prefix[-1]["seq"])
+                    turns = [dict(row) for row in prefix if int(row["seq"]) > int(session["summary_through_seq"])]
+                    if turns:
+                        summary = summarize_history(turns, session["summary"])
+                        now = _now()
+                        db.execute("UPDATE sessions SET summary=?,summary_through_seq=?,summary_status='ready',"
+                                   "summary_error=NULL,context_updated_at=? WHERE id=?",
+                                   (summary, covered, now, session_id))
+                        db.execute("DELETE FROM turns WHERE session_id=? AND seq<=?", (session_id, covered))
+        return self.get(session_id)
+
+    def set_summary_error(self, session_id: str, error: str) -> None:
+        with self._conn() as db:
+            db.execute("UPDATE sessions SET summary_status='error',summary_error=? WHERE id=?",
+                       (error[:500], session_id))
+
+    def set_summary_enabled(self, session_id: str, enabled: bool) -> dict:
+        with self._conn() as db:
+            cursor = db.execute("UPDATE sessions SET summary_enabled=?,summary_status=CASE "
+                                "WHEN ?=0 THEN 'disabled' WHEN summary<>'' THEN 'ready' ELSE 'empty' END,"
+                                "summary_error=NULL,context_updated_at=? WHERE id=?",
+                                (int(enabled), int(enabled), _now(), session_id))
+            if not cursor.rowcount:
+                raise SessionNotFound(session_id)
+            if not enabled:
+                db.execute("DELETE FROM turns WHERE session_id=? AND seq NOT IN "
+                           "(SELECT seq FROM turns WHERE session_id=? ORDER BY seq DESC LIMIT ?)",
+                           (session_id, session_id, self.max_turns))
+        return self.get(session_id)
+
+    def clear_summary(self, session_id: str) -> dict:
+        with self._conn() as db:
+            cursor = db.execute("UPDATE sessions SET summary='',summary_through_seq=0,"
+                                "summary_status=CASE WHEN summary_enabled=1 THEN 'empty' ELSE 'disabled' END,"
+                                "summary_error=NULL,context_updated_at=? WHERE id=?", (_now(), session_id))
+            if not cursor.rowcount:
+                raise SessionNotFound(session_id)
+        return self.get(session_id)
+
+    def refresh_facts(self, session_id: str) -> dict:
+        """Rebuild active facts from retained user turns; no model inference is used."""
+        with self._conn() as db:
+            session = db.execute("SELECT facts_enabled FROM sessions WHERE id=?", (session_id,)).fetchone()
+            if not session:
+                raise SessionNotFound(session_id)
+            if not session["facts_enabled"]:
+                raise ValueError("session fact extraction is disabled")
+            rows = db.execute("SELECT seq,content FROM turns WHERE session_id=? AND role='user' ORDER BY seq",
+                              (session_id,)).fetchall()
+            active = {}
+            for row in rows:
+                for fact in extract_explicit_facts(row["content"]):
+                    previous = active.get(fact["key"])
+                    if previous and previous["value"].casefold() == fact["value"].casefold():
+                        continue
+                    active[fact["key"]] = {**fact, "source_turn_seq": row["seq"],
+                                             "origin": "explicit_user_statement", "confidence": 1.0,
+                                             "updated_at": _now(),
+                                             "supersedes_turn_seq": previous.get("source_turn_seq")
+                                             if previous else None}
+            latest = int(rows[-1]["seq"]) if rows else 0
+            db.execute("UPDATE sessions SET facts_json=?,facts_through_seq=?,context_updated_at=? WHERE id=?",
+                       (json.dumps(list(active.values()), ensure_ascii=False), latest, _now(), session_id))
+        return self.facts(session_id)
 
     def history(self, session_id: str, limit: int | None = None) -> list[dict]:
         """Messages oldest-first; with ``limit``, only the most recent ones."""

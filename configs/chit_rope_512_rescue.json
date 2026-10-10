@@ -1,0 +1,32 @@
+{
+  "seed": 314159,
+  "device": "cpu",
+  "model": {
+    "vocab_size": 256,
+    "block_size": 512,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "dropout": 0.05,
+    "position_encoding": "rope",
+    "rope_theta": 10000.0
+  },
+  "training": {
+    "batch_size": 4,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.1,
+    "max_steps": 2000,
+    "eval_interval": 250,
+    "eval_steps": 5,
+    "checkpoint_interval": 1000,
+    "grad_clip": 1.0,
+    "warmup_steps": 200,
+    "lr_schedule": "linear",
+    "min_lr_ratio": 0.05,
+    "context_curriculum": [128, 256, 512]
+  },
+  "data": {
+    "train_file": "data/train.txt",
+    "eval_file": "data/eval.txt"
+  }
+}

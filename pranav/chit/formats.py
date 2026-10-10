@@ -23,24 +23,59 @@ def render_text(text: str) -> str:
 
 
 def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
-                       history: list[dict] | None = None, max_bytes: int | None = None) -> str:
+                       history: list[dict] | None = None, max_bytes: int | None = None,
+                       max_tokens: int | None = None, tokenizer=None,
+                       facts: list[dict] | None = None, summary: str = "") -> str:
     """Build the chat prompt: task header, recalled memory, earlier turns, then the new message.
 
     ``history`` is a list of ``{"role": "user"|"assistant", "content": ...}``, oldest first.
-    With ``max_bytes`` (the model's context size) the prompt is shortened until it fits:
-    first the oldest turns are dropped, then the lowest-ranked memories. The new
-    message is never dropped. Without history the result is identical to the
-    original single-turn prompt.
+    With ``max_bytes`` or ``max_tokens`` (the model's context size) the prompt is shortened until it fits:
+    first the oldest turns are dropped, then the lowest-ranked memories, then the
+    end of an overlong current message is truncated. Without history or a size
+    limit the result is identical to the original single-turn prompt.
     """
     mems = [m for m in memories if m]
     turns = [(t["role"], t["content"]) for t in (history or [])]
+    session_facts = [f for f in (facts or []) if f.get("key") and f.get("value")]
+    summary = summary.strip()
 
     def build() -> str:
         mem = "\n".join(f"- {m}" for m in mems) or "- (none)"
+        fact_block = ("User-stated facts (latest correction wins):\n" +
+                      "\n".join(f"- {f['key']}: {f['value']}" for f in session_facts) + "\n") \
+            if session_facts else ""
+        summary_block = f"Earlier conversation summary (derived context):\n{summary}\n" if summary else ""
         past = "".join(f"{USER if r == 'user' else ASSISTANT} {c.strip()}\n" for r, c in turns)
-        return f"Task: {task}\nKnown memory:\n{mem}\n{past}{USER} {user_input.strip()}\n{ASSISTANT}"
+        return f"Task: {task}\nKnown memory:\n{mem}\n{fact_block}{summary_block}{past}{USER} {user_input.strip()}\n{ASSISTANT}"
 
+    user_input = user_input.strip()
     prompt = build()
+    if max_tokens is not None:
+        if tokenizer is None:
+            raise ValueError("tokenizer is required when max_tokens is set")
+        count = lambda value: len(tokenizer.encode(value))
+        while count(prompt) > max_tokens and turns:
+            turns.pop(0)
+            while turns and turns[0][0] != "user":
+                turns.pop(0)
+            prompt = build()
+        if count(prompt) > max_tokens and summary:
+            summary = ""
+            prompt = build()
+        while count(prompt) > max_tokens and mems:
+            mems.pop()
+            prompt = build()
+        while count(prompt) > max_tokens and session_facts:
+            session_facts.pop(0)
+            prompt = build()
+        if count(prompt) > max_tokens:
+            original = tokenizer.encode(user_input)
+            user_input = ""
+            budget = max_tokens - count(build())
+            if budget >= 0:
+                user_input = tokenizer.decode(original[:budget])
+                prompt = build()
+        return prompt
     if max_bytes is None:
         return prompt
     while len(prompt.encode("utf-8")) > max_bytes and turns:
@@ -48,7 +83,25 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
         while turns and turns[0][0] != "user":  # never start on a reply with no question before it
             turns.pop(0)
         prompt = build()
+    if len(prompt.encode("utf-8")) > max_bytes and summary:
+        summary = ""
+        prompt = build()
     while len(prompt.encode("utf-8")) > max_bytes and mems:
         mems.pop()  # search returns the best match first, so drop from the end
         prompt = build()
+    while len(prompt.encode("utf-8")) > max_bytes and session_facts:
+        session_facts.pop(0)  # facts are oldest-first, so preserve the latest corrections
+        prompt = build()
+    # A long new request can itself exceed the context window. Preserve its
+    # beginning (where instructions usually appear) and truncate only after
+    # dropping older turns and memories. Keep the old behavior for tiny test or
+    # legacy models whose entire prompt scaffold cannot fit.
+    if len(prompt.encode("utf-8")) > max_bytes:
+        original = user_input
+        user_input = ""
+        scaffold = build()
+        budget = max_bytes - len(scaffold.encode("utf-8"))
+        if budget >= 0:
+            user_input = original.encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+            prompt = build()
     return prompt

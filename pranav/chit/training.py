@@ -19,13 +19,13 @@ from tqdm import tqdm
 
 from . import __version__
 from .config import ChitConfig
-from .data import TextDataset, random_batch
+from .data import TextDataset, random_batch, random_mixed_batch
 from .model import ChitModel, load_model_state
-from .tokenizer import ByteTokenizer
+from .tokenizer import BpeTokenizer, ByteTokenizer, create_tokenizer
 
 log = logging.getLogger(__name__)
 
-CHECKPOINT_FORMAT = 2  # bump when the checkpoint dict layout changes
+CHECKPOINT_FORMAT = 3  # includes versioned tokenizer asset metadata
 
 
 class TrainingCancelled(Exception):
@@ -63,7 +63,18 @@ def lr_at(step: int, c: ChitConfig) -> float:
     span = max(1, t.max_steps - t.warmup_steps)
     progress = min(1.0, (step - t.warmup_steps) / span)
     floor = t.learning_rate * t.min_lr_ratio
+    if t.lr_schedule == "linear":
+        return floor + (t.learning_rate - floor) * (1.0 - progress)
     return floor + (t.learning_rate - floor) * 0.5 * (1 + math.cos(math.pi * progress))
+
+
+def context_length_at(step: int, c: ChitConfig) -> int:
+    """Return this step's sequence length for an optional even-stage curriculum."""
+    schedule = c.training.context_curriculum
+    if not schedule:
+        return c.model.block_size
+    stage = min((max(step, 1) - 1) * len(schedule) // c.training.max_steps, len(schedule) - 1)
+    return schedule[stage]
 
 
 @torch.no_grad()
@@ -93,12 +104,14 @@ def save_checkpoint(obj, path) -> None:
             tmp.unlink()
 
 
-ARCHITECTURE_KEYS = ("vocab_size", "block_size", "n_layer", "n_head", "n_embd")
+ARCHITECTURE_KEYS = ("vocab_size", "block_size", "n_layer", "n_head", "n_embd",
+                    "position_encoding", "rope_theta")
 
 
 def same_architecture(a: dict, b: dict) -> bool:
     """True if weights trained with model config ``a`` load into config ``b`` (dropout may differ)."""
-    return all(a.get(k) == b.get(k) for k in ARCHITECTURE_KEYS)
+    defaults = {"position_encoding": "absolute", "rope_theta": 10000.0}
+    return all(a.get(k, defaults.get(k)) == b.get(k, defaults.get(k)) for k in ARCHITECTURE_KEYS)
 
 
 def load_checkpoint(path) -> dict:
@@ -116,6 +129,7 @@ def train(
     init_checkpoint: str | Path | None = None,
     on_step: Callable[[int], None] | None = None,
     on_eval: Callable[[int, float, float], None] | None = None,
+    on_checkpoint: Callable[[int, Path], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
     keep_step_checkpoints: bool = True,
     progress: bool = True,
@@ -127,6 +141,7 @@ def train(
                                         random init; its model_config must equal c.model
     on_step(step)                       called after every optimizer step
     on_eval(step, train_loss, eval_loss) called at every evaluation point
+    on_checkpoint(step, path)       called after each checkpoint is atomically saved
     should_stop()                       checked every step; True raises TrainingCancelled
     keep_step_checkpoints               also keep step_NNNNNN.pt files, not only latest.pt
     progress                            show a tqdm bar and print losses (CLI use)
@@ -134,10 +149,14 @@ def train(
     """
     set_seed(c.seed)
     dev = device_for(c.device)
-    tok = ByteTokenizer()
+    tok = create_tokenizer(c.tokenizer.name, c.tokenizer.model_file)
     if c.model.vocab_size != tok.vocab_size:
-        raise ValueError(f"model.vocab_size must equal tokenizer vocab ({tok.vocab_size})")
-    tr = TextDataset(c.data.train_file, tok, c.model.block_size)
+        raise ValueError(f"model.vocab_size ({c.model.vocab_size}) must equal tokenizer vocab ({tok.vocab_size})")
+    train_sources = c.data.sources
+    train_datasets = ([TextDataset(source.path, tok, c.model.block_size) for source in train_sources]
+                      if train_sources else [TextDataset(c.data.train_file, tok, c.model.block_size)])
+    train_weights = [source.weight for source in train_sources] if train_sources else [1.0]
+    source_window_counts = [0 for _ in train_datasets]
     ev = TextDataset(c.data.eval_file, tok, c.model.block_size)
 
     out = Path(output_dir)
@@ -145,11 +164,18 @@ def train(
     latest = out / "latest.pt"
     t = c.training
     model_cfg = c.to_dict()["model"]
+    tokenizer_asset = tok.asset if isinstance(tok, BpeTokenizer) else None
+    tokenizer_sha256 = tok.asset_sha256 if isinstance(tok, BpeTokenizer) else None
 
     m = ChitModel(**model_cfg)
     init_step = 0
     if init_checkpoint is not None:
         ck = load_checkpoint(init_checkpoint)
+        ck_tokenizer = ck.get("tokenizer", ByteTokenizer.name)
+        if ck_tokenizer != tok.name:
+            raise ValueError(f"init checkpoint tokenizer {ck_tokenizer!r} does not match {tok.name!r}")
+        if ck.get("tokenizer_sha256") != tokenizer_sha256:
+            raise ValueError("init checkpoint tokenizer assets do not match the configured tokenizer")
         if not same_architecture(ck["model_config"], model_cfg):
             raise ValueError(f"init checkpoint architecture {ck['model_config']} does not match {model_cfg}")
         load_model_state(m, ck["model"])
@@ -168,7 +194,13 @@ def train(
             raise TrainingCancelled(f"cancelled at step {step - 1}")
         for g in opt.param_groups:
             g["lr"] = lr_at(step, c)
-        x, y = random_batch(tr, t.batch_size, dev)
+        if train_sources:
+            x, y = random_mixed_batch(train_datasets, train_weights, t.batch_size, dev,
+                                      block_size=context_length_at(step, c),
+                                      source_counts=source_window_counts)
+        else:
+            x, y = random_batch(train_datasets[0], t.batch_size, dev,
+                                block_size=context_length_at(step, c))
         _, l = m(x, y)
         if not torch.isfinite(l):
             raise FloatingPointError(f"loss became {l.item()} at step {step}; lower the learning rate")
@@ -180,7 +212,10 @@ def train(
             on_step(step)
 
         if step % t.eval_interval == 0 or step == 1 or step == t.max_steps:
-            tl = estimate_loss(m, tr, t.batch_size, t.eval_steps, dev)
+            source_losses = [estimate_loss(m, ds, t.batch_size, t.eval_steps, dev)
+                             for ds in train_datasets]
+            total_weight = sum(train_weights)
+            tl = sum(value * weight for value, weight in zip(source_losses, train_weights)) / total_weight
             el = estimate_loss(m, ev, t.batch_size, t.eval_steps, dev)
             best_eval = min(best_eval, el)
             last_eval = {"step": step, "train_loss": tl, "eval_loss": el}
@@ -194,6 +229,8 @@ def train(
                 "format": CHECKPOINT_FORMAT,
                 "chit_version": __version__,
                 "tokenizer": tok.name,
+                "tokenizer_asset": tokenizer_asset,
+                "tokenizer_sha256": tokenizer_sha256,
                 "model": {k: v.detach().cpu() for k, v in m.state_dict().items()},
                 "optimizer": opt.state_dict(),
                 "model_config": model_cfg,
@@ -203,9 +240,17 @@ def train(
                 "init_from": str(init_checkpoint) if init_checkpoint else None,
                 "last_eval": last_eval,
                 "best_eval_loss": None if math.isinf(best_eval) else best_eval,
-                "metadata": metadata or {},
+                "metadata": {
+                    **(metadata or {}),
+                    "training_sources": ([{"path": source.path, "weight": source.weight,
+                                           "sampled_windows": source_window_counts[i]}
+                                          for i, source in enumerate(train_sources)]
+                                         if train_sources else []),
+                },
             }
             if keep_step_checkpoints:
                 save_checkpoint(ck, out / f"step_{step:06d}.pt")
             save_checkpoint(ck, latest)
+            if on_checkpoint:
+                on_checkpoint(step, out / f"step_{step:06d}.pt" if keep_step_checkpoints else latest)
     return latest

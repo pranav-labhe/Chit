@@ -1,0 +1,1 @@
+This document has been deprecated. Please refer to [PROJECT_INDEX.md](PROJECT_INDEX.md) in the repository root as the single, authoritative, and comprehensive source of truth for all architecture, dataset, training, and operational documentation.
