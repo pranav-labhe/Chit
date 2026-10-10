@@ -3,6 +3,11 @@
 ## 0.2.0
 
 ### Added
+- **Real-Time System Metrics**: `GET /sys_metrics` exposes CPU, Memory, and Disk usage via `psutil`. The UI features a real-time polling traffic-light badge in the header.
+- **Universal Page Guides**: All UI views now feature explicit "Page Guide" buttons mapping friendly UI terms directly to exact JSON API payloads and endpoints.
+- **Job Configuration Tracking**: The backend now captures the learning plan (`config_name`) inside the training job metadata and displays it directly on the Job Card.
+- **Explicit Checkpoint Timestamps**: The Studio UI explicitly tracks and displays the physical file modification timestamps for candidate (`latest.pt` inside job folder) and live (`checkpoints/latest.pt`) models to verify promotions.
+- **Golden Gate Integration UI**: Evaluated candidate models now display their explicit Gate Pass / Fail safety metrics on the job cards directly.
 - **Training data API** (`GET /data`, `POST /data/split`) and `python -m pranav.chit.tools.split`: check the train/eval files as they are on the server (size, hash, leakage), and split a corpus into held-out train/eval files, with `.bak` backups. See `docs/DATA_API.md`.
 - **Chat sessions** (`/sessions`, `session_id` on `/chat`): each conversation keeps its
   turn-by-turn history in SQLite under a session id, and recent turns are sent to the
@@ -39,3 +44,9 @@
 - CLI tools return non-zero exit codes with readable errors.
 - `.gitignore` excludes checkpoints, exports, memory and the knowledge database.
 - Dev dependencies split into `requirements-dev.txt`; `pyproject.toml` added.
+
+### Fixed
+- **UI Proxy Route Allowlist**: Registered `GET /sys_metrics` in `ui.ROUTES` so telemetry queries are no longer rejected with HTTP 403/404 by `/_ui/proxy`.
+- **Candidates State Matching**: Fixed `GET /candidates` filtering logic to recognize completed jobs with state `"succeeded"`, exposing candidate cards, timestamps, evaluations, and promotion controls in the UI.
+- **Timestamp Synchronization**: Added `checkpoint_timestamp` extraction and formatting to `#studioLiveStamp` and candidate cards, with dynamic `(Currently Live AI)` badge matching.
+- **Universal Page Guides**: Integrated comprehensive Page Guide dialogs across all 8 UI screens and API reference with precise field and payload mappings.

@@ -220,8 +220,10 @@ The answer has an `"id"`. **Copy it.** This is your training job. It starts runn
 `GET /train/PASTE_THE_ID_HERE`
 
 Repeat every few seconds. Watch two fields: `"state"` and `"progress"` (0 to 1). When `"state"` is
-`"succeeded"` and `"promoted"` is `true`, the new model is already live. On a small test computer a full
-run took about two minutes; your server may be faster or slower.
+`"succeeded"` means training finished. By default the result remains a candidate and `"promoted"` is
+`false`; use the reviewed promotion workflow to serve it. To explicitly bypass those review gates, send
+`"force_promote": true` with `POST /train`. On a small test computer a full run took about two minutes;
+your server may be faster or slower.
 
 ### Step 5 — Ask the model
 `POST /generate` with this body:
@@ -278,6 +280,20 @@ out, the **Default** is used.
 
 ---
 
+### `GET /sys_metrics`
+Shows the real-time health of the server hardware running Chit.
+
+**You send:** Nothing.
+**You get:**
+```json
+{
+  "cpu": 12.5,
+  "mem": 45.2,
+  "disk": 80.1
+}
+```
+**What happens:** The server returns the CPU load, Memory usage, and Disk storage usage as percentages (0-100). The Studio UI uses this to display a live traffic-light badge in the header.
+
 ### `GET /model`
 **What it does.** Describes the model that is currently live: its size and how it was trained.
 **Key needed:** yes.
@@ -301,7 +317,8 @@ out, the **Default** is used.
     "last_eval": {"step": 3000, "train_loss": 0.0934, "eval_loss": 2.9523},
     "metadata": {},
     "path": "checkpoints/latest.pt"
-  }
+  },
+  "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00"
 }
 ```
 
@@ -317,6 +334,7 @@ out, the **Default** is used.
 | `checkpoint.init_from` | If it started from an older model, the file name. `null` means it started from nothing. |
 | `checkpoint.best_eval_loss` | The best exam score it reached during training. **Lower is better.** |
 | `checkpoint.last_eval` | The scores at the very end: `train_loss` (on the textbook) and `eval_loss` (on the exam). |
+| `checkpoint_timestamp` | The date and time the current active checkpoint file was saved on disk (`st_mtime` of `checkpoints/latest.pt`). |
 
 **Reading the scores.** If `train_loss` is tiny (like 0.09) but `eval_loss` is much larger (like 2.95), the model
 **memorized** its textbook. It can repeat what it studied but is weak on new wording. Add varied data and
@@ -629,8 +647,9 @@ No matches gives `{"results": []}`.
 ## 6.5 Training
 
 **Training** is how the model learns. It reads `train.txt` over and over and slowly improves. It runs in the
-**background**: you start it, get a job ID, and check on it as often as you like. When it finishes well, the
-new model goes live automatically, with no restart.
+**background**: you start it, get a job ID, and check on it as often as you like. By default it creates a
+candidate and leaves the served model unchanged. Set `force_promote: true` in the `POST /train` body to
+install a successful candidate while bypassing automated evaluation gates; the previous checkpoint is archived.
 
 **Only one training job can run at a time.**
 
@@ -660,7 +679,8 @@ one job by adding them to your request (see the tables below).
 | `init` | `scratch` | `scratch`, `current`, `auto` | Where learning starts. See the box below. |
 | `model` | none | see the model table | Change the model's size for this job only. |
 | `training` | none | see the training table | Change training settings for this job only. |
-| `promote` | `true` | `true` or `false` | `true` = if it succeeds, it becomes the live model. `false` = train and keep the result but do not switch to it. |
+| `promote` | `false` | `true` or `false` | Legacy promotion request. `true` is rejected with `422` unless `force_promote` is also true. |
+| `force_promote` | `false` | `true` or `false` | Explicitly install the successful candidate as the live model, bypassing automated evaluation gates. The prior checkpoint is archived. |
 
 **`init`: where does learning start?**
 
@@ -704,6 +724,12 @@ one job by adding them to your request (see the tables below).
 ```json
 {"config": "chit_strong", "init": "scratch", "training": {"max_steps": 60}}
 ```
+
+**Example (explicitly bypass review and force promotion)**
+```json
+{"config":"chit_strong","init":"scratch","promote":true,"force_promote":true}
+```
+Use this only when accepting an unreviewed candidate. The server still checks that it can load the checkpoint and that its tokenizer family matches the served model.
 
 **Checks done before it starts** (a failed check gives a `422` with a list of reasons):
 - The files `train.txt` and `eval.txt` must exist.
@@ -1296,3 +1322,46 @@ This means "a training job is already running; here is its ID". Watch that one w
 
 **Remember:** use `temperature: 0` for steadier answers, and wait for
 `succeeded` **and** `promoted: true` after training.
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**You get:**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "4a71f01c87d4469eb070ad68832a875d",
+      "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00",
+      "job_manifest": {
+        "id": "4a71f01c87d4469eb070ad68832a875d",
+        "state": "succeeded",
+        "config_name": "chit_assistant_cpu"
+      },
+      "evaluation": {
+        "behavioral_gate": {
+          "gate_pass": true,
+          "case_ratings": []
+        }
+      }
+    }
+  ]
+}
+```
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

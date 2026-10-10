@@ -134,6 +134,23 @@ curl $BASE/health
 **Recommended.** Poll this after a deployment until `status` is `ok`. A new server with no checkpoint
 reports `no_model`: that is normal until the first training job finishes.
 
+### GET /sys_metrics
+Returns real-time system hardware metrics (requires `psutil`). Used by the UI for the live header badge.
+
+**Request**
+```http
+GET /sys_metrics HTTP/1.1
+```
+
+**Response (200 OK)**
+```json
+{
+  "cpu": 12.5,
+  "mem": 45.2,
+  "disk": 80.1
+}
+```
+
 ### GET /ready
 
 **Purpose.** Readiness check for traffic routing. Returns `200` only when a model, memory, knowledge,
@@ -164,7 +181,8 @@ curl -H "X-API-Key: $KEY" $BASE/model
     "last_eval": {"step": 3000, "train_loss": 0.09342920519411564, "eval_loss": 2.9523245334625243},
     "metadata": {},
     "path": "checkpoints/latest.pt"
-  }
+  },
+  "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00"
 }
 ```
 
@@ -188,6 +206,7 @@ curl -H "X-API-Key: $KEY" $BASE/model
 | `checkpoint.last_eval` | object | `step`, `train_loss`, `eval_loss` at the last check. |
 | `checkpoint.metadata` | object | Extra information from the job that produced it. |
 | `checkpoint.path` | string | File being served. |
+| `checkpoint_timestamp` | string or null | ISO 8601 UTC timestamp of the served checkpoint file modification time (`st_mtime` of `checkpoints/latest.pt`). |
 
 **Errors.** `503` if no model is loaded.
 
@@ -519,7 +538,8 @@ with the job and a `Location: /train/{id}` header.
 | `init` | `scratch`, `current` or `auto` | `scratch` | Starting weights. See below. |
 | `model` | object | none | Override model size, see the table below. |
 | `training` | object | none | Override training settings, see the table below. |
-| `promote` | boolean | `true` | If true, a successful job becomes the served model. If false, it is trained and kept but not served. |
+| `promote` | boolean | `false` | Legacy promotion request; `true` returns `422` unless `force_promote` is also true. |
+| `force_promote` | boolean | `false` | Explicitly install the successful candidate as served, bypassing automated evaluation gates. The previous checkpoint is archived. |
 
 **`init` values**
 
@@ -1112,3 +1132,51 @@ Set as environment variables on the server (not request parameters).
 | `CHIT_MAX_SESSION_TURNS` | `200` | Messages kept per session. |
 | `CHIT_HISTORY_TURNS` | `8` | Most recent session messages offered to the model as context. |
 | `CHIT_DATA_DIR` | `data` | Folder that `POST /data/split` reads corpus files from. |
+
+## Model Candidates and Administration
+
+These routes allow you to review completed training runs and safely swap the live model in production.
+
+### GET /candidates
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**Request**
+```http
+GET /candidates HTTP/1.1
+```
+
+**Response (200 OK)**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "4a71f01c87d4469eb070ad68832a875d",
+      "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00",
+      "job_manifest": {
+        "id": "4a71f01c87d4469eb070ad68832a875d",
+        "state": "succeeded",
+        "config_name": "chit_assistant_cpu"
+      },
+      "evaluation": {
+        "behavioral_gate": {
+          "gate_pass": true,
+          "case_ratings": []
+        }
+      }
+    }
+  ]
+}
+```
+
+### POST /candidates/{job_id}/evaluate
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+### POST /candidates/{job_id}/promote
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+### POST /admin/rollback
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+### POST /admin/reload
+Force-reloads the active Champion model from the disk into memory.

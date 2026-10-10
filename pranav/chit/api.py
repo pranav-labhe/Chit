@@ -276,6 +276,34 @@ class MemoryIn(BaseModel):
     tags: list[Tag] = Field(default_factory=list, max_length=20)
 
 
+
+@app.get("/sys_metrics", dependencies=[Depends(require_key)])
+def system_metrics():
+    import shutil
+    try:
+        import psutil
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+    except Exception:
+        cpu = 0.0
+        mem = 0.0
+        
+    try:
+        disk = shutil.disk_usage("/")
+        disk_pct = (disk.used / disk.total) * 100 if disk.total else 0.0
+    except Exception:
+        try:
+            disk = shutil.disk_usage(Path.cwd().anchor or ".")
+            disk_pct = (disk.used / disk.total) * 100 if disk.total else 0.0
+        except Exception:
+            disk_pct = 0.0
+    
+    return {
+        "cpu": round(float(cpu), 1),
+        "mem": round(float(mem), 1),
+        "disk": round(float(disk_pct), 1)
+    }
+
 @app.get("/health")
 def health():
     jobs = _state["jobs"]
@@ -316,8 +344,12 @@ def readiness():
 @app.get("/model", dependencies=[Depends(require_key)])
 def model_info():
     rt = get_runtime()
+    import os, datetime
+    ckpt_path = Path(CHECKPOINT)
+    mtime = ckpt_path.stat().st_mtime if ckpt_path.exists() else None
+    timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat() if mtime else None
     return {"model_config": rt.model_config, "parameters": rt.model.num_parameters(),
-            "device": str(rt.device), "checkpoint": rt.checkpoint_meta,
+            "device": str(rt.device), "checkpoint": rt.checkpoint_meta, "checkpoint_timestamp": timestamp,
             "tokenizer": {"name": rt.tokenizer.name, "vocab_size": rt.tokenizer.vocab_size,
                           "sha256": getattr(rt.tokenizer, "asset_sha256", None)},
             "memory_search": _memory_search_status(),
@@ -563,6 +595,7 @@ class TrainRequest(BaseModel):
     model: ModelOverrides = Field(default_factory=ModelOverrides)
     training: TrainingOverrides = Field(default_factory=TrainingOverrides)
     promote: bool = Field(default=False, description="deprecated; candidates require evaluation and explicit promotion")
+    force_promote: bool = Field(default=False, description="force-install this candidate after successful training, bypassing evaluation and reviewer gates")
 
 
 def _overrides(m: BaseModel) -> dict:
@@ -671,14 +704,65 @@ def _snapshot_init(init: Path | None, job_dir: Path) -> Path | None:
 
 
 def _submit(cfg: ChitConfig, r: TrainRequest, job_id: str, init: Path | None, **kw) -> dict:
-    if r.promote:
+    if r.promote and not r.force_promote:
         raise HTTPException(status_code=422, detail=(
             "direct training promotion is disabled; evaluate the candidate with eval_runner.py "
-            "and promote it with promote_candidate.py after it passes the reviewed gates"))
+            "and promote it with promote_candidate.py after it passes the reviewed gates; "
+            "set force_promote=true to bypass those gates"))
     try:
-        return get_jobs().submit(cfg, promote=False, job_id=job_id, init_checkpoint=init, **kw)
+        callback = kw.pop("after_success", None)
+        metadata = dict(kw.pop("metadata", {}) or {})
+        metadata["force_promote"] = r.force_promote
+        if r.force_promote:
+            def after_success(snapshot: dict) -> None:
+                _force_promote_candidate(snapshot)
+                snapshot["promoted"] = True
+                if callback:
+                    callback(snapshot)
+        else:
+            after_success = callback
+        return get_jobs().submit(cfg, promote=r.force_promote, job_id=job_id,
+                                 init_checkpoint=init, metadata=metadata,
+                                 after_success=after_success, **kw)
     except JobConflict as e:
         raise HTTPException(status_code=409, detail={"message": str(e), "active_job": e.active_id})
+
+
+def _force_promote_candidate(snapshot: dict) -> None:
+    """Install a successfully trained candidate without evaluation/reviewer gates."""
+    import shutil
+    from datetime import datetime, timezone
+    from .promotion_state import file_sha256, install_checkpoint
+
+    candidate = Path(snapshot["checkpoint"])
+    target = Path(CHECKPOINT)
+    # Load first so a corrupt/incompatible checkpoint cannot replace the live file.
+    candidate_runtime = ChitRuntime.from_checkpoint(candidate, memory=_state["memory"])
+    current_runtime = _state.get("runtime")
+    if current_runtime and candidate_runtime.tokenizer.name != current_runtime.tokenizer.name:
+        raise ValueError("force promotion does not bypass tokenizer compatibility")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    archive = target.parent / "champions"
+    archive.mkdir(exist_ok=True)
+    old_hash, candidate_hash = file_sha256(target), file_sha256(candidate)
+    old_archive, new_archive = archive / f"{old_hash}.pt", archive / f"{candidate_hash}.pt"
+    if not old_archive.exists():
+        shutil.copy2(target, old_archive)
+    if not new_archive.exists():
+        shutil.copy2(candidate, new_archive)
+    manifest_path = target.parent / "champion.json"
+    previous = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    now = datetime.now(timezone.utc).isoformat()
+    manifest = {"schema_version": 1, "updated_at": now,
+                "current": {"sha256": candidate_hash, "checkpoint": str(new_archive),
+                            "evaluation": snapshot.get("final_evaluation")},
+                "previous": {"sha256": old_hash, "checkpoint": str(old_archive)},
+                "decision": {"mode": "forced_training_promotion", "evaluation_gates_bypassed": True},
+                "history": previous.get("history", []) + [{"at": now, "from": old_hash,
+                    "to": candidate_hash, "reason": "explicit force_promote API option"}]}
+    install_checkpoint(target, new_archive, source_sha256=candidate_hash,
+                       previous_sha256=old_hash, previous_archive=old_archive, manifest=manifest)
+    _state.update(runtime=candidate_runtime, bridge=Bridge(candidate_runtime), error=None)
 
 
 def _ensure_idle() -> None:
@@ -701,7 +785,7 @@ def start_training(r: TrainRequest, response: Response):
     job_id = uuid.uuid4().hex
     job_dir = Path(JOBS_DIR) / job_id
     try:
-        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init})
+        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init, "config_name": r.config})
     except BaseException:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
@@ -1004,3 +1088,156 @@ def split_data(r: SplitRequest):
             raise HTTPException(status_code=500, detail=f"could not write {e.filename or 'the data files'}: "
                                                         f"{e.strerror or e} (is the folder mounted read-only?)")
     return {**report, "written": True, "backups": backups}
+
+import asyncio
+import subprocess
+from fastapi import BackgroundTasks
+
+@app.get("/candidates")
+async def list_candidates():
+    """List finished training jobs and their evaluation status."""
+    jobs_dir = Path(JOBS_DIR)
+    if not jobs_dir.is_dir():
+        return {"candidates": []}
+    
+    candidates = []
+    for p in jobs_dir.iterdir():
+        if not p.is_dir():
+            continue
+        manifest_path = p / "job.json"
+        if not manifest_path.is_file():
+            continue
+        try:
+            job_data = json.loads(manifest_path.read_text())
+        except Exception:
+            continue
+            
+        if job_data.get("state") not in ("success", "succeeded"):
+            continue
+            
+        eval_path = p / "evaluation-golden.json"
+        eval_data = None
+        if eval_path.is_file():
+            try:
+                eval_data = json.loads(eval_path.read_text())
+            except Exception:
+                pass
+                
+        ckpt_path = p / "latest.pt"
+        ckpt_timestamp = None
+        if ckpt_path.is_file():
+            import datetime
+            mtime = ckpt_path.stat().st_mtime
+            ckpt_timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+            
+        candidates.append({
+            "job_id": p.name,
+            "checkpoint_timestamp": ckpt_timestamp,
+            "job_manifest": job_data,
+            "evaluation": eval_data
+        })
+    return {"candidates": candidates}
+
+def _run_eval_background(job_id: str):
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        log.error(f"Cannot evaluate {job_id}: checkpoint missing")
+        return
+        
+    try:
+        # Run eval_runner via subprocess to avoid blocking the main worker thread
+        # and to cleanly load/unload the heavy evaluation model.
+        eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+        subprocess.run(
+            ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path), "--output", str(eval_path)],
+            check=True,
+            capture_output=True
+        )
+        
+        from pranav.chit.tools.auto_rate import auto_rate
+        golden_path = Path("data/golden_set.json")
+        ratings_path = Path(JOBS_DIR) / job_id / "ratings.json"
+        
+        if eval_path.exists() and golden_path.exists():
+            auto_rate(golden_path, eval_path, ratings_path)
+            subprocess.run(
+                ["python", "-m", "pranav.chit.tools.eval_runner", "--checkpoint", str(ckpt_path), "--output", str(eval_path), "--ratings", str(ratings_path)],
+                check=True,
+                capture_output=True
+            )
+    except subprocess.CalledProcessError as e:
+        log.error(f"Evaluation failed for {job_id}: {e.stderr.decode('utf-8', errors='ignore')}")
+    except Exception as e:
+        log.error(f"Evaluation exception for {job_id}: {e}")
+
+@app.post("/candidates/{job_id}/evaluate")
+async def evaluate_candidate(job_id: str, background_tasks: BackgroundTasks):
+    """Trigger the Golden Gate evaluation for a candidate in the background."""
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        raise HTTPException(status_code=404, detail="Candidate checkpoint not found")
+        
+    eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+    if eval_path.is_file():
+        return {"status": "already_evaluated", "job_id": job_id}
+        
+    background_tasks.add_task(_run_eval_background, job_id)
+    return {"status": "evaluating", "job_id": job_id}
+
+@app.post("/candidates/{job_id}/promote")
+async def promote_candidate_route(job_id: str):
+    """Promote a candidate to Champion safely if it passes the Golden Gate."""
+    from pranav.chit.tools.promote_candidate import promote
+    
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    eval_path = Path(JOBS_DIR) / job_id / "evaluation-golden.json"
+    
+    if not ckpt_path.is_file() or not eval_path.is_file():
+        raise HTTPException(status_code=400, detail="Candidate checkpoint or evaluation report missing.")
+        
+    champion_eval_path = Path(CHECKPOINT).parent / "champion_evaluation.json"
+    if not champion_eval_path.exists():
+        # Fallback if there is no current champion evaluation to compare against
+        # The script will handle bootstrap mode if incumbent fails.
+        champion_eval_path = Path(JOBS_DIR) / job_id / "evaluation-step_1.json"
+        
+    target_path = Path(CHECKPOINT)
+    
+    try:
+        # promote validates all safety gates (lift, score, hashes)
+        promote(ckpt_path, eval_path, champion_eval_path, target_path)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=f"Golden Gate promotion failed: {e}")
+    except Exception as e:
+        log.exception("Promotion error")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    # Hot-swap the runtime using existing safe reload logic
+    _load_served_model()
+    return {"status": "promoted", "job_id": job_id}
+
+
+
+@app.post("/admin/rollback")
+async def rollback_champion_route(to_sha256: str):
+    """Rollback the active champion to a previous version."""
+    from pranav.chit.tools.rollback_champion import rollback
+    target_path = Path(CHECKPOINT)
+    try:
+        manifest = rollback(target_path, to_sha256)
+    except Exception as e:
+        log.exception("Rollback error")
+        raise HTTPException(status_code=500, detail=str(e))
+    _load_served_model()
+    return manifest
+
+@app.post("/admin/reload")
+async def reload_champion_route():
+    """Reload the active champion from disk into memory."""
+    try:
+        _load_served_model()
+        return {"status": "reloaded"}
+    except Exception as e:
+        log.exception("Reload error")
+        raise HTTPException(status_code=500, detail=str(e))
+

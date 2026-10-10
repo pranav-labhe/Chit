@@ -147,9 +147,7 @@ class TrainingJobManager:
         metadata: dict | None = None,
         after_success: Callable[[dict], None] | None = None,
     ) -> dict:
-        """Start candidate training. ``after_success`` is a bookkeeping hook."""
-        if promote:
-            raise ValueError("training jobs only create candidates; promotion requires the evaluated promotion workflow")
+        """Start training; a success hook may install an explicitly forced candidate."""
         with self._lock:
             if self._active and not self._active[0].state.terminal:
                 raise JobConflict(self._active[0].id)
@@ -297,9 +295,17 @@ class TrainingJobManager:
                 with self._lock:
                     snap = job.snapshot()
                 after_success(snap)
+                if snap.get('promoted'):
+                    self._update(job, persist=True, promoted=True)
             except Exception as e:  # e.g. bookkeeping; the checkpoint itself is fine
                 log.exception('training job %s: post-success hook failed', job.id)
-                self._update(job, post_success_error=f'{type(e).__name__}: {e}')
+                if snap.get('promoted'):
+                    self._update(job, persist=True, promoted=True,
+                                 post_success_error=f'{type(e).__name__}: {e}')
+                elif job.promote:
+                    self._update(job, persist=True, promotion_error=f'{type(e).__name__}: {e}')
+                else:
+                    self._update(job, post_success_error=f'{type(e).__name__}: {e}')
         self._finish(job, JobState.SUCCEEDED)
         log.info('training job %s succeeded (promoted=%s)', job.id, job.promoted)
 

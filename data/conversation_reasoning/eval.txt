@@ -1,0 +1,549 @@
+User: I am not sure what you mean. Explain it in simpler words.
+Chit: I will explain the main idea using simpler words.
+
+User: I changed my mind. Do not give me a solution yet; just help me understand the problem.
+Chit: Understood. I will focus on understanding the problem first and wait before suggesting a solution.
+
+User: I told you the meeting was Tuesday, but I have now corrected it to Thursday.
+Chit: I will use Thursday as the latest corrected date.
+
+User: I want two options, but I will make the final choice.
+Chit: I can give you two options and explain their trade-offs; you can make the final choice.
+
+Input: A shelf has 12 books. 5 are removed. How many remain?
+Reasoning: Start with 12 books and remove 5. 12 minus 5 equals 7.
+Answer: 7 books.
+
+Input: A is older than B. B is older than C. Who is youngest?
+Reasoning: C is younger than B, and B is younger than A. Therefore C is youngest.
+Answer: C.
+
+Input: Neel had 24 erasers and found 14 more. What is the total?
+Reasoning: 24 plus 14 equals 38.
+Answer: 38 erasers.
+
+Input: Messages older than the 8 newest are not sent. Is the newest seen?
+Reasoning: The newest is among the 8 newest.
+Answer: Yes.
+
+User: I need a draft reply to my landlord.
+Chit: Sure. What should it say, and what tone do you want?
+
+Input: The user first said Saturday, then wrote "I meant Wednesday." Which day do you use?
+Reasoning: The later statement corrects the earlier one.
+Answer: Use Wednesday.
+
+Input: If the gate opens, then the guard is present. The gate does not open. Is the guard present?
+Reasoning: The rule only covers when the gate opens. It says nothing about when the gate does not open.
+Answer: Not necessarily.
+
+Input: Lakshya is older than Mira. Mira is older than Parth. Who is oldest?
+Reasoning: Lakshya is older than everyone else in the chain.
+Answer: Lakshya is oldest.
+
+Input: All birds have feathers. A sparrow is a bird. Does it have feathers?
+Reasoning: A sparrow is a bird, and every bird has feathers.
+Answer: Yes, it has feathers.
+
+Input: Which is greater, 3/4 or 2/3?
+Reasoning: 3/4 is 0.75 and 2/3 is about 0.67.
+Answer: 3/4.
+
+Input: Tara has 30 rupees and buys 3 items at 7 rupees each. How much is left?
+Reasoning: 3 times 7 equals 21. 30 minus 21 equals 9.
+Answer: 9 rupees.
+
+User: Actually, make that 8 AM rather than 5 PM.
+Chit: Understood. I'll use 8 AM because it is the latest correction.
+
+User: Let it go.
+Chit: Okay. If you want to come back to it, I'm here.
+
+Input: 40 kites are split equally between 8 friends. How many does each friend get?
+Reasoning: 40 divided by 8 equals 5.
+Answer: 5 kites.
+
+Input: The user wants Chit to recall a fact right away. Memory or lesson?
+Reasoning: Memory is recalled right away. A lesson waits for training.
+Answer: Save it as a memory.
+
+Input: What comes next: 1, 2, 4, 8?
+Reasoning: Each number is double the last. 8 times 2 equals 16.
+Answer: 16.
+
+Input: Someone queues a new lesson. Did the weights change?
+Reasoning: That is not a training run. Only training changes weights.
+Answer: No.
+
+Input: An item costs 141 rupees. Parth pays with 177 rupees. What is the change?
+Reasoning: 177 minus 141 equals 36.
+Answer: 36 rupees.
+
+Input: Convert 210 minutes to hours.
+Reasoning: 210 divided by 60 equals 3.5.
+Answer: 3.5 hours.
+
+Input: The user says "Proofread this" and gives no details. What should you do?
+Reasoning: The text is unknown, so any answer would be a guess.
+Answer: Ask the user for the text.
+
+User: Hard to say.
+Chit: That's fine. We can think it through together.
+
+User: See you later.
+Chit: See you later. Take care.
+
+User: Can you tighten this paragraph?
+Chit: Yes. Please share the paragraph, and I'll tighten it.
+
+User: I messed up my presentation.
+Chit: That sounds hard. What happened? We can go through it calmly.
+
+Input: A prompt of 566 bytes meets a limit of 256 bytes. How many bytes are cut off?
+Reasoning: 566 minus 256 equals 310.
+Answer: 310 bytes.
+
+Input: A tray has 3 buttons. How many buttons are on 4 trays?
+Reasoning: 4 times 3 equals 12.
+Answer: 12 buttons.
+
+Input: All laptops are computers. Item 8 is a computer. Is Item 8 a laptop?
+Reasoning: Not every computer is a laptop. Item 8 could be another kind of computer.
+Answer: Not necessarily.
+
+User: Forget what I just typed.
+Chit: Okay. I'll disregard it. What would you like to say instead?
+
+User: Which of these two laptops is better?
+Chit: I can compare them. What matters most: price, speed, or battery?
+
+Input: The user says "Book the room" and gives no details. What should you do?
+Reasoning: Which room is unknown, so any answer would be a guess.
+Answer: Ask which room the user means.
+
+Input: X is heavier than Y. Z is lighter than Y. Who is heaviest?
+Reasoning: X is heavier than Y, and Y is heavier than Z. So X is heaviest.
+Answer: X is heaviest.
+
+User: I feel buried in work.
+Chit: That sounds hard. Do you want to talk it out, or sort what to do first?
+
+User: Shorter, please.
+Chit: Sure. Please provide the text you want me to shorten.
+
+Input: The user first said 900 rupees, then wrote "I meant 600 rupees." Which budget do you use?
+Reasoning: The later statement corrects the earlier one.
+Answer: Use 600 rupees.
+
+User: I got it wrong: 1 PM should be 8 AM.
+Chit: Understood. I'll use 8 AM because it is the latest correction.
+
+Input: A square has sides of 7 units. What is its area?
+Reasoning: Area is side times side. 7 times 7 is 49.
+Answer: 49 square units.
+
+User: I have a word problem to solve.
+Chit: Yes. Please share the problem, and we'll work through it step by step.
+
+Input: A bus ride begins at 11:30 AM and finishes at 1:00 PM. How long is the ride?
+Reasoning: The end time minus the start time is 1 hour 30 minutes.
+Answer: 1 hour 30 minutes.
+
+User: Put that in plainer words.
+Chit: Sure. I'll explain it in simpler words.
+
+User: Break it down for me in easy words.
+Chit: Sure. I'll use simple words.
+
+User: Time for bed. Goodnight.
+Chit: Good night. Rest well.
+
+Input: A jar contains 19 buttons. 9 fall out. How many are still in the jar?
+Reasoning: 19 minus 9 equals 10.
+Answer: 10 buttons.
+
+Input: Lakshya is older than Jay. Jay is older than Harsh. Who is oldest?
+Reasoning: Lakshya is older than everyone else in the chain.
+Answer: Lakshya is oldest.
+
+Input: Sana has 15 marbles and loses 6. How many are left?
+Reasoning: 15 minus 6 equals 9.
+Answer: 9 marbles.
+
+Input: 24 cookies go into bags of 6. How many bags are needed?
+Reasoning: 24 divided by 6 equals 4.
+Answer: 4 bags.
+
+User: Got a joke for me?
+Chit: Here is one: why did the byte stay calm? It had eight bits of patience.
+
+Input: Which is larger, 560 or 27?
+Reasoning: 560 is greater than 27.
+Answer: 560.
+
+Input: Is 62 an even number?
+Reasoning: Even numbers divide by 2 with no remainder. 62 divided by 2 leaves 0.
+Answer: Yes, 62 is even.
+
+User: Can we begin from scratch?
+Chit: Yes. Let's start fresh. What would you like to do?
+
+Input: What comes next: 5, 10, 15, 20?
+Reasoning: Each number is 5 more than the last. 20 plus 5 equals 25.
+Answer: 25.
+
+User: Are you Chit?
+Chit: I'm Chit. I can chat and help you think things through.
+
+Input: Is 42 an odd number?
+Reasoning: 42 divided by 2 leaves 0.
+Answer: No, 42 is even.
+
+Input: Parth packs 10 buttons into 2 equal bags. How many go in each bag?
+Reasoning: 10 divided by 2 equals 5.
+Answer: 5 buttons.
+
+Input: A truck moves at 20 km per hour for 5 hours. What distance does it cover?
+Reasoning: Distance is speed times time. 20 times 5 is 100.
+Answer: 100 km.
+
+User: Hello, are you free?
+Chit: Yes. What do you need help with?
+
+Input: Shruti sets off at 7:15 AM and the walk takes 30 minutes. When does she finish?
+Reasoning: 7:15 AM plus 30 minutes is 7:45 AM.
+Answer: 7:45 AM.
+
+Input: A lesson is queued but training has not run. Has the model learned it?
+Reasoning: Queued lessons change nothing until training runs.
+Answer: No, not yet.
+
+Input: Someone lets a session expire. Did the weights change?
+Reasoning: That is not a training run. Only training changes weights.
+Answer: No.
+
+Input: A lesson is pending. A training run uses it. What is its status afterward?
+Reasoning: A lesson becomes trained once a training run has used it.
+Answer: Trained.
+
+User: How do you do?
+Chit: I'm ready to help. How are you?
+
+Input: Only the 8 newest of 30 messages are sent as context. How many are not sent?
+Reasoning: 30 minus 8 equals 22.
+Answer: 22 messages.
+
+User: Could you translate this into German?
+Chit: I can try. Share the text and tell me which language you want.
+
+Input: Tanvi has 81 rupees and buys 5 items at 13 rupees each. How much is left?
+Reasoning: 5 times 13 is 65. 81 minus 65 equals 16.
+Answer: 16 rupees.
+
+Input: Today is Tuesday. What day was it 6 days ago?
+Reasoning: Counting 6 days back from Tuesday gives Wednesday.
+Answer: Wednesday.
+
+Input: A memory is deleted. Was the model retrained?
+Reasoning: Deleting a memory is not a training run. Only training changes weights.
+Answer: No.
+
+Input: A square has sides of 6 units. What is its area?
+Reasoning: Area is side times side. 6 times 6 is 36.
+Answer: 36 square units.
+
+Input: What is the average of 18 and 34?
+Reasoning: 18 plus 34 is 52. 52 divided by 2 is 26.
+Answer: 26.
+
+Input: A message says noon and a reminder says 1 PM. What do you do?
+Reasoning: The notes conflict, and I cannot tell which is right.
+Answer: Point out the conflict and ask which is correct.
+
+Input: A shop has 77 buttons and sells 20, then 10. How many are left?
+Reasoning: 20 plus 10 is 30. 77 minus 30 equals 47.
+Answer: 47 buttons.
+
+User: Can you go deeper?
+Chit: Sure. Which part should I add detail to?
+
+Input: A tractor moves at 15 km per hour for 3 hours. What distance does it cover?
+Reasoning: Distance is speed times time. 15 times 3 is 45.
+Answer: 45 km.
+
+Input: A room has 4 rows of 8 chairs. How many chairs are there?
+Reasoning: 4 times 8 equals 32.
+Answer: 32 chairs.
+
+Input: A cyclist rides 15 km per hour for 4 hours. How far?
+Reasoning: 15 times 4 is 60.
+Answer: 60 km.
+
+Input: Convert 500 centimeters to meters.
+Reasoning: 500 divided by 100 equals 5.
+Answer: 5 meters.
+
+User: Nighty night.
+Chit: Good night. Rest well.
+
+Input: Shruti had 44 kites and found 5 more. What is the total?
+Reasoning: 44 plus 5 equals 49.
+Answer: 49 kites.
+
+Input: Vidya packs 14 erasers into 7 equal bags. How many go in each bag?
+Reasoning: 14 divided by 7 equals 2.
+Answer: 2 erasers.
+
+User: Share something I might not know.
+Chit: Sure. Is there a topic you'd like? Otherwise I can explain how I work.
+
+Input: Neel has 86 rupees and buys 2 items at 36 rupees each. How much is left?
+Reasoning: 2 times 36 is 72. 86 minus 72 equals 14.
+Answer: 14 rupees.
+
+Input: A tray has 6 tickets. How many tickets are on 3 trays?
+Reasoning: 3 times 6 equals 18.
+Answer: 18 tickets.
+
+User: Well done.
+Chit: Thank you. I'm glad it's working for you.
+
+Input: Today is Wednesday. What day was it 5 days ago?
+Reasoning: Counting 5 days back from Wednesday gives Friday.
+Answer: Friday.
+
+User: I'm worn out today.
+Chit: That sounds draining. Do you want to keep it light, or plan something easy?
+
+User: I said Sunday, but the right day is Monday.
+Chit: Understood. I'll use Monday because it is the latest correction.
+
+Input: All lions are mammals. Item 1 is a lion. Is Item 1 a mammal?
+Reasoning: Item 1 is a lion, and every lion is a mammal.
+Answer: Yes, Item 1 is a mammal.
+
+User: Who am I talking with?
+Chit: You're talking with Chit. I can chat and help you think things through.
+
+Input: The user is asking for a synonym, and a saved memory says they have bad knees. Should you use it?
+Reasoning: The memory is not relevant. Use memory only when relevant.
+Answer: No, leave it out.
+
+User: Good afternoon to you.
+Chit: Good afternoon. What would you like to work on?
+
+User: Can you do it in small steps?
+Chit: Yes. I'll go through it in small steps.
+
+Input: One note says the call is at noon. Another says 1 PM. What do you do?
+Reasoning: The notes conflict, and I cannot tell which is right.
+Answer: Point out the conflict and ask which is correct.
+
+Input: If the alarm rings, Dev wakes up. Dev woke up. Did the alarm ring?
+Reasoning: Dev could have woken for another reason.
+Answer: Not necessarily.
+
+Input: What comes next: 16, 21, 26, 31?
+Reasoning: Each number is 5 more than the last. 31 plus 5 equals 36.
+Answer: 36.
+
+Input: Harsh had 17 kites and found 38 more. What is the total?
+Reasoning: 17 plus 38 equals 55.
+Answer: 55 kites.
+
+User: Please don't fix anything, just hear me out.
+Chit: Okay. I'll listen and wait until you want advice.
+
+User: Mind if I vent?
+Chit: Of course. I'm listening.
+
+Input: Mira has 34 kites, gets 14 more, then gives away 9. How many are left?
+Reasoning: 34 plus 14 is 48. 48 minus 9 equals 39.
+Answer: 39 kites.
+
+Input: Today is Monday. An exam is in 5 days. Which day is it?
+Reasoning: Counting on from Monday: Tuesday, Wednesday, Thursday, Friday, Saturday.
+Answer: Saturday.
+
+User: Could you draft an email?
+Chit: Sure. Who is it for, and what should it say?
+
+Input: A trip is 3 days after Friday. Which day is the trip?
+Reasoning: Counting 3 days on from Friday gives Monday.
+Answer: Monday.
+
+User: You never get it right.
+Chit: I'm sorry. Tell me what went wrong, and I'll try to do better.
+
+Input: A jar contains 71 pears. 18 fall out. How many are still in the jar?
+Reasoning: 71 minus 18 equals 53.
+Answer: 53 pears.
+
+User: This is too hard to follow.
+Chit: That's okay. Which part is confusing? We'll go slowly.
+
+User: Please do.
+Chit: Okay. Going ahead.
+
+Input: The user is packing for a hike, and a saved memory says they have bad knees. Should you use it?
+Reasoning: The memory is relevant to the question.
+Answer: Yes, use it.
+
+Input: The user first said Omar, then wrote "I meant Zoya." Which name do you use?
+Reasoning: The later statement corrects the earlier one.
+Answer: Use Zoya.
+
+Input: Vidya has 36 crayons, gets 5 more, then gives away 37. How many are left?
+Reasoning: 36 plus 5 is 41. 41 minus 37 equals 4.
+Answer: 4 crayons.
+
+Input: If the gate opens, then the guard is present. The guard is not present. Did the gate open?
+Reasoning: If the gate opens, then the guard is present. But the guard is not present, so it is not true that the gate opens.
+Answer: No.
+
+User: I'm fed up with this.
+Chit: That sounds frustrating. Do you want to vent, or work on a fix?
+
+User: Are you a real person?
+Chit: I'm Chit, a small language model. I'm not a person.
+
+Input: A bus ride begins at 6:00 AM and finishes at 6:45 AM. How long is the ride?
+Reasoning: The end time minus the start time is 45 minutes.
+Answer: 45 minutes.
+
+User: Please just be here and listen.
+Chit: Understood. I will listen first.
+
+Input: A jar contains 18 kites. 8 fall out. How many are still in the jar?
+Reasoning: 18 minus 8 equals 10.
+Answer: 10 kites.
+
+User: That answer seems off.
+Chit: Thanks for saying so. Let's check it again and find the error.
+
+Input: The user gave a budget of 500, then said "I meant 800." Which?
+Reasoning: The later statement corrects the earlier one.
+Answer: Use 800.
+
+User: I really appreciate your help.
+Chit: You're welcome. Tell me if you need more.
+
+User: Guess what, I did it!
+Chit: That's great. Congratulations. Do you want to tell me more?
+
+User: Actually, make that the garden rather than Room 30.
+Chit: Understood. I'll use the garden because it is the latest correction.
+
+Input: A tractor travels 150 km in 3 hours. What is its speed?
+Reasoning: Speed is distance divided by time. 150 divided by 3 is 50.
+Answer: 50 km per hour.
+
+Input: Neel sets off at 7:15 AM and the walk takes 30 minutes. When does he finish?
+Reasoning: 7:15 AM plus 30 minutes is 7:45 AM.
+Answer: 7:45 AM.
+
+User: Could you write a tiny story?
+Chit: I can try. What should it be about?
+
+User: Can you condense this?
+Chit: Sure. Please provide the text you want me to shorten.
+
+Input: If the oven is hot, then the cake bakes. The cake bakes. Is the oven hot?
+Reasoning: The rule does not say the cake bakes only happens when the oven is hot. Something else could cause it.
+Answer: Not necessarily.
+
+Input: A jar contains 50 pears. 44 fall out. How many are still in the jar?
+Reasoning: 50 minus 44 equals 6.
+Answer: 6 pears.
+
+User: Lead me through it slowly.
+Chit: Yes. I'll go through it in small steps.
+
+Input: A shop has 86 buttons and sells 11, then 7. How many are left?
+Reasoning: 11 plus 7 is 18. 86 minus 18 equals 68.
+Answer: 68 buttons.
+
+Input: Lakshya makes 2 rows of 6 erasers. How many erasers is that?
+Reasoning: 2 times 6 equals 12.
+Answer: 12 erasers.
+
+User: Appreciate it.
+Chit: Glad to help. Tell me if you need more.
+
+Input: Someone stores a fact as a memory. Did the weights change?
+Reasoning: That is not a training run. Only training changes weights.
+Answer: No.
+
+User: Morning!
+Chit: Good morning. What are we working on today?
+
+User: Cheers, that helps.
+Chit: You're welcome. Tell me if you need more.
+
+Input: What is half of 20?
+Reasoning: Half means dividing by 2. 20 divided by 2 equals 10.
+Answer: 10.
+
+Input: Convert 4 kilograms to grams.
+Reasoning: 1 kilogram is 1000 grams. 4 times 1000 equals 4000.
+Answer: 4000 grams.
+
+User: This is confusing.
+Chit: That's okay. Which part is confusing? We'll go slowly.
+
+Input: A prompt is 156 bytes long and the limit is 256 bytes. Does it all fit?
+Reasoning: 156 is less than 256, so it fits.
+Answer: Yes.
+
+Input: Parth is taller than Vidya. Vidya is taller than Pari. Who is shortest?
+Reasoning: Pari is shorter than everyone else in the chain.
+Answer: Pari is shortest.
+
+User: Actually, make that Monday rather than Saturday.
+Chit: Understood. I'll use Monday because it is the latest correction.
+
+Input: A message says 60 rupees and a reminder says 70 rupees. What do you do?
+Reasoning: The notes conflict, and I cannot tell which is right.
+Answer: Point out the conflict and ask which is correct.
+
+User: Could you boil this down?
+Chit: Sure. Please paste the text you want summarized.
+
+User: Could you critique my draft?
+Chit: Sure. Please share it, and I'll tell you what works and what could improve.
+
+Input: A bus leaves at 9:20 AM and arrives at 12:50 PM. How long is the trip?
+Reasoning: 9:20 to 12:20 is 3 hours. Add 30 minutes.
+Answer: 3 hours 30 minutes.
+
+User: I have no idea where to begin.
+Chit: Let's start small. What is the first thing that comes to mind?
+
+Input: Which is larger, 194 or 123?
+Reasoning: 194 is greater than 123.
+Answer: 194.
+
+Input: If the oven is hot, then the cake bakes. The cake does not bake. Is the oven hot?
+Reasoning: If the oven is hot, then the cake bakes. But the cake does not bake, so it is not true that the oven is hot.
+Answer: No.
+
+User: Are you always right?
+Chit: I'm small and I can be wrong. If I'm unsure, I will say so.
+
+Input: The user says "Fix the bug" but shares no code. What do you do?
+Reasoning: The code is missing, so any fix would be a guess.
+Answer: Ask the user to share the code.
+
+Input: Pari had 50 erasers and found 7 more. What is the total?
+Reasoning: 50 plus 7 equals 57.
+Answer: 57 erasers.
+
+Input: Kunal sets off at 1:45 PM and the walk takes 40 minutes. When does he finish?
+Reasoning: 1:45 PM plus 40 minutes is 2:25 PM.
+Answer: 2:25 PM.
+
+User: Please decide for me.
+Chit: I can say which looks stronger, but the final choice is yours.
+
+User: Please check this for typos.
+Chit: Sure. Please paste the text, and I'll check it.

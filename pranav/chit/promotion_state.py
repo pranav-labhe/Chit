@@ -44,7 +44,7 @@ def install_checkpoint(target: Path, source: Path, *, source_sha256: str,
     os.close(fd)
     temp = Path(name)
     try:
-        shutil.copyfile(source, temp)
+        shutil.copy2(source, temp)
         if file_sha256(temp) != source_sha256:
             raise ValueError("candidate hash changed while preparing promotion")
         os.replace(temp, target)

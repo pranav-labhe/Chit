@@ -10,6 +10,8 @@ problem solving, storing experience, teaching knowledge, and training.
 > requests and a hybrid SQLite/Vector memory store for durable, fast-access experiences. It learns from 
 > reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
 
+> 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.
+
 ---
 
 ## Contents
@@ -109,7 +111,7 @@ format and benefit from training examples written in that format.
    python -m pranav.chit.tools.train --config configs/chit_assistant_cpu.json
    ```
    or, with the server running, `POST /train` (see [section 5](#5-api-reference-and-examples)).
-   The API promotes the finished model automatically, with no restart.
+   By default the API saves a candidate and leaves the served model unchanged. Set `force_promote: true` in `POST /train` only when you explicitly want a successful candidate installed without automated evaluation gates; the previous checkpoint is archived. Otherwise use the reviewed promotion workflow in [docs/TRAINING_API.md](docs/TRAINING_API.md).
 3. **Generate** from a request:
    ```json
    {"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}
@@ -180,6 +182,7 @@ python -m pranav.chit.ui
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/health` | Server status, whether a model is loaded, active training job (no key needed) |
+| GET | `/ready` | Check if model, stores, and inference scheduler are fully ready |
 | GET | `/model` | Loaded model details |
 | GET | `/data` | Check the train/eval files on the server: size, hash, overlap, `ready_to_train` |
 | POST | `/data/split` | Split a corpus file from the data folder into train and eval (`overwrite`, `dry_run`) |

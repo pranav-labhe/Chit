@@ -1,0 +1,322 @@
+Task: chat
+User: Hello!
+Chit: Hello! How can I help?
+
+Task: chat
+User: Good morning.
+Chit: Good morning! What can I do for you?
+
+Task: chat
+User: Thanks for explaining that.
+Chit: You’re welcome. I’m glad the explanation helped.
+
+Task: chat
+User: Goodbye for now.
+Chit: Goodbye! Take care.
+
+Task: chat
+User: What is a calendar used for?
+Chit: A calendar helps organize dates, appointments, and events.
+
+Task: chat
+User: Please give me one simple way to organize my desk.
+Chit: Put the items you use most often within easy reach and store the rest together.
+
+Task: chat
+User: I think I made a mistake in my email.
+Chit: That happens. If you share the sentence, I can help you revise it.
+
+Task: chat
+User: Can you make this sentence shorter?
+Chit: Sure. Send me the sentence, and I’ll make it more concise.
+
+Task: chat
+User: The train is delayed again.
+Chit: That’s frustrating. Do you know how long the delay is?
+
+Task: chat
+User: Could you explain photosynthesis in one sentence?
+Chit: Photosynthesis is the process plants use to turn light, water, and carbon dioxide into sugars and oxygen.
+
+Task: chat
+User: Please list two things to bring on a rainy walk.
+Chit: Bring a waterproof jacket and an umbrella.
+
+Task: chat
+User: I prefer short answers.
+Chit: Understood. I’ll keep my answers concise in this conversation.
+
+Task: chat
+User: Actually, I meant Thursday, not Tuesday.
+Chit: Thanks for correcting that. I’ll use Thursday.
+
+Task: chat
+User: Can you help me choose a title?
+Chit: Yes. What is the piece about, and what tone would you like?
+
+Task: chat
+User: Tell me a joke about a sleepy cat.
+Chit: The sleepy cat opened one eye, saw the sun, and decided tomorrow would be a better day to get up.
+
+Task: chat
+User: What should I write in a thank-you note?
+Chit: Mention what you appreciated and add one personal detail. For example: “Thank you for your thoughtful help with the move. It made a busy day much easier.”
+
+Task: chat
+User: Please answer with exactly two words: Are you ready?
+Chit: I am.
+
+Task: chat
+User: I need a plan, but I have not said what the goal is.
+Chit: What goal would you like the plan to help you reach?
+
+Task: chat
+User: Is this sentence correct: “She have a blue bag”?
+Chit: It should be “She has a blue bag.”
+
+Task: chat
+User: Can you translate “Good evening” into Hindi?
+Chit: शुभ संध्या।
+
+Task: chat
+User: The room is too noisy for me to concentrate.
+Chit: That can make it hard to focus. Would moving to a quieter place or using earplugs be possible?
+
+Task: chat
+User: Give me three names for a small bakery.
+Chit: 1. Hearth & Crumb
+2. Morning Loaf
+3. Little Flour Shop
+
+Task: chat
+User: Please explain the difference between “their” and “there.”
+Chit: “Their” shows that something belongs to people; “there” refers to a place or introduces a sentence, as in “There is a book.”
+
+Task: chat
+User: I have two errands and only an hour. What should I do first?
+Chit: Which errands are they, and does either one have a deadline or a longer travel time?
+
+Task: chat
+User: Please rewrite this politely: “You forgot to attach the file.”
+Chit: Could you please send the file when you have a chance? It looks like it may not have been attached.
+
+Task: chat
+User: I found a small bird outside. What should I do?
+Chit: Keep it somewhere quiet and safe from pets, and avoid feeding it. If it seems injured, contact a local wildlife rehabilitator.
+
+Task: chat
+User: What is 15 plus 7? Show the calculation.
+Chit: 15 + 7 = 22.
+
+Task: chat
+User: I like the first suggestion better.
+Chit: Got it. We can use the first suggestion.
+
+Task: chat
+User: Can you write a one-line birthday greeting for a colleague?
+Chit: Wishing you a wonderful birthday and a year full of good things!
+
+Task: chat
+User: What does “brief” mean?
+Chit: “Brief” means short in length or duration.
+
+Task: chat
+User: Thanks.
+Chit: You’re welcome!
+
+Task: chat
+User: I am not sure what to ask.
+Chit: That’s okay. You can tell me what you’re working on, or we can start with a topic you’re curious about.
+
+Task: chat
+User: Please give me one reason to save a draft before editing.
+Chit: A saved draft lets you recover the original if an edit removes something important.
+
+Task: chat
+User: Could you check this later?
+Chit: I can review it when you share it here, but I can’t check back on my own later.
+
+Task: chat
+User: My presentation is tomorrow and I feel nervous.
+Chit: It’s understandable to feel nervous. Would a short practice outline or a quick rehearsal help?
+
+Task: chat
+User: Make up a cheerful sentence about a kite.
+Chit: A bright red kite danced across the spring sky.
+
+Task: chat
+User: Do you know which restaurant I visited yesterday?
+Chit: I don’t know from the information in this conversation. Which restaurant did you visit?
+
+Task: chat
+User: Please answer in a numbered list with two steps for watering a houseplant.
+Chit: 1. Check whether the top layer of soil feels dry.
+2. Water slowly until a little drains from the pot, then empty the saucer.
+
+Task: chat
+User: The first option was a blue mug and the second was a green mug. Can you describe it?
+Chit: Which mug do you mean—the blue one or the green one?
+
+Task: chat
+User: My sister put the parcel by the door. Where is it?
+Chit: The parcel is by the door.
+
+Task: chat
+User: I bought a notebook and a pen. It has a green cover.
+Chit: Which item has the green cover—the notebook or the pen?
+
+Task: chat
+User: Mira gave Leena her umbrella. Who owns the umbrella?
+Chit: The sentence does not make that clear. Do you mean Mira’s umbrella or Leena’s?
+
+Task: chat
+User: The bowl is on the shelf. Please move it to the table.
+Chit: I can’t physically move it, but the bowl you mean is the one on the shelf.
+
+Task: chat
+User: We discussed the map after the meeting. Can you summarize it?
+Chit: Do you mean the map or the discussion after the meeting?
+
+Task: chat
+User: The laptop is beside the printer. Where is the laptop?
+Chit: The laptop is beside the printer.
+
+Task: chat
+User: Asha called Neha after she arrived. Who arrived?
+Chit: It could mean either Asha or Neha. Which person do you mean?
+
+Task: chat
+User: I left the keys in the blue bowl. Where are they?
+Chit: The keys are in the blue bowl.
+
+Task: chat
+User: I told Sam that Jordan had changed the schedule. What had changed?
+Chit: Jordan had changed the schedule.
+
+Task: chat
+User: There is a cup beside a plate. Can you pick it up?
+Chit: Which one should be picked up—the cup or the plate? I also can’t physically pick it up.
+
+Task: chat
+User: The meeting note says the room changed to 204. What changed?
+Chit: The meeting room changed to room 204.
+
+Task: chat
+User: The dog chased the ball into the garden. Where did the ball go?
+Chit: The ball went into the garden.
+
+Task: chat
+User: I gave Priya the book because she had asked for it. What had Priya asked for?
+Chit: Priya had asked for the book.
+
+Task: chat
+User: The red box is larger than the white box. Is it heavy?
+Chit: The description doesn’t say whether either box is heavy.
+
+Task: chat
+User: After the bell rang, the students entered the hall. What happened first?
+Chit: The bell rang first.
+
+Task: chat
+User: There are two unread messages. Can you answer it?
+Chit: Which message would you like me to answer? You can paste it here.
+
+Task: chat
+User: Leo placed the vase on the table and then covered it. What was covered?
+Chit: The sentence most naturally suggests that the vase was covered, but “it” could refer to the table. Which did you mean?
+
+Task: chat
+User: The train arrived after the bus left. Which one left first?
+Chit: The bus left first.
+
+Task: chat
+User: Sana sent a photo to Omar. He replied with a question. Who replied?
+Chit: Omar replied with a question.
+
+Task: chat
+User: The package was near the door when I found it. Where was the package?
+Chit: The package was near the door.
+
+Task: chat
+User: My friend said the concert was canceled. What was canceled?
+Chit: The concert was canceled.
+
+Task: chat
+User: I have a red scarf and a blue jacket. It is wet. Which item is wet?
+Chit: The sentence does not identify which item is wet. Is it the scarf or the jacket?
+
+Task: chat
+User: The chef washed the vegetables before chopping them. What was chopped?
+Chit: The vegetables were chopped.
+
+Task: chat
+User: I read an article about bees. It explained how they pollinate flowers. What did the article explain?
+Chit: It explained how bees pollinate flowers.
+
+Task: chat
+User: The parcel and the letter arrived together. It was damaged.
+Chit: Which item was damaged—the parcel or the letter?
+
+Task: chat
+User: The road was flooded, so the driver turned back. Why did the driver turn back?
+Chit: The driver turned back because the road was flooded.
+
+Task: chat
+User: I spoke to the receptionist after the doctor called. Who called?
+Chit: The doctor called.
+
+Task: chat
+User: The chair is beside the desk. Where is it?
+Chit: The chair is beside the desk.
+
+Task: chat
+User: The twins packed one suitcase each. Did they share one suitcase?
+Chit: No. Each twin packed a separate suitcase.
+
+Task: chat
+User: A book is under the blanket. Where is it?
+Chit: The book is under the blanket.
+
+Task: chat
+User: The guide spoke to the visitors because they were lost. Who was lost?
+Chit: The visitors were lost.
+
+Task: chat
+User: A bottle and a glass are on the counter. Can you put it away?
+Chit: Which item should be put away—the bottle or the glass?
+
+Task: chat
+User: Nina closed the window because the wind was strong. What was closed?
+Chit: Nina closed the window.
+
+Task: chat
+User: I found the receipt in my coat pocket. Where was it?
+Chit: The receipt was in your coat pocket.
+
+Task: chat
+User: The computer restarted after the update finished. What finished first?
+Chit: The update finished first.
+
+Task: chat
+User: He gave him the keys. Who has the keys now?
+Chit: The sentence does not identify who has the keys. Who do “he” and “him” refer to?
+
+Task: chat
+User: A storm damaged the fence, but the house was safe. What was damaged?
+Chit: The fence was damaged.
+
+Task: chat
+User: I put the folder on the desk next to the lamp. Where is the folder?
+Chit: The folder is on the desk next to the lamp.
+
+Task: chat
+User: The teacher thanked the student after she returned the book. Who returned it?
+Chit: The sentence could refer to the teacher or the student. Who returned the book?
+
+Task: chat
+User: We packed sandwiches for the hike. What did we pack?
+Chit: You packed sandwiches.
+
+Task: chat
+User: The bus passed the school before it stopped. What stopped?
+Chit: The bus stopped.
