@@ -271,7 +271,7 @@ The project contains 137 tests driven by `pytest`.
 These routes allow you to review completed training runs and safely swap the live model in production.
 
 ### GET /candidates
-Returns a list of all finished candidate models and their Golden Gate evaluation scores.
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their candidate checkpoint modification timestamps (`checkpoint_timestamp`), and their Golden Gate evaluation scores.
 
 ### POST /candidates/{job_id}/evaluate
 Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 

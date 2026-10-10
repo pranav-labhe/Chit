@@ -44,3 +44,9 @@
 - CLI tools return non-zero exit codes with readable errors.
 - `.gitignore` excludes checkpoints, exports, memory and the knowledge database.
 - Dev dependencies split into `requirements-dev.txt`; `pyproject.toml` added.
+
+### Fixed
+- **UI Proxy Route Allowlist**: Registered `GET /sys_metrics` in `ui.ROUTES` so telemetry queries are no longer rejected with HTTP 403/404 by `/_ui/proxy`.
+- **Candidates State Matching**: Fixed `GET /candidates` filtering logic to recognize completed jobs with state `"succeeded"`, exposing candidate cards, timestamps, evaluations, and promotion controls in the UI.
+- **Timestamp Synchronization**: Added `checkpoint_timestamp` extraction and formatting to `#studioLiveStamp` and candidate cards, with dynamic `(Currently Live AI)` badge matching.
+- **Universal Page Guides**: Integrated comprehensive Page Guide dialogs across all 8 UI screens and API reference with precise field and payload mappings.

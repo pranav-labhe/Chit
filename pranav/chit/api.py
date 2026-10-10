@@ -284,17 +284,24 @@ def system_metrics():
         import psutil
         cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory().percent
-    except ImportError:
+    except Exception:
         cpu = 0.0
         mem = 0.0
         
-    disk = shutil.disk_usage("/")
-    disk_pct = (disk.used / disk.total) * 100 if disk.total else 0
+    try:
+        disk = shutil.disk_usage("/")
+        disk_pct = (disk.used / disk.total) * 100 if disk.total else 0.0
+    except Exception:
+        try:
+            disk = shutil.disk_usage(Path.cwd().anchor or ".")
+            disk_pct = (disk.used / disk.total) * 100 if disk.total else 0.0
+        except Exception:
+            disk_pct = 0.0
     
     return {
-        "cpu": round(cpu, 1),
-        "mem": round(mem, 1),
-        "disk": round(disk_pct, 1)
+        "cpu": round(float(cpu), 1),
+        "mem": round(float(mem), 1),
+        "disk": round(float(disk_pct), 1)
     }
 
 @app.get("/health")
@@ -1105,7 +1112,7 @@ async def list_candidates():
         except Exception:
             continue
             
-        if job_data.get("state") != "success":
+        if job_data.get("state") not in ("success", "succeeded"):
             continue
             
         eval_path = p / "evaluation-golden.json"

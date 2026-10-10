@@ -225,6 +225,8 @@ and project-fact files; it does not replace the shared train/eval files.
 | | `start_training` | `r: TrainRequest` | Initiates a weight update job. |
 | | `add_knowledge` | `batch: KnowledgeBatch` | Adds data to the training queue. |
 | | `split_data` | `r: SplitRequest` | Organizes raw corpus into training/eval. |
+| | `system_metrics` | none | Real-time hardware telemetry (CPU, Memory, Disk). |
+| | `list_candidates` | none | Lists finished training candidates with evaluation and checkpoint timestamps. |
 | **`bridge.py`** | `__init__` | `runtime, max_memories, ...` | Initializes the API-to-Runtime bridge. |
 | **`data.py`** | `random_batch` | `ds, batch_size, device` | Provides shuffled data for training. |
 | **`model.py`** | `forward` | `idx, targets` | The core Transformer forward pass. |

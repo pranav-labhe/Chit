@@ -317,7 +317,8 @@ Shows the real-time health of the server hardware running Chit.
     "last_eval": {"step": 3000, "train_loss": 0.0934, "eval_loss": 2.9523},
     "metadata": {},
     "path": "checkpoints/latest.pt"
-  }
+  },
+  "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00"
 }
 ```
 
@@ -333,6 +334,7 @@ Shows the real-time health of the server hardware running Chit.
 | `checkpoint.init_from` | If it started from an older model, the file name. `null` means it started from nothing. |
 | `checkpoint.best_eval_loss` | The best exam score it reached during training. **Lower is better.** |
 | `checkpoint.last_eval` | The scores at the very end: `train_loss` (on the textbook) and `eval_loss` (on the exam). |
+| `checkpoint_timestamp` | The date and time the current active checkpoint file was saved on disk (`st_mtime` of `checkpoints/latest.pt`). |
 
 **Reading the scores.** If `train_loss` is tiny (like 0.09) but `eval_loss` is much larger (like 2.95), the model
 **memorized** its textbook. It can repeat what it studied but is weak on new wording. Add varied data and
@@ -1326,7 +1328,30 @@ This means "a training job is already running; here is its ID". Watch that one w
 These routes allow you to review completed training runs and safely swap the live model in production.
 
 ### GET /candidates
-Returns a list of all finished candidate models and their Golden Gate evaluation scores.
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**You get:**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "4a71f01c87d4469eb070ad68832a875d",
+      "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00",
+      "job_manifest": {
+        "id": "4a71f01c87d4469eb070ad68832a875d",
+        "state": "succeeded",
+        "config_name": "chit_assistant_cpu"
+      },
+      "evaluation": {
+        "behavioral_gate": {
+          "gate_pass": true,
+          "case_ratings": []
+        }
+      }
+    }
+  ]
+}
+```
 
 ### POST /candidates/{job_id}/evaluate
 Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 

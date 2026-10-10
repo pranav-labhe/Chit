@@ -170,3 +170,39 @@ def test_login_accepts_public_origin_behind_https_reverse_proxy():
         response = client.post("/_ui/login", json={"api_key": KEY}, headers=proxy_headers)
     assert response.status_code == 200
     assert response.json() == {"authenticated": True}
+
+
+def test_sys_metrics_is_registered_in_routes_and_proxied(monkeypatch):
+    assert ("GET", "/sys_metrics") in {(r["method"], r["path"]) for r in ui.ROUTES}
+
+    def upstream(request):
+        assert request.method == "GET"
+        assert request.url.path == "/sys_metrics"
+        assert request.headers.get("x-api-key") == KEY
+        return httpx.Response(200, json={"cpu": 15.0, "mem": 42.0, "disk": 78.5})
+
+    monkeypatch.setattr(ui, "_new_http_client", lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(upstream), follow_redirects=False))
+
+    with TestClient(ui.app) as client:
+        client.post("/_ui/login", json={"api_key": KEY})
+        response = client.post("/_ui/proxy", json={"method": "GET", "path": "/sys_metrics"})
+    assert response.status_code == 200
+    assert response.json() == {"cpu": 15.0, "mem": 42.0, "disk": 78.5}
+
+
+def test_page_guide_buttons_and_telemetry_in_rendered_ui():
+    with TestClient(ui.app) as client:
+        response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    for btn_id in [
+        "helpChatPage", "helpConversationsPage", "helpGenPage",
+        "helpBrainPage", "helpTeachPage", "helpStudioPage",
+        "helpDataPage", "helpDiagPage", "helpApiPage"
+    ]:
+        assert f'id="{btn_id}"' in html, f"Button {btn_id} missing in rendered HTML"
+    assert 'id="studioLiveStamp"' in html
+    for metric_id in ["sysCpu", "sysMem", "sysDisk"]:
+        assert f'id="{metric_id}"' in html
+

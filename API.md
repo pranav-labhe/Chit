@@ -181,7 +181,8 @@ curl -H "X-API-Key: $KEY" $BASE/model
     "last_eval": {"step": 3000, "train_loss": 0.09342920519411564, "eval_loss": 2.9523245334625243},
     "metadata": {},
     "path": "checkpoints/latest.pt"
-  }
+  },
+  "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00"
 }
 ```
 
@@ -205,6 +206,7 @@ curl -H "X-API-Key: $KEY" $BASE/model
 | `checkpoint.last_eval` | object | `step`, `train_loss`, `eval_loss` at the last check. |
 | `checkpoint.metadata` | object | Extra information from the job that produced it. |
 | `checkpoint.path` | string | File being served. |
+| `checkpoint_timestamp` | string or null | ISO 8601 UTC timestamp of the served checkpoint file modification time (`st_mtime` of `checkpoints/latest.pt`). |
 
 **Errors.** `503` if no model is loaded.
 
@@ -1136,7 +1138,35 @@ Set as environment variables on the server (not request parameters).
 These routes allow you to review completed training runs and safely swap the live model in production.
 
 ### GET /candidates
-Returns a list of all finished candidate models and their Golden Gate evaluation scores.
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**Request**
+```http
+GET /candidates HTTP/1.1
+```
+
+**Response (200 OK)**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "4a71f01c87d4469eb070ad68832a875d",
+      "checkpoint_timestamp": "2026-10-10T04:23:00.000000+00:00",
+      "job_manifest": {
+        "id": "4a71f01c87d4469eb070ad68832a875d",
+        "state": "succeeded",
+        "config_name": "chit_assistant_cpu"
+      },
+      "evaluation": {
+        "behavioral_gate": {
+          "gate_pass": true,
+          "case_ratings": []
+        }
+      }
+    }
+  ]
+}
+```
 
 ### POST /candidates/{job_id}/evaluate
 Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 

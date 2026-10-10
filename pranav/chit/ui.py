@@ -61,6 +61,7 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Health & model", "name": "Server health", "method": "GET", "path": "/health", "pattern": r"^/health$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Service readiness", "method": "GET", "path": "/ready", "pattern": r"^/ready$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Live model details", "method": "GET", "path": "/model", "pattern": r"^/model$", "query": {}, "body": None},
+    {"category": "Health & model", "name": "System metrics", "method": "GET", "path": "/sys_metrics", "pattern": r"^/sys_metrics$", "query": {}, "body": None},
     {"category": "Generate & chat", "name": "Generate a response", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}},
     {"category": "Generate & chat", "name": "Continue raw text", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Chit is the", "mode": "continue", "tokens": 60, "temperature": 0}},
     {"category": "Generate & chat", "name": "Chat message", "method": "POST", "path": "/chat", "pattern": r"^/chat$", "query": {}, "body": {"message": "Hello, Chit.", "temperature": 0}},

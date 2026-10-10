@@ -1,53 +1,67 @@
 const $=s=>document.querySelector(s); let chatId=null, authenticated=false;
 const controlHelp={
   helpChatPage: {
-    what: 'This page lets you talk with Chit. It automatically remembers recent messages to keep a conversation going.',
-    example: 'API Mapping: Clicking Send calls POST /chat with JSON {"message": "your text", "session_id": "current_session"}.',
-    best: 'The chat UI hides the complexity of tracking history (the Notebook). It uses sessions.db to recall recent context automatically.',
-    recommended: 'Use this for natural interaction. If the AI seems confused, use "Start new conversation" to wipe the session_id context.',
-    risk: 'This only uses standard chat generation, it does not permanently teach Chit new facts (use Teach for that).'
+    what: 'Provides an interactive chat console to converse with Chit. Chit automatically preserves conversation history across turns and recalls relevant memories from SQLite during inference.',
+    example: 'API Mapping: Sending a message calls POST /chat with JSON payload {"message": "Hello Chit", "session_id": "hex_session_id", "temperature": 0.0}. Chit looks up past turns via sessions.py and relevant facts via memory.py before generating a response.',
+    best: 'Keep each conversation focused on a single topic or task. Use "New conversation" when changing subjects so older, unrelated conversational turns do not pollute the context window.',
+    recommended: 'Start with direct, complete questions. Use Shift+Enter for multiline inputs.',
+    risk: 'Chatting only uses existing neural weights and notebook memories; it does not permanently train the model. Very long sessions will eventually drop older turns once the token limit is reached.'
+  },
+  helpConversationsPage: {
+    what: 'View, reopen, or remove past chat sessions. Chit manages isolated conversations in sessions.db, tracking full turn history, extracted facts, and automatic progressive summaries.',
+    example: 'API Mapping: Listing sessions calls GET /sessions?limit=50&offset=0. Reopening a conversation calls GET /sessions/{session_id}?limit=100 to fetch message history. Deleting a conversation calls DELETE /sessions/{session_id}.',
+    best: 'Revisit earlier conversations when you need to resume a specific line of thinking. Use session summaries to quickly find previous discussions.',
+    recommended: 'Delete old or test conversations that are no longer needed to keep your conversation list organized.',
+    risk: 'Deleting a conversation is permanent and cannot be undone. All turns, extracted user facts, and summaries in that session will be wiped from sessions.db.'
   },
   helpGenPage: {
-    what: 'This page provides raw, direct access to the neural network brain without chat history or memory lookup.',
-    example: 'API Mapping: Clicking Generate calls POST /generate with JSON {"prompt": "...", "max_new_tokens": length, "temperature": creativity}.',
-    best: 'Use this when you want Chit to continue exactly from your prompt without chat formatting getting in the way.',
-    recommended: 'Lower the Temperature for factual answers, increase it for creative writing.',
-    risk: 'Because there is no session history, Chit will only know exactly what you type in the Prompt box.'
+    what: 'Provides raw, direct inference from the Transformer neural network for one-shot answers or open-ended text completion without chat formatting or session history.',
+    example: 'API Mapping: Clicking Generate calls POST /generate with JSON payload {"prompt": "...", "mode": "assistant" (default) or "continue", "tokens": 160, "temperature": 0.4, "top_k": 50}. UI "Response length" maps to "tokens", "Creativity" maps to "temperature", and "Response variety" maps to "top_k".',
+    best: 'Use "Answer my request" (assistant mode) for one-off tasks and answers. Use "Continue my text" (continue mode) when you want the model to directly continue writing from a given text prefix.',
+    recommended: 'Keep Temperature at 0.0 for deterministic factual responses, or set to 0.4-0.7 for creative writing. Start with Concise or Detailed response length.',
+    risk: 'Because there is no session history or memory lookup, Chit only sees the exact text in the prompt box. Long prompts may leave less room for generated tokens within the model context window.'
+  },
+  helpBrainPage: {
+    what: 'Explore, search, and manage Chit\'s long-term memory store (memory.db) and monitor the knowledge learning pipeline. Memories are recalled at inference time to personalize responses.',
+    example: 'API Mapping: Searching memories calls GET /memory/search?q=query&limit=50. Adding a memory calls POST /memory with JSON payload {"content": "...", "memory_type": "experience"|"fact", "importance": 0.5, "tags": []}. Deleting calls DELETE /memory/{memory_id}. Pipeline stage counts query GET /knowledge/stats.',
+    best: 'Store persistent user preferences, project guidelines, and facts that Chit should recall in every chat session without needing to retrain neural weights.',
+    recommended: 'Write concise, clear facts and set importance to 0.5 or 0.8 for key information.',
+    risk: 'Deleting a memory permanently removes it from FTS5 and vector search indexes. Memories provide inference context only and do not alter the neural weights.'
   },
   helpTeachPage: {
-    what: 'This page lets you explicitly save new facts (memories) and queue lessons for future training.',
-    example: 'API Mapping: Saving calls POST /knowledge/items with JSON {"kind": "text"|"qa", "text": "...", "source": "..."}. Checking "Also save as memory" simultaneously calls POST /memory.',
-    best: 'The Knowledge API queues the text into the Notebook (knowledge.db) as a Pending lesson. Training will later burn it into the Brain weights.',
-    recommended: 'Save a memory if you need Chit to know a fact immediately during chat via vector retrieval.',
-    risk: 'Training data must be explicitly moved into training files via the Training Library page before the AI can learn it.'
+    what: 'Queue structured facts and Q&A lessons for future training runs in knowledge.db. Lessons remain pending until you train a new candidate model in Studio.',
+    example: 'API Mapping: Saving a lesson calls POST /knowledge with JSON payload {"items": [{"kind": "text"|"qa", "question": "...", "answer": "...", "text": "...", "source": "..."}]}. Checking "Also save as memory" triggers both POST /knowledge/items and POST /memory simultaneously.',
+    best: 'Use Q&A pairs for specific questions Chit should answer accurately. Use text passages for general background knowledge and definitions.',
+    recommended: 'Check "Also save as memory" if you want Chit to recall the fact immediately in chat without waiting for a training run.',
+    risk: 'Saving a lesson does not immediately change the AI\'s neural weights. The lesson remains in the training queue until a training run is initiated and the resulting candidate is promoted.'
   },
   helpDataPage: {
-    what: 'This page prepares raw text and saved lessons into actual training files (.txt) used by learning plans.',
-    example: 'API Mapping: Creating splits calls POST /data/split with JSON {"config": "recipe_name", "source": "filename", "overwrite": true/false}.',
-    best: 'Use this to compile all pending Knowledge into plain text files that the neural network can process.',
-    recommended: 'Always inspect the split preview to ensure your train and review (validation) files have enough data.',
-    risk: 'Checking "Replace existing" will overwrite your current dataset files. A backup is kept, but be careful.'
+    what: 'Inspect training material for selected recipes and divide raw text files into training and held-out validation (eval) datasets required by learning plans.',
+    example: 'API Mapping: Inspecting files calls GET /data?config=recipe_name. Creating file splits calls POST /data/split with JSON payload {"source": "filename.txt", "config": "recipe_name", "by": "paragraph", "eval_fraction": 0.1, "dry_run": true/false}. UI "Replace existing training files" maps to overwrite: true.',
+    best: 'Always use "Preview a file split" (dry_run: true) first to verify line counts and byte splits before modifying dataset files on disk.',
+    recommended: 'Ensure your dataset is clean UTF-8 text with consistent paragraph breaks and sufficient eval data (at least 10%).',
+    risk: 'Checking "Replace existing training files" will overwrite existing train.txt and eval.txt files in the server data directory. Although backups are made, accidental overwrites can alter training behavior.'
   },
   helpStudioPage: {
-    what: 'This page manages the actual training process that changes the AI brain weights permanently.',
-    example: 'API Mapping: Calls POST /train with {"config": "recipe"}. UI term "from scratch" maps to init_checkpoint: null in JSON (fresh brain). "from current" maps to init_checkpoint: "latest".',
-    best: 'The neural network learns by reading the .txt files defined in the config. New AI versions are saved as Candidates.',
-    recommended: 'Leave "Force promotion" off so you can test new Candidates before making them Live.',
-    risk: 'Training "from scratch" creates a completely empty brain. Only do this for entirely new models!'
+    what: 'Configure, start, and monitor neural network training runs, and review/promote candidate checkpoints to become the live Champion model.',
+    example: 'API Mapping: Starting training calls POST /train with JSON payload {"config": "recipe", "init": "scratch"|"auto", "force_promote": false}. UI "from scratch" maps to init_checkpoint: null (fresh randomized brain); UI "from current" maps to init_checkpoint: "latest". Evaluating a candidate calls POST /candidates/{job_id}/evaluate; promoting calls POST /candidates/{job_id}/promote.',
+    best: 'Train on top of the current model ("from current") for continuous learning. Let training complete, run the safety evaluation against the 50 Golden Gate rules, and verify passing score before promoting.',
+    recommended: 'Leave "Force promotion" unchecked so candidates undergo automated safety evaluation before taking over live traffic.',
+    risk: 'Training "from scratch" (init_checkpoint: null) completely resets and wipes all existing neural weights, starting from randomized initialization. Training also uses significant CPU/GPU compute.'
   },
   helpDiagPage: {
-    what: 'This page checks if the AI Brain, Memory, and Server are all running correctly.',
-    example: 'API Mapping: Calls GET /model. The UI term "Text reader" maps to "tokenizer" in JSON. "Context window" maps to "model_config.block_size".',
-    best: 'Use this when the chat isn\'t responding or the AI generates garbage text. It helps you find exactly which subsystem failed.',
-    recommended: 'Ensure the "Text reader" (tokenizer) matches your model. A mismatch here is the #1 cause of corrupted text.',
-    risk: 'This page only reads server status; it does not change or fix configurations itself.'
+    what: 'Run comprehensive diagnostics across the server, neural runtime, memory store, and tokenization settings to detect hardware issues or garbled output.',
+    example: 'API Mapping: Diagnostics query GET /ready, GET /health, and GET /model. UI "Text reader" maps to "tokenizer" (ByteTokenizer or BpeTokenizer); UI "Context window" maps to "model_config.block_size". Generating test output calls POST /generate.',
+    best: 'Run diagnostics whenever responses appear garbled, repetitive, or off-topic. Check whether the tokenizer matches the model configuration.',
+    recommended: 'Inspect the active model\'s tokenizer sha256 against recipe expectations. A tokenizer mismatch is the most common cause of unreadable text.',
+    risk: 'This screen is diagnostic and read-only. It identifies issues and suggests next steps but does not alter model files or configuration.'
   },
   helpApiPage: {
-    what: 'This page allows you to test the raw JSON API endpoints exactly as another program would see them.',
-    example: 'API Mapping: It reads ui.ROUTES and renders a form that executes raw fetch() calls returning complete JSON bodies.',
-    best: 'Use this to test specific routes or verify the exact response structures before writing your own scripts.',
-    recommended: 'Review the JSON response carefully, as this represents the exact payload you must parse programmatically.',
-    risk: 'These API calls operate directly on the live databases and checkpoints.'
+    what: 'Interactive developer reference for all allowlisted Chit API routes. Build requests visually or edit raw JSON payloads directly.',
+    example: 'API Mapping: Proxies HTTP calls through POST /_ui/proxy with JSON payload {"method": "GET"|"POST"|"DELETE", "path": "/route", "query": {...}, "body": {...}}, attaching the session-held API key.',
+    best: 'Use the guided builder to understand schema fields, default values, and response layouts before integrating external clients.',
+    recommended: 'Test with read-only GET requests (e.g. /health, /model, /sys_metrics) before submitting mutating POST or DELETE requests.',
+    risk: 'Requests sent through the proxy execute directly against the backend API and will alter live databases or start actual training runs.'
   },
   activeAiHelpWrap:{what:'The exact file timestamp of the latest.pt checkpoint currently powering your chats.',example:'Match this timestamp with a job below to see which checkpoint is live.',best:'Use this to confirm that a new checkpoint was successfully promoted.',recommended:'Check this after promoting a new candidate.',risk:'None.'},
 apiKey:{what:'Lets this browser sign in to Chit. The key stays on the server for this browser session.',example:'Paste the API key given to you by the server owner.',best:'Only enter the key on the trusted Chit page. Do not share it in a message or screenshot.',recommended:'Use the key supplied for this server.',risk:'Anyone with this key may be able to change data or start training.'},
@@ -281,10 +295,17 @@ async function showConfigDetails(name){
 }
 
 async function renderJobs() {
-    const [rJobs, rCands] = await Promise.all([
+    const [rJobs, rCands, rModel] = await Promise.all([
         req('/_ui/train/jobs'),
-        req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/candidates'})})
+        req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/candidates'})}),
+        req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'GET',path:'/model'})})
     ]);
+    const liveStampEl = document.getElementById('studioLiveStamp');
+    const liveTsRaw = (rModel.ok && rModel.data?.checkpoint_timestamp) ? rModel.data.checkpoint_timestamp : null;
+    const liveStampFormatted = liveTsRaw ? new Date(liveTsRaw).toLocaleString() : null;
+    if (liveStampEl) {
+        liveStampEl.textContent = liveStampFormatted || 'None (Not initialized)';
+    }
     const list = $('#jobList');
     if (!rJobs.ok) {
         list.textContent = 'Could not load learning history. ' + friendlyError(rJobs.data, rJobs.status);
@@ -345,15 +366,19 @@ async function renderJobs() {
             });
             actions.appendChild(btn);
             card.appendChild(actions);
-        } else if (job.state === 'succeeded' && cands[job.id]) {
-            const c = cands[job.id];
-            const ts = c.checkpoint_timestamp ? new Date(c.checkpoint_timestamp).toLocaleString() : 'Unknown';
+        } else if (job.state === 'succeeded') {
+            const c = cands[job.id] || {};
+            const rawTs = c.checkpoint_timestamp;
+            const ts = rawTs ? new Date(rawTs).toLocaleString() : 'No checkpoint';
+            const isLive = ts !== 'No checkpoint' && (
+                job.promoted ||
+                (liveTsRaw && rawTs && new Date(rawTs).getTime() === new Date(liveTsRaw).getTime()) ||
+                (liveStampFormatted && ts === liveStampFormatted)
+            );
+            const liveBadge = isLive ? `<span style="color:var(--success); font-weight:bold; margin-left: 8px;">(Currently Live AI)</span>` : '';
             const evalHtml = c.evaluation ? 
                 `<b>Safety Test:</b> <span style="color:${c.evaluation.behavioral_gate?.gate_pass ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${c.evaluation.behavioral_gate?.gate_pass ? 'Passed' : 'Failed'}</span> (Checked ${c.evaluation.behavioral_gate?.case_ratings?.length || 0} rules)` : 
                 `<i>Safety Test: Not tested yet</i>`;
-            
-            // Check if this job is explicitly marked promoted
-            const promotedTag = job.promoted ? `<span style="color:var(--success); font-weight:bold; margin-left: 8px;">(Active AI)</span>` : '';
                 
             const candDiv = document.createElement('div');
             candDiv.style.marginTop = '10px';
@@ -361,7 +386,7 @@ async function renderJobs() {
             candDiv.style.borderTop = '1px dashed var(--accent)';
             
             candDiv.innerHTML = `
-                <div style="font-size:12px; margin-bottom:4px; display:inline-block;" class="job-ai-stamp" id="candStamp_${job.id}"><b>Job Checkpoint:</b> ${ts} ${promotedTag}</div><br>
+                <div style="font-size:12px; margin-bottom:4px; display:inline-block;" class="job-ai-stamp" id="candStamp_${job.id}"><b>Job Checkpoint:</b> ${ts} ${liveBadge}</div><br>
                 <div style="font-size:12px; margin: 4px 0;">${evalHtml}</div>
                 <div class="actions" style="margin-top: 8px;">
                     <button class="secondary eval-btn" data-id="${job.id}">Test this AI version</button>
@@ -456,6 +481,14 @@ async function loadModelSummary(){
             const config=model.data.model_config||{};
             details.textContent=`Current brain · ${config.n_layer??'—'} layers · ${model.data.parameters?.toLocaleString?.()??'—'} learned settings · ${model.data.device||'device not reported'}`;
             box.appendChild(details);
+        }
+        const liveStampEl = document.getElementById('studioLiveStamp');
+        if (liveStampEl) {
+            if (model.ok && model.data?.checkpoint_timestamp) {
+                liveStampEl.textContent = new Date(model.data.checkpoint_timestamp).toLocaleString();
+            } else {
+                liveStampEl.textContent = 'None (Not initialized)';
+            }
         }
     }catch(e){box.textContent=e.message}
 }
@@ -1010,10 +1043,23 @@ document.getElementById('rollbackModelBtn')?.addEventListener('click', async () 
 
 addHelpTrigger(document.getElementById('activeAiHelpWrap'));
 
+const pageGuideTitles = {
+    helpChatPage: 'Chat Page Guide',
+    helpConversationsPage: 'Conversations Page Guide',
+    helpGenPage: 'Generate Page Guide',
+    helpBrainPage: 'Brain / Memories Page Guide',
+    helpTeachPage: 'Teach Chit Page Guide',
+    helpStudioPage: 'Studio Page Guide',
+    helpDataPage: 'Training Library Page Guide',
+    helpDiagPage: 'Diagnostics & Health Page Guide',
+    helpApiPage: 'Guided API Reference Page Guide'
+};
+
 document.querySelectorAll('.page-help').forEach(btn => {
     btn.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
+        btn._helpLabel = pageGuideTitles[btn.id] || 'Page Guide';
         btn._helpInfo = controlHelp[btn.id];
         showContextHelp(btn);
     });
@@ -1022,7 +1068,7 @@ document.querySelectorAll('.page-help').forEach(btn => {
 
 async function pollMetrics() {
     if (!authenticated) {
-        setTimeout(pollMetrics, 3000);
+        setTimeout(pollMetrics, 2000);
         return;
     }
     try {
@@ -1030,9 +1076,9 @@ async function pollMetrics() {
         if (r.ok && r.data) {
             const updateStat = (id, val) => {
                 const el = document.getElementById(id);
-                if (!el) return;
+                if (!el || typeof val !== 'number') return;
                 el.textContent = val.toFixed(1) + '%';
-                el.style.color = val < 60 ? 'var(--success)' : (val < 85 ? 'darkorange' : 'var(--danger)');
+                el.style.color = val < 60 ? 'var(--success)' : (val < 85 ? '#ff8c00' : 'var(--danger)');
             };
             updateStat('sysCpu', r.data.cpu);
             updateStat('sysMem', r.data.mem);
