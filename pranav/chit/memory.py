@@ -413,18 +413,23 @@ class SQLiteMemoryStore:
         for m in items_by_id.values():
             if want and not want.issubset(m["tags"]):
                 continue
-            lexical = len(terms & (_terms(m["content"]) | {t.lower() for t in m["tags"]}))
+            matching_terms = terms & (_terms(m["content"]) | {t.lower() for t in m["tags"]})
+            lexical = len(matching_terms)
             similarity = vectors.get(m["id"])
             if similarity is not None and self.semantic_threshold is not None and similarity < self.semantic_threshold:
                 continue
             if lexical or similarity is not None:
+                query_coverage = lexical / max(1, len(terms))
+                # Discount vocatives where only the self-referential entity name matches in a multi-term query
+                if len(terms) > 1 and matching_terms == {"chit"}:
+                    query_coverage *= 0.25
+
                 if similarity is None:
-                    relevance = ((1.0 - self.semantic_weight) * lexical / max(1, len(terms))
-                                 if vectors else float(lexical))
+                    effective_lexical = query_coverage
+                    relevance = (1.0 - self.semantic_weight) * effective_lexical if vectors else effective_lexical
                 else:
-                    max_lexical = max(1, len(terms))
                     relevance = self.semantic_weight * ((similarity + 1.0) / 2.0)
-                    relevance += (1.0 - self.semantic_weight) * (lexical / max_lexical)
+                    relevance += (1.0 - self.semantic_weight) * query_coverage
                 if relevance <= 0.0 or (min_relevance is not None and relevance < min_relevance):
                     continue
                 scored.append(((relevance, lexical, m["importance"], m["created_at"]), m))

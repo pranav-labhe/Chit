@@ -67,7 +67,9 @@ Beyond moving data, the system performs several intelligent background tasks:
 - **Fact Extraction (`facts.py`)**: It does *not* use AI to extract facts. It uses lightning-fast, deterministic Regular Expressions (Regex) to spot patterns like `name`, `location`, `preference`, `email`, `project`, and `goal` in user messages, rejecting common conversational false positives.
 - **Background Summarization (`summarization.py`)**: It runs a deduplicated extractive summarizer. When a chat session gets too long, it condenses the oldest messages into a short summary block so the AI doesn't have to re-read the whole conversation.
 - **Semantic Search (`embeddings.py` & `faiss_index.py`)**: When you save a memory, it is converted into a mathematical array (vector) using `SentenceTransformers`. When the user asks a question, the system finds the closest matching vectors using FAISS (a high-speed search library) or exact cosine similarity if FAISS isn't installed.
-- **Retrieval Thresholding & Grounding (`bridge.py` & `memory.py`)**: Enforces `min_relevance` thresholding (default `0.35` in Bridge) to filter out low-confidence semantic noise. Automatically engages deterministic greedy decoding (`temperature=0.0`) when memories or facts are present.
+- **Retrieval Thresholding & Information-Theoretic Query Coverage (`bridge.py` & `memory.py`)**: Enforces `min_relevance` thresholding (default `0.35` in Bridge) to filter out low-confidence semantic noise. Lexical matching uses normalized query coverage $\frac{|Q_{\text{terms}} \cap D_{\text{terms}}|}{|Q_{\text{terms}}|}$ with vocative attenuation ($0.25\times$) for self-referential identity addressing, completely preventing false memory recalls on greetings (e.g. `"Hello Chit"`). Automatically engages deterministic greedy decoding (`temperature=0.0`) when memories or facts are present.
+- **Resilient Autonomous Metasearch & Crawler (`search.py`)**: Multi-tier discovery spanning DuckDuckGo JSON, Wikipedia REST, Internet Archive, and external search engines (`CHIT_SEARCH_URL`). An SSRF-guarded deep crawler (`crawl_page`) extracts compact 60–80 character factual propositions that fit Chit's 256-byte context window without truncation.
+- **Native Neural Reasoning Over Premises (`bridge.py`)**: Feeds retrieved premises directly into Chit's Transformer (`Input: <Premise>. <Query>\nReasoning:`). A cognitive supervisor truth gate anchors the response to the premise if the small model encounters memorized attractor states.
 - **Generation Quality & Early Stopping (`runtime.py` & `model.py`)**: Implements token-level early stopping via boundary callback `stop_fn` to prevent wasted forward passes past stop boundaries. Employs prompt-scoped repetition penalties (`idx[b, prompt_len:]`) that penalize repeated generation tokens without penalizing prompt/memory tokens.
 
 ---
@@ -146,6 +148,7 @@ The Chit UI (`ui.py` & `app.js`) is the primary way to interact with the system.
 |---|---|---|---|
 | `bridge.py` | Gathers memories, history, and user prompt. | Connects `api.py` to `memory/sessions`. | Powers `POST /chat`. |
 | `formats.py` | Executes the prompt trimming hierarchy. | Called by `bridge.py`. | Internal only. |
+| `search.py` | Multi-tier metasearch and SSRF-guarded crawler. | Called by `bridge.py`. | Powers autonomous grounding. |
 | `inference.py` | Queue system protecting CPU from overload. | Called by `bridge.py` and `api.py`. | Protects generation. |
 | `runtime.py` | Wrapper bundling model, tokenizer, memory. | Booted in `api.py`. | Core server engine. |
 

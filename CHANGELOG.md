@@ -1,6 +1,29 @@
 # Changelog
 
-## 0.3.3
+## Latest Changes
+
+### Added
+- **Resilient Multi-Tier Autonomous Metasearch & Deep Crawler (`pranav/chit/search.py`)**:
+  - Implemented an unblocked, zero-dependency cascade across DuckDuckGo Instant Answer JSON API (`api.duckduckgo.com`), Wikipedia REST APIs (`en.wikipedia.org/w/api.php` and `/api/rest_v1/page/summary/`), Internet Archive Open Search API (`archive.org/advancedsearch.php`), and configurable `CHIT_SEARCH_URL` (SearXNG/Brave).
+  - Implemented an autonomous deep page crawler (`crawl_page`) with built-in SSRF protection (blocking private RFC-1918 subnets, loopback `127.0.0.0/8`, link-local `169.254.0.0/16`), hard 2.5s timeouts, 128 KB streaming read bounds, and DOM cleaning.
+  - Implemented factual relevance ranking budgeting external evidence down to an ultra-compact 60–80 character factual proposition matching Chit's 256-byte context window.
+  - Added polymorphic `SearchResult(str)` carrying `.url`, `.title`, `.domain`, and `.snippet`.
+- **Native Neural Reasoning Over Retrieved Premises (`pranav/chit/bridge.py`)**:
+  - Conditioned Chit's Transformer on sensory premises using the native trained format: `Input: [Retrieved Premise P]. [User Query Q]\nReasoning:`.
+  - Enabled Chit's attention heads to natively generate deduction tokens and scratchpad thoughts over the retrieved premises.
+  - Implemented a cognitive supervisor truth gate anchoring generations to factual premises when the 4.87M parameter neural model drifts into memorized training attractor states.
+- **Information-Theoretic IR Query Coverage & Vocative Attenuation (`pranav/chit/memory.py`)**:
+  - Eliminated false memory recalls on greetings and conversational pleasantries (e.g. `"Hello Chit"`) without brittle hardcoded wordlists.
+  - Formulated relevance as normalized query coverage $\frac{|Q_{\text{terms}} \cap D_{\text{terms}}|}{|Q_{\text{terms}}|}$ rather than un-normalized raw match counts.
+  - Implemented self-referential entity vocative attenuation ($0.25\times$ scale) when the assistant's name is merely an address rather than an informational query, dropping greeting relevance below the 0.35 threshold while preserving substantive queries (e.g. `"Who is Chit?"`).
+- **Principled Semantic Divergence & Anti-Attractor Supervisor (`pranav/chit/bridge.py`)**:
+  - Implemented `_has_semantic_divergence()` and `_is_short_conversational_turn()` to detect when small model outputs commit to narrow meta-tasks (text shortening, correction triage) that have zero token overlap with the user prompt, safely intercepting attractor state collapses.
+- **Frontend Attribution & Accessibility Polish (`app.js`)**:
+  - Filtered `memory_ids` to exclude `"web-search"`, ensuring the UI breadcrumb *"Chit used N saved memories"* only displays for genuine SQLite records from `memory.db`.
+  - Added clickable web domain badges (e.g. `[en.wikipedia.org]`, `[archive.org]`) on assistant bubbles.
+  - Guarded control help accessibility observers against thought container descendants.
+  - Populated human-authored `controlHelp` entries across advanced console controls.
+
 
 ### Added
 - **Generate API Web Search & Thinking Support**: Added `search: bool = False` and `think: bool = False` to `GenerateRequest` (`POST /generate`), forwarding them to `Bridge.process()`. In assistant mode, returns rich metadata (`confidence`, `web_grounded`, `sources`, `is_uncertain`, `is_incomplete`, `metadata`). In `mode: continue`, enforces validation rejecting `search` and `think` with HTTP 422.

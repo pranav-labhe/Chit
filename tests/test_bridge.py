@@ -74,6 +74,58 @@ def test_bridge_search_and_thinking_pipeline_unified(monkeypatch):
     assert decision.metadata["thought_tokens"] == len(rt.tokenizer.encode("Phobos and Deimos are moons."))
     assert decision.metadata["web_grounded"] is True
     assert decision.metadata["sources"] == fake_snippets
-    assert decision.metadata["web_search_query"] == "How many moons does Mars have?"
-    assert rt.history[0]["prompt"] == "Input: How many moons does Mars have?\nReasoning:"
+    assert decision.metadata["memory_ids"] == []
+    assert rt.history[0]["prompt"] == "Input: Mars has two moons, Phobos and Deimos. How many moons does Mars have?\nReasoning:"
+
+
+def test_bridge_pure_greeting_with_memory_store(tmp_path):
+    from pranav.chit.memory import SQLiteMemoryStore
+    s = SQLiteMemoryStore(tmp_path / "mem.db", seed_path=None)
+    s.add("Chit is the learning/model layer.", tags=["chit", "identity"])
+    assert s.search("Hello Chit", min_relevance=0.35) == []
+    assert len(s.search("Who is Chit?", min_relevance=0.35)) == 1
+
+    class RuntimeWithMemory(MockRuntime):
+        def recall(self, query, k, min_relevance=0.35):
+            return s.search(query, k, min_relevance=min_relevance)
+
+    rt = RuntimeWithMemory(["Hello! How can I help you today?"])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(user_input="Hello Chit"))
+    assert decision.text == "Hello! How can I help you today?"
+    assert decision.metadata["memory_ids"] == []
+    assert "Known memory:" not in rt.history[0]["prompt"]
+
+
+def test_bridge_greeting_recovers_from_attractor_collapse():
+    class AttractorRuntime(MockRuntime):
+        def recall(self, query, k, min_relevance=0.0):
+            return []
+
+    rt = AttractorRuntime(["Sure. I'll use the latest explicit correction and treat the earlier detail as obsolete."])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(user_input="Hello Chit"))
+    assert decision.text == "Hello! How can I help you today?"
+    assert decision.confidence == 0.95
+    assert decision.metadata["memory_ids"] == []
+
+
+def test_bridge_non_greeting_queries_recall_memory():
+    recalled = []
+
+    class NonGreetingRuntime(MockRuntime):
+        def recall(self, query, k, min_relevance=0.0):
+            recalled.append(query)
+            return [{"id": "seed-001", "content": "Chit is the learning/model layer."}]
+
+    rt = NonGreetingRuntime(["Chit is the neural layer."])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(user_input="Who is Chit?"))
+    assert len(recalled) == 1
+    assert decision.metadata["memory_ids"] == ["seed-001"]
+    assert "Known memory:" in rt.history[0]["prompt"]
+
 

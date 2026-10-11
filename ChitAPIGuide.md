@@ -447,7 +447,7 @@ messages are dropped first, then the least matching notes. If the current reques
 truncated for generation. Every message is saved in full. Markdown structure is preserved unless it falls beyond
 the context limit.
 
-**Autonomous Web Search (Self-RAG).** If Chit is asked about an unknown topic where internal confidence is low ($C < 0.40$) and no local memory matches, Chit will autonomously search the web via DuckDuckGo, pick the top factual snippets, and regenerate a grounded answer. You can also explicitly trigger this by passing `"search": true`.
+**Autonomous Web Search & Multi-Tier Crawler.** If Chit is asked about an unknown topic where internal confidence is low ($C < 0.40$) and no local memory matches, Chit will autonomously search the web using its multi-tier discovery engine (DuckDuckGo JSON, Wikipedia REST, Internet Archive, or configured external search), extract an unblocked factual proposition using an SSRF-guarded deep crawler, feed the premise directly into its neural reasoning prompt, and produce a grounded response. You can also explicitly trigger this by passing `"search": true`.
 
 **Important.** The model works best when training examples use this same request style (`Task:`, `User:`, and
 `Chit:` lines). `task: "continue"` remains available for raw text continuation and does not create a session.
@@ -689,7 +689,7 @@ Memory is a notebook of short facts. You write a fact once, and assistant-mode `
 Example address: `/memory/search?q=Pranav&limit=3`
 
 **How the search works.** It matches **whole words**. It ignores capital letters, punctuation, and very common
-words such as "is" and "the". Notes with more matching words come first, then the more important ones, then the
+words such as "is" and "the". Lexical relevance is calculated as normalized query coverage (percentage of query words matched in the note), with self-referential name vocative discounting so that greetings such as `"Hello Chit"` never return false memories. Notes with higher coverage come first, then the more important ones, then the
 newer ones. **This search uses keyword overlap rather than semantic matching.** Searching `city` will not find a note that only says `Nagpur`.
 Use the same words in the note and in the search.
 

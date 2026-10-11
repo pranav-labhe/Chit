@@ -122,7 +122,14 @@ apiQuery:{what:'Optional search or filtering choices for an advanced request.',e
 apiBody:{what:'The advanced information sent with a request that creates or changes something.',example:'The selected topic fills in a sample when it needs one.',best:'Prefer the guided screen; it checks common values for you.',recommended:'Keep the supplied example unless you understand each field.',risk:'A request can start training or change saved information. Review it before sending.'},
 runApi:{what:'Sends the request shown in the advanced editor.',example:'Use after selecting an API topic and reviewing its example.',best:'Read the topic guide and confirm the method, route, and body.',recommended:'Use a guided screen for routine tasks.',risk:'Some requests change or delete data, or start long-running training.'},
 apiKeySubmit:{what:'Checks the key and opens the Chit console.',example:'Enter the key, then choose Continue.',best:'Use the key from the server owner.',recommended:'Sign in only on the trusted Chit address.',risk:'Never share your key.'},
-refreshSessions:{what:'Reloads your saved conversation list.',example:'Choose after creating a conversation.',best:'Use if the list is out of date.',recommended:'No setting needed.',risk:'Read-only.'}
+refreshSessions:{what:'Reloads your saved conversation list.',example:'Choose after creating a conversation.',best:'Use if the list is out of date.',recommended:'No setting needed.',risk:'Read-only.'},
+logout:{what:'Locks the console and clears session credentials from this browser.',example:'Choose Lock console before leaving your workstation.',best:'Lock the console whenever you finish your session.',recommended:'Lock console when away from your computer.',risk:'You will need the server API key to sign in again.'},
+refreshFactsBtn:{what:'Fetches recent personalized facts Chit remembered during this conversation.',example:'Click after stating your name, role, or preferences.',best:'Verify what session context Chit is currently holding in memory.',recommended:'Check whenever you want to confirm Chit registered your statements.',risk:'Read-only; does not change or delete facts.'},
+clearFactsBtn:{what:'Instructs Chit to permanently forget all personalized facts learned during this session.',example:'Click if Chit learned an outdated or mistaken preference.',best:'Use when switching contexts or clearing personal details.',recommended:'Click to clear session-specific facts.',risk:'Permanently deletes all extracted facts for this conversation from sessions.db.'},
+forcePromote:{what:'Bypasses the 50 Golden Gate automated safety evaluations when promoting a candidate model.',example:'Check only in local development when testing raw checkpoints without running full evaluation.',best:'Keep unchecked in production to maintain safety guarantees.',recommended:'Unchecked.',risk:'Promoting an unevaluated model may introduce hallucinations or regressed accuracy.'},
+reloadModelBtn:{what:'Reloads the active model checkpoint from disk into runtime memory.',example:'Use if a checkpoint was updated on disk outside the browser.',best:'Click to ensure the runtime is serving the latest champion weights.',recommended:'Use after manual server-side checkpoint updates.',risk:'Momentarily pauses active inference while reloading weights.'},
+rollbackModelBtn:{what:'Reverts the live model to a previously saved checkpoint by SHA-256 fingerprint.',example:'Enter a valid checkpoint hash and click Rollback.',best:'Use to recover if a recently promoted candidate performs poorly.',recommended:'Keep previous checkpoint hashes documented.',risk:'Immediately replaces the active neural weights with the selected historical checkpoint.'},
+rollbackHashInput:{what:'The SHA-256 fingerprint or identifier of the historical checkpoint to roll back to.',example:'Paste the 64-character hash of a known stable checkpoint.',best:'Obtain the exact hash from Studio training history.',recommended:'Verify the hash before initiating rollback.',risk:'Entering an invalid hash will cause the rollback to fail.'}
 };
 function inferredHelp(element){
       if(element.classList.contains('job-ai-stamp'))return {what:'The file timestamp of the latest.pt checkpoint inside this job\'s folder.',example:'If this matches the Live AI Checkpoint above, this checkpoint is the one you are currently using.',best:'Use this to verify if a promotion was successful.',recommended:'None.',risk:'None.'};
@@ -138,6 +145,12 @@ function inferredHelp(element){
     if(element.classList.contains('promote-btn'))return {what:'Replaces your current AI with this new tested version.',example:'Choose this to swap out the AI.',best:'Do this only if the test score says YES.',recommended:'Make sure you want to replace your current AI.',risk:'This immediately changes the AI for all your chats.'};
     if(words==='copy')return {what:'Copies Chit’s reply to your clipboard.',example:'Choose Copy, then paste the text where you need it.',best:'Review the answer before sharing it.',recommended:'Use when you want to reuse the reply.',risk:'Copied text may contain mistakes; check it before sharing.'};
     if(words==='try another answer')return {what:'Asks Chit to answer your latest message again.',example:'Choose after a reply missed your intent.',best:'Make your original prompt clearer if the next reply is also wrong.',recommended:'Try once after checking the prompt.',risk:'This sends another request and uses compute.'};
+    if(words.includes('advanced tools'))return {what:'Reveals developer tools, including the interactive API reference and test editor.',example:'Click to toggle advanced tools and API explorer.',best:'Explore when integrating Chit with external HTTP applications.',recommended:'Open when inspecting raw API endpoints.',risk:'None; expanding this section is read-only.'};
+    if(words.includes('advanced response settings'))return {what:'Configures fine-grained inference parameters such as temperature, top-k, and token limits.',example:'Adjust response creativity and diversity.',best:'Keep defaults for general assistant tasks; tweak for creative writing.',recommended:'Default settings (temperature 0.0 or 0.4).',risk:'High temperature or extreme top-k may produce unreadable text.'};
+    if(words.includes('technical evidence and limits'))return {what:'Displays low-level diagnostic telemetry, tokenizer details, and context window limits.',example:'Inspect active block size and token count evidence.',best:'Review when troubleshooting model output or context truncation.',recommended:'Check when diagnosing unreadable output.',risk:'Read-only diagnostic inspection.'};
+    if(words.includes('save a memory for chit'))return {what:'Opens the manual memory creation drawer to store persistent user preferences.',example:'Save facts like dietary restrictions or coding styles.',best:'Store concise, permanent facts.',recommended:'One clear fact per memory.',risk:'Memories are stored in memory.db and influence future inference.'};
+    if(words.includes('edit the raw json request')||words.includes('raw json'))return {what:'Enables direct editing of raw HTTP JSON payloads sent to the Chit backend.',example:'Craft custom JSON bodies for POST requests.',best:'Use when testing specific API parameters.',recommended:'Use guided controls unless testing custom fields.',risk:'Malformed payloads will be rejected with HTTP 422.'};
+    if(words.includes('read the complete chit api guide')||words.includes('api guide'))return {what:'Displays full plain-English documentation for all allowlisted Chit API routes.',example:'Read detailed route descriptions and parameter tables.',best:'Browse to understand endpoint contracts.',recommended:'Review before integrating external applications.',risk:'Read-only documentation.'};
     const navInfo={chat:{what:'Opens the conversation screen where you can talk with Chit.',example:'Choose Chat to ask a question and continue the conversation.',best:'Use one conversation for one topic.',recommended:'Start here for normal use.',risk:'Replies can be wrong; check important facts.'},conversations:{what:'Opens your saved conversation list.',example:'Choose one to continue it or remove it.',best:'Use this when you need to return to an earlier topic.',recommended:'No setting needed.',risk:'Deleting a conversation removes its saved messages.'},generate:{what:'Opens the one-time answer screen.',example:'Ask for one answer without saving a conversation.',best:'Use Chat for a back-and-forth exchange.',recommended:'Use the default response settings.',risk:'Long answers take longer and may be less focused.'},brain:{what:'Opens saved memories and lesson progress.',example:'Search for a memory or review learning counts.',best:'Use memory for facts Chit should recall now.',recommended:'No setting needed.',risk:'Deleting a memory removes it from recall.'},teach:{what:'Opens the lesson form for information Chit may learn later.',example:'Save one checked fact or question and answer.',best:'Keep lessons accurate and focused.',recommended:'Use a short, clear lesson.',risk:'Lessons affect the model only after training.'},studio:{what:'Opens learning plans and training progress.',example:'Choose a plan, read its settings, then start learning.',best:'Inspect data before training.',recommended:'Use the everyday assistant plan when available.',risk:'Training uses compute and may take time.'},data:{what:'Opens the training file inspection screen.',example:'Check that the plan has enough training text.',best:'Preview a file split before writing it.',recommended:'No setting needed.',risk:'Creating a split changes files used by future training.'},diagnostics:{what:'Opens checks for the server, model, tokenizer, data, and recent training.',example:'Use after a reply looks unreadable or unexpected.',best:'Run checks, then try the simple sample prompt.',recommended:'Choose the same plan that produced the problem.',risk:'Checks cannot guarantee that a model will answer correctly.'},explorer:{what:'Opens the plain-language API reference and optional technical editor.',example:'Choose a topic to see what it does and what it needs.',best:'Use the guided screens for normal tasks.',recommended:'Only open the request editor if you understand the selected route.',risk:'Advanced requests can change data or start work.'}};
     if(navInfo[view])return navInfo[view];
     const isButton=element.tagName==='BUTTON';const text=(element.textContent||'').trim().toLowerCase();
@@ -160,6 +173,7 @@ function showContextHelp(element){
 function addHelpTrigger(element){
     if(element.dataset.helpDecorated||element.id==='closeContextHelp'||element.classList.contains('help-trigger')||element.classList.contains('page-help'))return;
     if(element.matches('input[type="hidden"]'))return;
+    if(element.closest?.('.thought-container'))return;
     const info=controlHelp[element.id]||element._helpInfo||inferredHelp(element);
     element._helpInfo=info;element._helpLabel=element.labels?.[0]?.textContent?.trim()||element.getAttribute('aria-label')||element.textContent?.trim()||element.placeholder||element.id||'Help';
     element.dataset.helpDecorated='true';
@@ -697,12 +711,44 @@ function addBubble(role, text, metadata = {}) {
     const b = document.createElement('div');
     b.className = 'bubble ' + role;
     
-    // 0. If web grounded, prepend web search grounding badge
+    // 0. If web grounded, prepend web search grounding badge with clickable domain badges
     if (role === 'chit' && metadata && metadata.web_grounded) {
         const webGroundedHeader = document.createElement('div');
         webGroundedHeader.className = 'web-grounded-header';
-        const sourceCount = (metadata.sources && metadata.sources.length) ? ` (${metadata.sources.length} sources)` : '';
-        webGroundedHeader.innerHTML = `🌐 <strong>Grounded via Web Search</strong>${sourceCount}`;
+        webGroundedHeader.innerHTML = `🌐 <strong>Grounded via Web Search</strong>`;
+        
+        const webSources = Array.isArray(metadata.web_sources) ? metadata.web_sources : [];
+        if (webSources.length > 0) {
+            const badgesWrap = document.createElement('span');
+            badgesWrap.className = 'web-source-badges';
+            badgesWrap.style.marginLeft = '8px';
+            badgesWrap.style.display = 'inline-flex';
+            badgesWrap.style.gap = '6px';
+            badgesWrap.style.flexWrap = 'wrap';
+            webSources.forEach(s => {
+                const domain = s.domain || (s.url ? s.url.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '') : 'source');
+                const badge = document.createElement('a');
+                badge.className = 'web-source-pill';
+                badge.href = s.url || '#';
+                badge.target = '_blank';
+                badge.rel = 'noopener noreferrer';
+                badge.textContent = `[${domain}]`;
+                badge.title = s.title ? `${s.title}: ${s.snippet || ''}` : (s.snippet || s.url || '');
+                badge.style.fontSize = '11px';
+                badge.style.padding = '1px 6px';
+                badge.style.borderRadius = '3px';
+                badge.style.background = 'rgba(255,255,255,0.08)';
+                badge.style.color = 'var(--text-accent, #64B5F6)';
+                badge.style.textDecoration = 'none';
+                badge.style.border = '1px solid rgba(100,181,246,0.3)';
+                badgesWrap.appendChild(badge);
+            });
+            webGroundedHeader.appendChild(badgesWrap);
+        } else if (metadata.sources && metadata.sources.length) {
+            const countSpan = document.createElement('span');
+            countSpan.textContent = ` (${metadata.sources.length} sources)`;
+            webGroundedHeader.appendChild(countSpan);
+        }
         b.appendChild(webGroundedHeader);
     }
 
@@ -828,8 +874,9 @@ $('#sendChat').addEventListener('click', async () => {
         if (!r.ok) throw new Error(friendlyError(r.data,r.status));
         
         chatId = r.data.session_id;
-        const recalled = r.data?.metadata?.memory_ids;
-        const hasMemory = Array.isArray(recalled) && recalled.length > 0;
+        const rawRecalled = r.data?.metadata?.memory_ids;
+        const genuineMemories = Array.isArray(rawRecalled) ? rawRecalled.filter(id => id && id !== 'web-search') : [];
+        const hasMemory = genuineMemories.length > 0;
         const recordedTemp = tempOverride !== undefined 
             ? tempOverride 
             : (hasMemory ? 0 : 'adaptive');
@@ -855,7 +902,7 @@ $('#sendChat').addEventListener('click', async () => {
         }
         if(hasMemory){
             const breadcrumb=document.createElement('div');breadcrumb.className='memory-breadcrumb';
-            breadcrumb.textContent=`Chit used ${recalled.length} saved ${recalled.length===1?'memory':'memories'} to shape this reply.`;
+            breadcrumb.textContent=`Chit used ${genuineMemories.length} saved ${genuineMemories.length===1?'memory':'memories'} to shape this reply.`;
             $('#chatlog').appendChild(breadcrumb);
         }
         addBubble('chit', r.data.text || '', Object.assign({}, r.data?.metadata || {}, r.data || {}));

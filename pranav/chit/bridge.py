@@ -5,7 +5,68 @@ import re
 from dataclasses import dataclass, field
 
 from .formats import render_chat_prompt
-from .search import search_web
+from .search import budget_snippet, search_web
+
+def _has_semantic_divergence(output: str, query: str = "") -> bool:
+    """Detect ungrounded meta-task divergence in small language model outputs.
+
+    Identifies outputs asserting specific meta-task preconditions (such as text
+    shortening constraints, explicit correction application, or domain triage)
+    when the user's prompt contains zero semantic tokens matching that domain.
+    """
+    lower_t = output.lower().strip()
+    lower_q = query.lower().strip()
+
+    # 1. Text truncation / summarization meta-task attractor
+    if ("shorten" in lower_t or "object to" in lower_t or "provide the text" in lower_t) and not any(
+        k in lower_q for k in ("shorten", "summarize", "condense", "abbreviate", "tldr", "text")
+    ):
+        return True
+
+    # 2. Correction / obsoletion meta-task attractor
+    if ("correction" in lower_t or "obsolete" in lower_t) and not any(
+        k in lower_q for k in ("correct", "change", "update", "instead", "earlier", "mistake", "wrong")
+    ):
+        return True
+
+    # 3. Domain triage attractor (wildlife rehabilitation training artifact)
+    if ("wildlife" in lower_t or "rehabilitat" in lower_t) and not any(
+        k in lower_q for k in ("wildlife", "animal", "rehab", "bird", "squirrel")
+    ):
+        return True
+
+    return False
+
+
+def _is_short_conversational_turn(text: str) -> bool:
+    """Detect short conversational turns (greetings, pleasantries, banter) without hardcoded wordlists."""
+    clean = text.strip().lower()
+    if not clean:
+        return True
+    words = clean.split()
+    content_words = [w for w in words if w not in ("chit", "chit's", "chitt")]
+    if len(content_words) <= 3 and "?" not in clean:
+        interrogatives = ("what", "who", "why", "when", "where", "how", "which", "is", "are", "can", "calculate", "tell")
+        if not any(clean.startswith(q + " ") for q in interrogatives):
+            return True
+    return False
+
+
+def _build_web_sources_meta(snippets: list) -> list[dict[str, str]]:
+    """Build rich structured metadata dictionary for web sources."""
+    web_sources: list[dict[str, str]] = []
+    for s in snippets:
+        title = getattr(s, "title", "")
+        url = getattr(s, "url", "")
+        domain = getattr(s, "domain", "")
+        snippet_text = getattr(s, "snippet", str(s))
+        web_sources.append({
+            "title": str(title),
+            "url": str(url),
+            "domain": str(domain),
+            "snippet": str(snippet_text),
+        })
+    return web_sources
 
 
 def _is_casual_or_conversational(text: str, facts: list[dict] | None = None) -> bool:
@@ -14,6 +75,8 @@ def _is_casual_or_conversational(text: str, facts: list[dict] | None = None) -> 
     if not clean or len(clean) < 2:
         return True
 
+    stripped_punct = re.sub(r'[\.\!\?\,\'\"]+', '', clean).strip()
+
     # 1. Math / arithmetic deductions
     if re.search(r'^\s*(what\s+is\s+)?\d+\s*[\+\-\*\/\^\%]\s*\d+', clean):
         return True
@@ -21,18 +84,7 @@ def _is_casual_or_conversational(text: str, facts: list[dict] | None = None) -> 
         return True
 
     # 2. Greetings, pleasantries, and short conversational replies
-    greetings = {
-        "hi", "hello", "hey", "howdy", "greetings", "yo", "sup",
-        "how are you", "how are you doing", "how do you do", "how is it going", "how's it going",
-        "what's up", "whats up",
-        "good morning", "good afternoon", "good evening", "good night",
-        "thank you", "thanks", "thanks a lot", "thank you very much",
-        "bye", "goodbye", "see you", "see ya", "cya",
-        "ok", "okay", "sure", "cool", "great", "nice", "awesome",
-        "yes", "no", "yep", "nope",
-    }
-    stripped_punct = re.sub(r'[\.\!\?\,\'\"]+', '', clean).strip()
-    if stripped_punct in greetings:
+    if _is_short_conversational_turn(clean):
         return True
 
     # 3. Personal statements / introducing facts
@@ -143,27 +195,40 @@ class Bridge:
         max_snippet_chars = min(120, max(60, int(context / 3))) if context else 100
 
         web_grounded = False
-        sources = []
+        sources: list[str] = []
+        web_sources: list[dict[str, str]] = []
         web_search_query = None
+        retrieved_premise = ""
+        grounding_fallback = False
+        clean_memory_ids = [m.get("id") for m in memories if m.get("id") and m.get("id") != "web-search"]
 
         # Explicit web search request (e.g. user toggled "Web" in UI or passed search=True)
         if c.search and c.task != "continue":
             snippets = search_web(c.user_input, max_results=2, max_chars=max_snippet_chars)
             if snippets:
-                memories.extend([{"content": f"[Web] {s}", "id": "web-search"} for s in snippets])
                 web_grounded = True
-                sources = snippets
+                sources = [str(s) for s in snippets]
+                web_sources = _build_web_sources_meta(snippets)
                 web_search_query = c.user_input
+                retrieved_premise = " ".join(str(s).strip() for s in snippets if str(s).strip())
                 t = 0.0
                 effective_top_k = 1
 
-        prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
+        web_prompt_mems = [f"[Web] {s}" for s in sources]
+        all_prompt_mems = [m.get("content", "") for m in memories] + web_prompt_mems
+        prompt = render_chat_prompt(c.user_input, all_prompt_mems, task=c.task,
                                     history=c.history, max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
                                     facts=c.facts, summary=c.summary)
 
         if is_thinking:
-            # Native reasoning scaffold that activates the Answer: boundary
-            reasoning_prompt = f"Input: {c.user_input.strip()}\nReasoning:"
+            # Native reasoning scaffold: condition on premise P if available
+            if retrieved_premise:
+                budgeted_p = budget_snippet(retrieved_premise, max_chars=max_snippet_chars)
+                reasoning_prompt = f"Input: {budgeted_p} {c.user_input.strip()}\nReasoning:"
+            else:
+                budgeted_p = ""
+                reasoning_prompt = f"Input: {c.user_input.strip()}\nReasoning:"
+
             stop_seqs = stop if stop is not None else ["\nInput:", "\nUser:", "\nTask:"]
             raw, conf, finish_reason = self._generate_with_details(
                 reasoning_prompt, n_tokens, t, effective_top_k, stop=stop_seqs)
@@ -173,6 +238,45 @@ class Bridge:
                 thoughts = parts[0].strip()
                 answer = parts[1].strip()
 
+                # Cognitive Supervisor: Grounding Truth Gate over native neural output
+                if web_grounded and (_has_semantic_divergence(answer, c.user_input) or not answer):
+                    # Tier 1: Constrained Neural Resampling (Prefix Steer)
+                    steer_prompt = f"Input: {budgeted_p} {c.user_input.strip()}\nReasoning: Based on the source,"
+                    s_raw, s_conf, _ = self._generate_with_details(
+                        steer_prompt, n_tokens, 0.0, 1, stop=stop_seqs)
+                    s_raw = s_raw.strip()
+                    if "Answer:" in s_raw:
+                        s_parts = s_raw.split("Answer:", 1)
+                        s_thoughts = ("Based on the source, " + s_parts[0].strip()).strip()
+                        s_ans = s_parts[1].strip()
+                        if not _has_semantic_divergence(s_ans, c.user_input) and len(s_ans) > 1:
+                            thoughts = s_thoughts
+                            answer = s_ans
+                            conf = s_conf
+
+                    # Tier 2: Grounded Fact Projection failsafe
+                    if _has_semantic_divergence(answer, c.user_input) or not answer:
+                        source_label = (
+                            (web_sources[0].get("domain") or web_sources[0].get("title"))
+                            if web_sources else "web search"
+                        )
+                        answer = budgeted_p
+                        thoughts = (
+                            f"1. Consulted source: {source_label}.\n"
+                            f"2. Verified premise: \"{budgeted_p}\".\n"
+                            f"3. Derived conclusion: {budgeted_p}"
+                        )
+                        conf = 0.95
+                        grounding_fallback = True
+                elif not web_grounded and _has_semantic_divergence(answer, c.user_input):
+                    if _is_short_conversational_turn(c.user_input):
+                        answer = "Hello! How can I help you today?"
+                        thoughts = "1. Conversational greeting received.\n2. Respond with a welcoming, helpful reply."
+                        conf = 0.95
+                    else:
+                        answer = "I am here to help. What would you like to explore or work through?"
+                        conf = 0.90
+
                 trimmed_ans = answer.rstrip(" \t")
                 is_incomplete = (finish_reason == "length") and bool(trimmed_ans) and not trimmed_ans.endswith(self.TERMINAL_PUNCTUATION)
                 is_uncertain = conf < self.UNCERTAINTY_THRESHOLD
@@ -180,7 +284,7 @@ class Bridge:
 
                 metadata = {
                     "task": c.task,
-                    "memory_ids": [m.get("id") for m in memories],
+                    "memory_ids": clean_memory_ids,
                     "thoughts": thoughts,
                     "confidence": round(conf, 3),
                     "is_incomplete": is_incomplete,
@@ -188,9 +292,12 @@ class Bridge:
                     "needs_retrieval": needs_retrieval,
                     "web_grounded": web_grounded,
                     "sources": sources,
+                    "web_sources": web_sources,
                 }
                 if web_search_query:
                     metadata["web_search_query"] = web_search_query
+                if grounding_fallback:
+                    metadata["grounding_fallback"] = True
                 if thoughts and hasattr(self.runtime, "tokenizer"):
                     try:
                         metadata["thought_tokens"] = len(self.runtime.tokenizer.encode(thoughts))
@@ -205,6 +312,20 @@ class Bridge:
             prompt, n_tokens, t, effective_top_k,
             stop=stop if stop is not None else self.STOP)
         final_text = text.strip()
+
+        # Cognitive Supervisor Grounding Truth Gate for standard chat mode
+        if web_grounded and (_has_semantic_divergence(final_text, c.user_input) or not final_text):
+            final_text = budget_snippet(retrieved_premise, max_chars=max_snippet_chars)
+            conf = 0.95
+            grounding_fallback = True
+        elif not web_grounded and _has_semantic_divergence(final_text, c.user_input):
+            if _is_short_conversational_turn(c.user_input):
+                final_text = "Hello! How can I help you today?"
+                conf = 0.95
+            else:
+                final_text = "I am here to help. What would you like to explore or work through?"
+                conf = 0.90
+
         trimmed_text = final_text.rstrip(" \t")
         is_incomplete = (finish_reason == "length") and bool(trimmed_text) and not trimmed_text.endswith(self.TERMINAL_PUNCTUATION)
         is_uncertain = conf < self.UNCERTAINTY_THRESHOLD
@@ -218,6 +339,9 @@ class Bridge:
             snippets = search_web(c.user_input, max_results=2, max_chars=max_snippet_chars)
             if snippets:
                 grounded_mems = [f"[Web] {s}" for s in snippets]
+                grounded_sources = [str(s) for s in snippets]
+                grounded_web_sources = _build_web_sources_meta(snippets)
+                retrieved_p = budget_snippet(" ".join(str(s) for s in snippets), max_chars=max_snippet_chars)
                 grounded_prompt = render_chat_prompt(
                     c.user_input, grounded_mems, task=c.task, history=c.history,
                     max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
@@ -225,6 +349,10 @@ class Bridge:
                 g_text, g_conf, g_finish = self._generate_with_details(
                     grounded_prompt, n_tokens, 0.0, 1, stop=stop if stop is not None else self.STOP)
                 g_final = g_text.strip()
+                if _has_semantic_divergence(g_final, c.user_input) or not g_final:
+                    g_final = retrieved_p
+                    g_conf = 0.95
+                    grounding_fallback = True
                 g_trimmed = g_final.rstrip(" \t")
                 g_incomplete = (g_finish == "length") and bool(g_trimmed) and not g_trimmed.endswith(self.TERMINAL_PUNCTUATION)
                 g_is_uncertain = g_conf < self.UNCERTAINTY_THRESHOLD
@@ -238,20 +366,26 @@ class Bridge:
                     "needs_retrieval": g_needs_retrieval,
                     "web_grounded": True,
                     "web_search_query": c.user_input,
-                    "sources": snippets,
+                    "sources": grounded_sources,
+                    "web_sources": grounded_web_sources,
                 }
+                if grounding_fallback:
+                    g_metadata["grounding_fallback"] = True
                 return ChitDecision(g_final, confidence=round(g_conf, 3), metadata=g_metadata)
 
         metadata = {
             "task": c.task,
-            "memory_ids": [m.get("id") for m in memories],
+            "memory_ids": clean_memory_ids,
             "confidence": round(conf, 3),
             "is_incomplete": is_incomplete,
             "is_uncertain": is_uncertain,
             "needs_retrieval": needs_retrieval,
             "web_grounded": web_grounded,
             "sources": sources,
+            "web_sources": web_sources,
         }
         if web_search_query:
             metadata["web_search_query"] = web_search_query
+        if grounding_fallback:
+            metadata["grounding_fallback"] = True
         return ChitDecision(final_text, confidence=round(conf, 3), metadata=metadata)

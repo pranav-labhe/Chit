@@ -64,6 +64,8 @@ Chit (चित्) is a compact neural brain designed for fast, context-aware t
 ### 📄 Memory Store (`memory.db`)
 SQLite is the canonical store for memory records; legacy `memory.json` is imported with IDs and metadata preserved and retained for recovery. A `memory_embeddings` table stores rebuildable vectors keyed by memory ID and embedding model version.
 - **Search Algorithm**: SQLite FTS5 supplies keyword candidates; with a local embedding provider, normalized vectors are searched through a rebuildable FAISS HNSW index on supported deployments. Exact cosine is the fallback when FAISS is absent or disabled. Hybrid scoring preserves keyword evidence, semantic score, importance, recency, and hard tag filters.
+  - **Information-Theoretic Query Coverage**: Lexical relevance is calculated as normalized query coverage $\frac{|Q_{\text{terms}} \cap D_{\text{terms}}|}{|Q_{\text{terms}}|}$ rather than raw counts.
+  - **Vocative Attenuation**: When the query is a multi-term sentence and the only overlapping term with memory is the assistant's own name (`chit`), the vocative term is scaled by $0.25$, ensuring greetings like `"Hello Chit"` score $0.125$ and drop below the $0.35$ relevance threshold while substantive queries like `"Who is Chit?"` retrieve correctly.
 - **Storage**: Objects contain `id`, `type`, `content`, `importance`, `tags`, `created_at`, and optional `source`.
 
 ### 🗄️ SQLite Databases
@@ -106,8 +108,8 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | Module | Role | Key Components | Logic Flow |
 | :--- | :--- | :--- | :--- |
 | **`api.py`** | **Gateway** | FastAPI Routes | Handles HTTP requests $\rightarrow$ Auth $\rightarrow$ Bridge/Store $\rightarrow$ JSON Response (`ChatResponse`). |
-| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to `Runtime`. Manages two-pass Self-RAG loops, confidence calibration, and context assembly. |
-| **`search.py`** | **Web Retrieval** | `search_web`, `budget_snippet` | Zero-dependency DuckDuckGo API (JSON + HTML fallback) with word-boundary context budgeting. |
+| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to `Runtime`. Manages sensory premise conditioning, cognitive supervision, confidence calibration, and context assembly. |
+| **`search.py`** | **Web Retrieval** | `search_web`, `crawl_page`, `budget_snippet` | Resilient multi-tier metasearch (DDG JSON, Wikipedia REST, Archive.org, external) and autonomous SSRF-guarded crawler with compact proposition extraction. |
 | **`inference.py`** | **Scheduler** | `InferenceManager` | Bounds FIFO admission and serializes model execution on the device worker. |
 | **`runtime.py`** | **Execution** | `ChitRuntime` | The interface for `generate` and `recall`. Bridges the Gap between Model and Memory. |
 | **`model.py`** | **Brain** | `ChitModel` | Transformer-based architecture. Handles tensor math, token log-probabilities, and finish reasons. |
@@ -126,15 +128,23 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 - **Uncertainty Calibration**: Outputs with $C < 0.40$ are flagged as uncertain (`is_uncertain = True`).
 - **Web Retrieval Trigger**: Flags `needs_retrieval = True` on uncertainty or low chat confidence ($< 0.35$), providing the autonomous trigger for Self-RAG web search.
 
-### 🌐 Autonomous Internet Search (Self-RAG)
-- **Zero-Dependency Web Retrieval**: `search.py` provides `search_web(query)` using Python's standard `urllib.request`. Dual strategy accesses DuckDuckGo Instant Answer JSON API with fallback to DuckDuckGo HTML snippet extraction, enforcing strict 3.5s timeouts and fail-safe exception handling.
-- **Dynamic Context Budgeting**: `budget_snippet()` enforces word-boundary truncation to fit snippets within small transformer context budgets (`min(120, max(60, int(block_size / 3)))`), cleanly terminating with punctuation.
-- **Two-Pass Autonomous Self-RAG Loop**: In `Bridge.process()`:
-  1. Pass 1 generates an initial hypothesis response.
-  2. If $C < 0.40$ and no local memory is present, Chit detects an information void (`needs_retrieval = True`).
-  3. Chit queries DuckDuckGo for top-2 budgeted snippets.
-  4. Injects snippets under `Known memory:\n- [Web] {snippet}`.
-  5. Pass 2 regenerates with deterministic greedy decoding ($T=0.0$), marking `web_grounded = True` and recording source snippets.
+### 🌐 Autonomous Internet Search & Resilient Crawler
+- **Multi-Tier Metasearch Cascade (`search.py`)**:
+  - **Tier 1 (Instant/Entities)**: DuckDuckGo Instant Answer JSON API (`api.duckduckgo.com`, never blocked on EC2).
+  - **Tier 2 (Encyclopedic)**: Wikipedia REST Search & Summary APIs (`en.wikipedia.org/w/api.php` and `/api/rest_v1/page/summary/` with custom User-Agent `ChitAssistant/0.3`).
+  - **Tier 3 (Archival & Source Literature)**: Internet Archive Open Search API (`archive.org/advancedsearch.php`).
+  - **Tier 4 (Configurable Provider)**: Support for `CHIT_SEARCH_URL` (SearXNG / Brave).
+  - **Fallback**: DuckDuckGo HTML scraping fallback.
+- **Autonomous Deep Page Crawler (`crawl_page`)**:
+  - Fetches candidate web pages with browser headers under strict bounds: 2.5s hard timeout, stream reading capped at 128 KB, and built-in SSRF protection blocking private RFC-1918 subnets, loopback `127.0.0.0/8`, and link-local `169.254.0.0/16`.
+  - DOM cleaning via `html.parser` and factual proposition ranker budgeting evidence into a clean 60–80 character core factual proposition to strictly prevent context overflow in Chit's 256-byte context window.
+  - Polymorphic `SearchResult(str)` carrying `.url`, `.title`, `.domain`, and `.snippet`.
+- **Native Neural Reasoning Over Sensory Premises (`bridge.py`)**:
+  - Retains Chit's neural Transformer as the thinker: when external premises are retrieved, formats the prompt into Chit's native reasoning format: `Input: [Retrieved Premise P]. [User Query Q]\nReasoning:`.
+  - Chit's attention heads attend to premise $P$ and generate the chain-of-thought scratchpad tokens and answer directly.
+  - **Cognitive Supervisor (Truth Gate)**: Inspects Chit's generated output; if the neural model collapses into memorized training attractor states or contradicts the premise, the supervisor anchors the response to the verified factual premise, setting `web_grounded = true` and attributing source records while keeping `memory_ids` strictly isolated to genuine SQLite notebook memories.
+- **Principled Anti-Attractor Supervisor**:
+  - Uses `_has_semantic_divergence()` and `_is_short_conversational_turn()` to detect task intent conflicts (such as text shortening, conflict triage) when user queries have zero semantic overlap with the generated claim, eliminating hardcoded wordlists.
 - **Direct Search Mode**: Passing `search: true` in `Context` / `ChatRequest` (or clicking `🌐 Search Web` in UI) bypasses Pass 1 and searches immediately.
 
 ### Browser Console (`ui.py`, `ui/templates/index.html`, `ui/static/`)

@@ -233,3 +233,83 @@ def test_chat_api_search_option(client, monkeypatch):
     assert data["web_grounded"] is True
     assert "Mount Everest is 8,848 meters tall." in data["sources"]
 
+
+def test_ssrf_protection_rejects_private_and_metadata_ips():
+    from pranav.chit.search import is_safe_url
+    assert is_safe_url("http://127.0.0.1/admin") is False
+    assert is_safe_url("http://localhost:8000/") is False
+    assert is_safe_url("http://169.254.169.254/latest/meta-data/") is False
+    assert is_safe_url("http://10.0.0.1/private") is False
+    assert is_safe_url("http://192.168.1.1/router") is False
+    assert is_safe_url("http://172.16.0.5/") is False
+    assert is_safe_url("ftp://en.wikipedia.org/") is False
+    assert is_safe_url("https://en.wikipedia.org/wiki/Rigveda") is True
+
+
+def test_crawl_page_html_parsing_and_ranking(monkeypatch):
+    from pranav.chit.search import crawl_page, SearchResult
+    sample_page = b"""
+    <!DOCTYPE html>
+    <html>
+      <head><title>Test Page</title><style>.nav { color: red; }</style></head>
+      <body>
+        <nav><a href="/">Home</a></nav>
+        <p>Irrelevant intro boilerplate text that does not answer the question.</p>
+        <article>
+          <p>The Nasadiya Sukta is the 129th hymn of the 10th mandala of Rigveda concerned with cosmology and the origin of universe.</p>
+        </article>
+        <footer>Copyright 2026</footer>
+      </body>
+    </html>
+    """
+
+    class FakeHtmlResp:
+        def __init__(self):
+            self.headers = {"Content-Type": "text/html; charset=utf-8"}
+        def read(self, n=-1):
+            if not hasattr(self, "_done"):
+                self._done = True
+                return sample_page
+            return b""
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: FakeHtmlResp())
+    monkeypatch.setattr("pranav.chit.search.is_safe_url", lambda u: True)
+
+    result = crawl_page("https://archive.org/details/nasadiya_sukta", "What is the Nasadiya Sukta?")
+    assert result is not None
+    assert isinstance(result, SearchResult)
+    assert isinstance(result, str)
+    assert "Nasadiya Sukta" in result
+    assert result.domain == "archive.org"
+
+
+def test_cognitive_supervisor_truth_gate_intercepts_attractor(monkeypatch):
+    from pranav.chit.search import SearchResult
+    fake_snippet = SearchResult(
+        "Paris is the capital of France.",
+        url="https://en.wikipedia.org/wiki/Paris",
+        title="Paris",
+        domain="en.wikipedia.org"
+    )
+    monkeypatch.setattr("pranav.chit.bridge.search_web", lambda *a, **kw: [fake_snippet])
+
+    # Model hallucinates training attractor
+    rt = DummyRetrievalRuntime([
+        ("Some random thoughts.\nAnswer: The object to shorten is missing. Please provide the text.", 0.90, "stop")
+    ])
+    bridge = Bridge(rt)
+
+    ctx = Context(user_input="What is the capital of France?", search=True, think=True)
+    decision = bridge.process(ctx)
+
+    assert decision.metadata["web_grounded"] is True
+    assert decision.metadata.get("grounding_fallback") is True
+    assert "Paris is the capital of France" in decision.text
+    assert "The object to shorten is missing" not in decision.text
+    assert "Consulted source: en.wikipedia.org" in decision.metadata["thoughts"]
+    assert decision.metadata["memory_ids"] == []
+

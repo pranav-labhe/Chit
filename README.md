@@ -7,8 +7,8 @@ problem solving, storing experience, teaching knowledge, and training.
 > **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
 > `/generate` and `/chat` format messages for a context-aware Chit response, while `/generate` can still
 > do raw continuation with `mode: "continue"`. It employs a bounded inference scheduler to handle concurrent
-> requests, a hybrid SQLite/Vector memory store for durable experiences, token-level inference confidence calibration
-> with generation completeness detection, and an Autonomous Internet Search (Self-RAG) retrieval engine to ground uncertain answers in real-time web facts. It learns from 
+> requests, a hybrid SQLite/Vector memory store with normalized query coverage and vocative filtering for durable experiences, token-level inference confidence calibration
+> with generation completeness detection, and a multi-tier Autonomous Web Metasearch and SSRF-guarded crawler to feed sensory premises directly into native neural reasoning. It learns from 
 > reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
 
 > 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.
@@ -305,6 +305,7 @@ Then ask with `POST /generate`, prompt `"Who created Chit?"`, `temperature` 0.
 | `CHIT_INFERENCE_QUEUE_SIZE` | `32` | Maximum waiting inference requests |
 | `CHIT_INFERENCE_QUEUE_TIMEOUT` | `30` seconds | Queue wait deadline |
 | `CHIT_DATA_DIR` | `data` | Folder `POST /data/split` reads corpus files from |
+| `CHIT_SEARCH_URL` | *(unset)* | Optional external metasearch endpoint (SearXNG/Brave) for Tier 4 web search |
 | `CHIT_KNOWLEDGE_DB` | `data/knowledge.db` | Knowledge database |
 
 Setting a variable: `export NAME=value` (Linux/macOS/Git Bash), `$env:NAME = "value"` (PowerShell),

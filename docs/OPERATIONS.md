@@ -48,8 +48,16 @@ The supported topology is one Uvicorn worker per model process. The inference qu
 | `CHIT_MAX_TRAIN_STEPS` | `100000` | Per-job training step upper bound |
 | `CHIT_MAX_DATASET_MB` | `200` | Generated dataset size limit |
 | `CHIT_DATA_DIR` | `data` | Source directory for data-splitting APIs |
+| `CHIT_SEARCH_URL` | unset | Optional external metasearch endpoint (e.g. SearXNG/Brave format `https://engine/search?q={query}&format=json`) for Tier 4 retrieval |
 
 Training and knowledge routes are disabled when no `CHIT_API_KEY` is set unless the local-development opt-in is explicitly set. Never enable that opt-in on a shared or internet-facing service.
+
+## Autonomous Search & Web Crawler Operations
+
+Chit executes unblocked web searches across DuckDuckGo JSON, Wikipedia REST, and Internet Archive. When deep crawling external pages (`crawl_page`), strict operational limits apply:
+- **SSRF Guard**: Automatically blocks non-HTTP/HTTPS schemes, localhost, loopback (`127.0.0.0/8`), link-local metadata services (`169.254.0.0/16`), and private RFC-1918 subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+- **Resource Constraints**: Capped at 2.5 seconds timeout per external host and reads a maximum of 128 KB to prevent tarpits and large binary downloads.
+- **Custom Search Provider**: If configured, `CHIT_SEARCH_URL` queries an external metasearch aggregator.
 
 ## Memory migration and recovery
 
