@@ -142,32 +142,20 @@ class Bridge:
         max_prompt_tokens = (context - 16) if (context and is_thinking and context > 32) else context
         max_snippet_chars = min(120, max(60, int(context / 3))) if context else 100
 
-        # Fast-Path: Explicit web search request (e.g. user clicked "Search Web" in UI)
+        web_grounded = False
+        sources = []
+        web_search_query = None
+
+        # Explicit web search request (e.g. user toggled "Web" in UI or passed search=True)
         if c.search and c.task != "continue":
             snippets = search_web(c.user_input, max_results=2, max_chars=max_snippet_chars)
             if snippets:
-                grounded_mems = [m.get("content", "") for m in memories] + [f"[Web] {s}" for s in snippets]
-                search_prompt = render_chat_prompt(
-                    c.user_input, grounded_mems, task=c.task, history=c.history,
-                    max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
-                    facts=c.facts, summary=c.summary)
-                text, conf, finish_reason = self._generate_with_details(
-                    search_prompt, n_tokens, 0.0, 1, stop=stop if stop is not None else self.STOP)
-                final_text = text.strip()
-                trimmed_text = final_text.rstrip(" \t")
-                is_incomplete = (finish_reason == "length") and bool(trimmed_text) and not trimmed_text.endswith(self.TERMINAL_PUNCTUATION)
-                metadata = {
-                    "task": c.task,
-                    "memory_ids": [m.get("id") for m in memories],
-                    "confidence": round(conf, 3),
-                    "is_incomplete": is_incomplete,
-                    "is_uncertain": conf < self.UNCERTAINTY_THRESHOLD,
-                    "needs_retrieval": False,
-                    "web_grounded": True,
-                    "web_search_query": c.user_input,
-                    "sources": snippets,
-                }
-                return ChitDecision(final_text, confidence=round(conf, 3), metadata=metadata)
+                memories.extend([{"content": f"[Web] {s}", "id": "web-search"} for s in snippets])
+                web_grounded = True
+                sources = snippets
+                web_search_query = c.user_input
+                t = 0.0
+                effective_top_k = 1
 
         prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
                                     history=c.history, max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
@@ -198,9 +186,11 @@ class Bridge:
                     "is_incomplete": is_incomplete,
                     "is_uncertain": is_uncertain,
                     "needs_retrieval": needs_retrieval,
-                    "web_grounded": False,
-                    "sources": [],
+                    "web_grounded": web_grounded,
+                    "sources": sources,
                 }
+                if web_search_query:
+                    metadata["web_search_query"] = web_search_query
                 if thoughts and hasattr(self.runtime, "tokenizer"):
                     try:
                         metadata["thought_tokens"] = len(self.runtime.tokenizer.encode(thoughts))
@@ -259,7 +249,9 @@ class Bridge:
             "is_incomplete": is_incomplete,
             "is_uncertain": is_uncertain,
             "needs_retrieval": needs_retrieval,
-            "web_grounded": False,
-            "sources": [],
+            "web_grounded": web_grounded,
+            "sources": sources,
         }
+        if web_search_query:
+            metadata["web_search_query"] = web_search_query
         return ChitDecision(final_text, confidence=round(conf, 3), metadata=metadata)

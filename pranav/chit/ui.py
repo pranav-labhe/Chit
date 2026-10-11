@@ -180,11 +180,16 @@ async def index(request: Request):
 @app.get("/_ui/api-guide", response_class=PlainTextResponse)
 async def api_guide():
     """Serve the maintained plain-English API guide inside the console."""
-    repository_root = Path(__file__).resolve().parents[2]
-    guide_path = repository_root / "ChitAPIGuide.md"
-    if not guide_path.is_file():
-        guide_path = repository_root / "docs" / "ChitAPIGuide.md"
-    if not guide_path.is_file():
+    candidates = [
+        Path("ChitAPIGuide.md"),
+        Path("docs/ChitAPIGuide.md"),
+        Path(__file__).resolve().parent.parent.parent / "ChitAPIGuide.md",
+        Path(__file__).resolve().parent.parent.parent / "docs" / "ChitAPIGuide.md",
+    ]
+    guide_path = next((p for p in candidates if p.is_file()), None)
+
+
+    if not guide_path:
         raise HTTPException(status_code=404, detail="The plain-English API guide is not installed.")
     return PlainTextResponse(guide_path.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 

@@ -59,3 +59,21 @@ def test_bridge_reasoning_fallback_without_answer():
     assert len(rt.history) == 2
     assert rt.history[0]["prompt"] == "Input: Casual hello\nReasoning:"
     assert rt.history[1]["prompt"].endswith("User: Casual hello\nChit:")
+
+
+def test_bridge_search_and_thinking_pipeline_unified(monkeypatch):
+    fake_snippets = ["Mars has two moons, Phobos and Deimos."]
+    monkeypatch.setattr("pranav.chit.bridge.search_web", lambda *a, **kw: fake_snippets)
+
+    rt = MockRuntime(["Phobos and Deimos are moons.\nAnswer: 2 moons."])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(user_input="How many moons does Mars have?", search=True, think=True))
+    assert decision.text == "2 moons."
+    assert decision.metadata["thoughts"] == "Phobos and Deimos are moons."
+    assert decision.metadata["thought_tokens"] == len(rt.tokenizer.encode("Phobos and Deimos are moons."))
+    assert decision.metadata["web_grounded"] is True
+    assert decision.metadata["sources"] == fake_snippets
+    assert decision.metadata["web_search_query"] == "How many moons does Mars have?"
+    assert rt.history[0]["prompt"] == "Input: How many moons does Mars have?\nReasoning:"
+

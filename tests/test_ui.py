@@ -237,3 +237,20 @@ def test_proxy_routes_patch_method(monkeypatch):
         "body": json.dumps({"enabled": True}, separators=(",", ":")),
     }
 
+
+def test_api_guide_endpoint_serves_markdown():
+    with TestClient(ui.app) as client:
+        response = client.get("/_ui/api-guide")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.headers["cache-control"] == "no-store"
+    assert "# Chit API Guide" in response.text or "## 6. Every endpoint" in response.text
+
+
+def test_api_guide_endpoint_returns_404_when_no_guide_installed(monkeypatch):
+    monkeypatch.setattr(ui.Path, "is_file", lambda self: False)
+    with TestClient(ui.app) as client:
+        response = client.get("/_ui/api-guide")
+    assert response.status_code == 404
+    assert "not installed" in response.json()["detail"]
+
