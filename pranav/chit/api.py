@@ -252,6 +252,8 @@ class GenerateRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="0 = greedy")
     top_k: int = Field(default=50, ge=1, le=256)
     stop: list[Annotated[str, Field(min_length=1, max_length=50)]] = Field(default_factory=list, max_length=8)
+    search: bool = Field(default=False, description="Enable web retrieval grounding")
+    think: bool = Field(default=False, description="Enable chain-of-thought thinking")
 
 
 class ChatRequest(BaseModel):
@@ -264,6 +266,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$", description=(
         "continue this conversation; omit to start a new one (its id is returned)"))
     think: bool = Field(default=False, description="Enable chain-of-thought intermediate reasoning")
+    search: bool = Field(default=False, description="Explicitly query web search for grounding before answering")
 
 
 class ChatResponse(BaseModel):
@@ -273,6 +276,8 @@ class ChatResponse(BaseModel):
     confidence: float | None = None
     is_incomplete: bool = False
     is_uncertain: bool = False
+    web_grounded: bool = False
+    sources: list[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
 
 
@@ -375,18 +380,30 @@ async def generate(r: GenerateRequest):
     bridge = _state["bridge"]
     try:
         if r.mode == "continue":
+            if r.search:
+                raise HTTPException(status_code=422, detail=["web search is not supported with mode 'continue'"])
+            if r.think:
+                raise HTTPException(status_code=422, detail=["thinking is not supported with mode 'continue'"])
             runtime = _state["runtime"]
             text = await _state["inference"].run(
                 lambda: runtime.generate(r.prompt, r.tokens, r.temperature, r.top_k, stop=r.stop))
+            return {"text": text}
         else:
             decision = await _state["inference"].run(lambda: bridge.process(
-                Context(user_input=r.prompt, task="chat"), r.temperature,
-                max_new_tokens=r.tokens, top_k=r.top_k, stop=r.stop or None))
-            text = decision.text
+                Context(user_input=r.prompt, task="chat", search=r.search, think=r.think), r.temperature,
+                max_new_tokens=r.tokens, top_k=r.top_k, stop=r.stop or None, think=r.think))
+            return {
+                "text": decision.text,
+                "confidence": decision.confidence,
+                "web_grounded": decision.metadata.get("web_grounded", False),
+                "sources": decision.metadata.get("sources", []),
+                "is_uncertain": decision.metadata.get("is_uncertain", False),
+                "is_incomplete": decision.metadata.get("is_incomplete", False),
+                "metadata": decision.metadata,
+            }
     except InferenceOverloaded as exc:
         raise HTTPException(status_code=429, detail={"code": "inference_overloaded", "message": str(exc)},
                             headers={"Retry-After": "1"}) from exc
-    return {"text": text}
 
 
 @app.post("/chat", dependencies=[Depends(require_key)])
@@ -398,6 +415,8 @@ async def chat(r: ChatRequest):
         raise HTTPException(status_code=422, detail=["sessions are not used with task 'continue'"])
     if r.task == "continue" and r.think:
         raise HTTPException(status_code=422, detail=["thinking is not supported with task 'continue'"])
+    if r.task == "continue" and r.search:
+        raise HTTPException(status_code=422, detail=["web search is not supported with task 'continue'"])
     history: list[dict] = []
     session_context = None
     if use_session and r.session_id:
@@ -413,7 +432,8 @@ async def chat(r: ChatRequest):
                     facts=(session_context["facts"] if session_context and session_context["facts_enabled"] else []),
                     summary=(session_context["summary"] if session_context and
                              session_context["summary_enabled"] else ""),
-                    think=r.think),
+                    think=r.think,
+                    search=r.search),
             r.temperature, max_new_tokens=r.tokens, think=r.think))
     except InferenceOverloaded as exc:
         raise HTTPException(status_code=429, detail={"code": "inference_overloaded", "message": str(exc)},
@@ -433,6 +453,8 @@ async def chat(r: ChatRequest):
         "confidence": d.confidence,
         "is_incomplete": d.metadata.get("is_incomplete", False),
         "is_uncertain": d.metadata.get("is_uncertain", False),
+        "web_grounded": d.metadata.get("web_grounded", False),
+        "sources": d.metadata.get("sources", []),
         "metadata": d.metadata,
     }
 

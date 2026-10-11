@@ -693,6 +693,15 @@ function addBubble(role, text, metadata = {}) {
     const b = document.createElement('div');
     b.className = 'bubble ' + role;
     
+    // 0. If web grounded, prepend web search grounding badge
+    if (role === 'chit' && metadata && metadata.web_grounded) {
+        const webGroundedHeader = document.createElement('div');
+        webGroundedHeader.className = 'web-grounded-header';
+        const sourceCount = (metadata.sources && metadata.sources.length) ? ` (${metadata.sources.length} sources)` : '';
+        webGroundedHeader.innerHTML = `🌐 <strong>Grounded via Web Search</strong>${sourceCount}`;
+        b.appendChild(webGroundedHeader);
+    }
+
     // 1. If thoughts exist, prepend collapsible thought container at the top of the bubble
     if (role === 'chit' && metadata && metadata.thoughts) {
         const thoughtDetails = document.createElement('details');
@@ -760,7 +769,12 @@ function addBubble(role, text, metadata = {}) {
             webBtn.innerHTML = '🌐 Search Web';
             webBtn.title = 'Chit is uncertain. Search the internet for live facts.';
             webBtn.onclick = () => {
-                alert('Web Retrieval Tool will be integrated in the upcoming phase.');
+                const messages = document.querySelectorAll('.bubble.user');
+                if (messages.length) {
+                    $('#chatInput').value = messages[messages.length - 1].textContent;
+                    window._nextChatSearch = true;
+                    $('#sendChat').click();
+                }
             };
             actions.appendChild(webBtn);
         }
@@ -797,9 +811,13 @@ $('#sendChat').addEventListener('click', async () => {
     try {
         const tempOverride = window._nextChatTemperature;
         window._nextChatTemperature = undefined;
+        const searchOverride = window._nextChatSearch || false;
+        window._nextChatSearch = undefined;
+        const searchChecked = $('#searchToggle')?.checked || false;
         const think = $('#thinkToggle')?.checked || false;
         const payload = { message, session_id: chatId, think };
         if (typeof tempOverride === 'number') payload.temperature = tempOverride;
+        if (searchOverride || searchChecked) payload.search = true;
 
         const r = await callApi('POST', '/chat', {}, payload);
         
@@ -836,7 +854,7 @@ $('#sendChat').addEventListener('click', async () => {
             breadcrumb.textContent=`Chit used ${recalled.length} saved ${recalled.length===1?'memory':'memories'} to shape this reply.`;
             $('#chatlog').appendChild(breadcrumb);
         }
-        addBubble('chit', r.data.text || '', r.data?.metadata || {});
+        addBubble('chit', r.data.text || '', Object.assign({}, r.data?.metadata || {}, r.data || {}));
         
     } catch (e) {
         addBubble('system', e.message);
@@ -975,7 +993,53 @@ $('#doMemSearch').addEventListener('click', async () => {
 
 $('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendChat').click()}});
 $('#newChat').addEventListener('click',()=>{chatId=null;$('#chatlog').replaceChildren();$('#chatSession').textContent='New conversation'});
-$('#runGenerate').addEventListener('click',async()=>{const status=$('#genStatus');status.textContent='Generating…';status.classList.remove('error');try{const body={prompt:$('#genPrompt').value.trim(),mode:$('#genMode').value,tokens:Number($('#genTokens').value),temperature:Number($('#genTemp').value),top_k:Number($('#genTopK').value),stop:[]};if(!body.prompt)throw new Error('Write a prompt first.');const r=await callApi('POST','/generate',{},body);if(!r.ok)throw new Error(friendlyError(r.data,r.status));$('#genResult').textContent=typeof r.data?.text==='string'?r.data.text:pretty(r.data);recordResponseEvidence({mode:body.mode,prompt:body.prompt,tokens:body.tokens,temperature:body.temperature,topK:body.top_k,response:r.data});status.textContent='Done'}catch(e){status.textContent=e.message;status.classList.add('error')}});
+$('#runGenerate').addEventListener('click',async()=>{
+    const status=$('#genStatus');status.textContent='Generating…';status.classList.remove('error');
+    try{
+        const body={
+            prompt:$('#genPrompt').value.trim(),
+            mode:$('#genMode').value,
+            tokens:Number($('#genTokens').value),
+            temperature:Number($('#genTemp').value),
+            top_k:Number($('#genTopK').value),
+            stop:[],
+            search:$('#genSearch')?.checked || false,
+            think:$('#genThink')?.checked || false,
+        };
+        if(!body.prompt)throw new Error('Write a prompt first.');
+        const r=await callApi('POST','/generate',{},body);
+        if(!r.ok)throw new Error(friendlyError(r.data,r.status));
+        $('#genResult').textContent=typeof r.data?.text==='string'?r.data.text:pretty(r.data);
+        
+        const metaBox=$('#genMeta');
+        if(metaBox){
+            metaBox.replaceChildren();
+            if(r.data?.web_grounded){
+                const pill=document.createElement('div');
+                pill.className='web-grounded-header';
+                const count=r.data.sources?.length?` (${r.data.sources.length} sources)`:'';
+                pill.innerHTML=`🌐 <strong>Grounded via Web Search</strong>${count}`;
+                metaBox.appendChild(pill);
+            }
+            if(typeof r.data?.confidence==='number'){
+                const badge=document.createElement('span');
+                badge.className='conf-badge '+(r.data.is_uncertain?'conf-low':'conf-high');
+                badge.textContent=`${Math.round(r.data.confidence*100)}% conf`;
+                metaBox.appendChild(badge);
+            }
+            if(r.data?.is_uncertain || r.data?.is_incomplete){
+                const notice=document.createElement('div');
+                notice.className='retrieval-notice';
+                const reason=r.data.is_incomplete?'⚡ Generation was truncated mid-sentence.':`⚠️ Low model confidence (${Math.round((r.data.confidence||0)*100)}%).`;
+                notice.innerHTML=`<span>${reason}</span>`;
+                metaBox.appendChild(notice);
+            }
+        }
+
+        recordResponseEvidence({mode:body.mode,prompt:body.prompt,tokens:body.tokens,temperature:body.temperature,topK:body.top_k,response:r.data});
+        status.textContent='Done';
+    }catch(e){status.textContent=e.message;status.classList.add('error')}
+});
 const routeGuides={
 'Server health':['Check whether the server and model are responding.','Nothing to enter.','Read-only. Reports whether a model is loaded and whether a training job is active.'],
 'Service readiness':['Check whether the model, memory, knowledge, and inference services are ready for use.','Nothing to enter.','Read-only. Useful when the server is online but some features may still be starting.'],

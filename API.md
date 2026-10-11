@@ -233,14 +233,18 @@ the model memorized its training text.
 | `temperature` | number | no | 0.7 | 0–2 | Randomness. `0` always picks the most likely byte (same answer each time). Higher is more random. |
 | `top_k` | integer | no | 50 | 1–256 | At each step, choose only among the `top_k` most likely bytes. Has no effect when `temperature` is 0. |
 | `stop` | array of strings | no | none | up to 8 strings | Custom stop strings. In assistant mode, omitted or empty uses chat-turn markers; in continue mode, omitted or empty means no explicit stop. |
+| `search` | boolean | no | `false` | true or false | Enable autonomous web retrieval grounding before generating. Not allowed with `mode: "continue"`. |
+| `think` | boolean | no | `false` | true or false | Enable intermediate chain-of-thought scratchpad reasoning. Not allowed with `mode: "continue"`. |
 
 **Behavior**
 
 - The returned `text` contains **only the generated response**, not your prompt.
 - In the default `assistant` mode, the prompt is formatted as a `User:` request and relevant
   memories are included. Chat-turn markers are used as stops unless custom `stop` strings are given.
+  Assistant mode returns rich metadata including `confidence`, `web_grounded`, `sources`, `is_uncertain`,
+  `is_incomplete`, and `metadata`.
 - In `continue` mode, the supplied prompt is passed directly to the model and the `stop` list is
-  applied as given.
+  applied as given. Returns `{"text": text}`.
 - Markdown written in `prompt` is preserved as request text, including headings, lists, tables,
   quotes, and fenced code. The model context limit still applies. To train from a `.md` corpus file,
   use `/data/split`; source files are read as text, not converted from Markdown into another format.
@@ -255,16 +259,39 @@ curl -X POST $BASE/generate -H "X-API-Key: $KEY" -H "Content-Type: application/j
   -d '{"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}'
 ```
 ```json
-{"text": "Relevant memories can be included in the request context. Saving a memory does not change model weights."}
+{
+  "text": "Relevant memories can be included in the request context. Saving a memory does not change model weights.",
+  "confidence": 0.912,
+  "web_grounded": false,
+  "sources": [],
+  "is_uncertain": false,
+  "is_incomplete": false,
+  "metadata": {
+    "task": "chat",
+    "memory_ids": [],
+    "confidence": 0.912,
+    "is_incomplete": false,
+    "is_uncertain": false,
+    "needs_retrieval": false
+  }
+}
 ```
 
-**Response fields**
+**Response fields (assistant mode)**
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `text` | string | The generated response (your prompt is not repeated). |
+| `confidence` | number or null | Sequence-level confidence score in $[0.0, 1.0]$. |
+| `web_grounded` | boolean | True if response was grounded with live web search snippets. |
+| `sources` | array of strings | Snippets from the web used to ground the answer. |
+| `is_uncertain` | boolean | True if model confidence is below 0.40. |
+| `is_incomplete` | boolean | True if generation hit the token limit mid-sentence. |
+| `metadata` | object | Generation metadata including task, memory_ids, finish_reason, and retrieval status. |
 
-**Errors.** `401` missing or wrong key. `422` a field is out of range, for example an empty `prompt` or `tokens` over 500.
+*(In `continue` mode, the response is `{"text": text}`.)*
+
+**Errors.** `401` missing or wrong key. `422` a field is out of range, for example an empty `prompt` or `tokens` over 500, or `search`/`think` combined with `mode: "continue"`.
 `503` no model is loaded.
 
 ### POST /chat
@@ -281,13 +308,15 @@ and recent session messages, then stores the exchange. **Access:** key.
 | `temperature` | number or null | no | `null` | 0–2 | Randomness. `null` uses the server default, 0.7. |
 | `tokens` | integer or null | no | `null` | 1–500 | Maximum new model tokens; for the byte tokenizer, each token is one UTF-8 byte. |
 | `session_id` | string or null | no | `null` | 32 lowercase hex characters | Continue this conversation. Omit it to start a new one; the new id is returned. Not allowed with `task: "continue"`. |
+| `think` | boolean | no | `false` | true or false | Enable chain-of-thought intermediate reasoning before answering. Not allowed with `task: "continue"`. |
+| `search` | boolean | no | `false` | true or false | Explicitly query autonomous web search for real-time grounding before answering. Not allowed with `task: "continue"`. |
 
 **Behavior.** With `task: "chat"` the prompt is built as:
 
 ```
 Task: chat
 Known memory:
-- <up to 5 memories found by searching your message>
+- <up to 5 memories found by searching your message or retrieved from web>
 <last 8 messages of the session, as "User: ..." and "Chit: ...">
 User: <message>
 Chit:
@@ -298,6 +327,8 @@ The prompt is shortened to fit the model's `block_size`: the oldest messages go 
 lowest-ranked memories, then the end of an overlong new request is truncated; session messages are
 still stored in full. The reply stops at a chat-turn marker or the configured token limit (256 bytes
 by default). The message and reply are saved to the session in full.
+
+**Autonomous Self-RAG & Web Grounding.** When asked about unknown entities or facts where Chit's confidence is low (`is_uncertain: true`, $C < 0.40$) and local memory has no match, Chit autonomously triggers a lightweight web retrieval search, injects top-budgeted snippets under `Known memory: - [Web] ...`, and regenerates a grounded answer. Alternatively, setting `"search": true` in the request forces web search grounding immediately.
 
 **Which endpoint to use.** Use `/chat` for a conversation that should use session history and recalled
 memory. Use `/generate` for a single request or raw continuation. The model still needs suitable
@@ -316,13 +347,17 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
   "confidence": 0.892,
   "is_incomplete": false,
   "is_uncertain": false,
+  "web_grounded": false,
+  "sources": [],
   "metadata": {
     "task": "chat",
     "memory_ids": [],
     "confidence": 0.892,
     "is_incomplete": false,
     "is_uncertain": false,
-    "needs_retrieval": false
+    "needs_retrieval": false,
+    "web_grounded": false,
+    "sources": []
   }
 }
 ```
@@ -344,6 +379,8 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
   "confidence": 0.745,
   "is_incomplete": false,
   "is_uncertain": false,
+  "web_grounded": false,
+  "sources": [],
   "metadata": {
     "task": "continue",
     "memory_ids": [],
@@ -364,12 +401,16 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
 | `confidence` | number or null | Sequence-level confidence score in $[0.0, 1.0]$ based on geometric mean token probability. |
 | `is_incomplete` | boolean | True if generation hit max token length without terminal punctuation. |
 | `is_uncertain` | boolean | True if confidence is below the uncertainty threshold (0.40). |
+| `web_grounded` | boolean | True if the response was grounded using internet web search. |
+| `sources` | array of strings | Snippets from the web used to ground the answer. |
 | `metadata.task` | string | The task that was used. |
 | `metadata.memory_ids` | array of strings | Ids of the memories that were put into the prompt. |
 | `metadata.confidence` | number | Rounded confidence score. |
 | `metadata.is_incomplete` | boolean | Incompleteness status. |
 | `metadata.is_uncertain` | boolean | Uncertainty status. |
 | `metadata.needs_retrieval` | boolean | True when retrieval is recommended due to uncertainty or information void. |
+| `metadata.web_grounded` | boolean | True if web search was executed and injected into memory. |
+| `metadata.sources` | array of strings | Web snippet sources used for grounding. |
 
 **Errors.** `404` `session not found` (unknown or deleted `session_id`). `422` `session_id` is not 32 hex characters, or it was
 combined with `task: "continue"`. `503` no model is loaded.

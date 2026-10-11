@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.3
+
+### Added
+- **Generate API Web Search & Thinking Support**: Added `search: bool = False` and `think: bool = False` to `GenerateRequest` (`POST /generate`), forwarding them to `Bridge.process()`. In assistant mode, returns rich metadata (`confidence`, `web_grounded`, `sources`, `is_uncertain`, `is_incomplete`, `metadata`). In `mode: continue`, enforces validation rejecting `search` and `think` with HTTP 422.
+- **Chat Upfront Web Search Toggle**: Added interactive `🌐 Web` toggle switch (`#searchToggle`) in `index.html` chat actions alongside `#thinkToggle`, allowing users to force live web search grounding before sending messages.
+- **Generate Screen Web Search & Evidentiary Metadata**: Added `#genSearch` and `#genThink` options in Generate screen, along with the evidentiary container `#genMeta` displaying search grounding pills, confidence badges (`conf-high` / `conf-low`), and uncertainty warning notices.
+- **Generate API Test Suite**: Expanded `tests/test_generate_api.py` with tests verifying `search` and `think` in assistant mode, rich schema fields, and 422 rejection in continue mode.
+
+## 0.3.2
+
+### Added
+- **Autonomous Internet Search (Self-RAG)**: Implemented an autonomous retrieval loop in `Bridge.process()`. When Chit encounters unknown entities or facts where generation confidence is low ($C < 0.40$) and local memory has no match, it autonomously queries the web, injects top-budgeted snippets into `Known memory: - [Web] ...`, and regenerates a grounded answer with deterministic greedy decoding ($T=0.0$).
+- **Zero-Dependency Web Retrieval Engine**: Created `pranav/chit/search.py` implementing `search_web()` using Python standard library `urllib.request`. Uses a dual strategy: DuckDuckGo Instant Answer JSON API with graceful fallback to DuckDuckGo HTML snippet parsing, strictly protected with timeouts and fail-safe exception handling.
+- **Dynamic Context Budgeting**: Implemented `budget_snippet()` with clean whitespace and word-boundary slicing, budgeting web snippets to fit within tight context limits (`min(120, max(60, int(block_size / 3)))`) without truncation artifacts.
+- **Direct Search API & Schema Exposure**: Added `search: bool = False` to `ChatRequest` and exposed `web_grounded: bool` and `sources: list[str]` in `ChatResponse` (`POST /chat`), enabling clients to force search grounding on demand.
+- **Interactive Web UI Grounding & Search Trigger**: Wired the `🌐 Search Web` action button in `app.js` to trigger grounded search on demand, and rendered a dedicated `web-grounded-header` pill (`🌐 Grounded via Web Search`) on assistant bubbles when search was used.
+- **Retrieval Test Suite**: Created `tests/test_retrieval.py` with 11 comprehensive tests covering instant JSON answers, HTML fallback parsing, network failure resilience, snippet budgeting, Bridge Self-RAG loops, high-confidence bypasses, and API schema validation.
+
 ## 0.3.1
 
 ### Added

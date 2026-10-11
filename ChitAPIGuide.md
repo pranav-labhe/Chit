@@ -361,6 +361,8 @@ review held-out replies before promoting the checkpoint.
 | `temperature` | No | 0.7 | 0 to 2 | How adventurous Chit is. **0** = always the safest choice, so you get the same answer every time. Higher = more random and more mistakes. |
 | `top_k` | No | 50 | 1 to 256 | Chit picks each letter from its top few guesses. This sets how many. It does nothing when `temperature` is 0. |
 | `stop` | No | assistant turn markers | up to 8 pieces of text | Optional custom stop text. `mode: "continue"` applies only the stop strings you provide. |
+| `search` | No | `false` | `true` or `false` | Enable web retrieval grounding before answering. Not allowed with `mode: "continue"`. |
+| `think` | No | `false` | `true` or `false` | Enable intermediate chain-of-thought scratchpad reasoning. Not allowed with `mode: "continue"`. |
 
 **Best settings for steady answers:** `"temperature": 0`. Assistant mode uses chat-turn stop markers by default.
 
@@ -369,14 +371,37 @@ review held-out replies before promoting the checkpoint.
 {"prompt": "Explain how memory helps Chit.", "tokens": 100, "temperature": 0}
 ```
 
-**What you get back**
+**What you get back (assistant mode)**
 ```json
-{"text": "Relevant memories can be included in the request context. Saving a memory does not change model weights."}
+{
+  "text": "Relevant memories can be included in the request context. Saving a memory does not change model weights.",
+  "confidence": 0.912,
+  "web_grounded": false,
+  "sources": [],
+  "is_uncertain": false,
+  "is_incomplete": false,
+  "metadata": {
+    "task": "chat",
+    "memory_ids": [],
+    "confidence": 0.912,
+    "is_uncertain": false,
+    "is_incomplete": false,
+    "needs_retrieval": false
+  }
+}
 ```
 
 | Field | What it means |
 | --- | --- |
 | `text` | The generated response only. **Your prompt is not repeated.** |
+| `confidence` | Sequence-level confidence score in $[0.0, 1.0]$ based on geometric mean token probability. |
+| `web_grounded` | `true` if live web search snippets were retrieved and used to ground the answer. |
+| `sources` | Snippets from web search used to ground the answer (empty list if none). |
+| `is_uncertain` | `true` if model confidence is low ($< 0.40$), indicating an unfamiliar topic. |
+| `is_incomplete` | `true` if generation reached the token limit mid-sentence without terminal punctuation. |
+| `metadata` | Detailed decision metadata (task, finish reason, memory IDs, etc.). |
+
+*(Note: In `mode: "continue"`, `/generate` returns a simple `{"text": "..."}` object preserving exact raw continuation format).*
 
 **Common problems**
 
@@ -405,12 +430,14 @@ conversation history, then **saves** the exchange in a conversation (a "session"
 | `temperature` | No | server's own (0.7) | 0 to 2 | Same as in `/generate`. Use 0 for steady answers. |
 | `tokens` | No | server's default (256) | 1 to 500 | Maximum new bytes to generate. |
 | `session_id` | No | none | the 32-character ID of a conversation | To continue an old conversation, send its ID. **Leave it out to start a new one**: the server makes one and returns its ID. Not allowed with `task: "continue"`. |
+| `think` | No | `false` | `true` or `false` | Enable intermediate chain-of-thought scratchpad reasoning. |
+| `search` | No | `false` | `true` or `false` | Force live web search grounding before answering. Not allowed with `task: "continue"`. |
 
 **How the chat message is built.** In `chat` mode the model is shown this, filled in:
 ```
 Task: chat
 Known memory:
-- (up to 5 notes from Memory that match your message)
+- (up to 5 notes from Memory or web search snippets that match your message)
 (the last 8 messages of this conversation)
 User: (your message)
 Chit:
@@ -419,6 +446,8 @@ Then Chit writes what comes after `Chit:`. If the whole thing is too long for th
 messages are dropped first, then the least matching notes. If the current request still does not fit, its end is
 truncated for generation. Every message is saved in full. Markdown structure is preserved unless it falls beyond
 the context limit.
+
+**Autonomous Web Search (Self-RAG).** If Chit is asked about an unknown topic where internal confidence is low ($C < 0.40$) and no local memory matches, Chit will autonomously search the web via DuckDuckGo, pick the top factual snippets, and regenerate a grounded answer. You can also explicitly trigger this by passing `"search": true`.
 
 **Important.** The model works best when training examples use this same request style (`Task:`, `User:`, and
 `Chit:` lines). `task: "continue"` remains available for raw text continuation and does not create a session.
@@ -435,13 +464,17 @@ Response:
   "confidence": 0.892,
   "is_incomplete": false,
   "is_uncertain": false,
+  "web_grounded": false,
+  "sources": [],
   "metadata": {
     "task": "chat",
     "memory_ids": [],
     "confidence": 0.892,
     "is_incomplete": false,
     "is_uncertain": false,
-    "needs_retrieval": false
+    "needs_retrieval": false,
+    "web_grounded": false,
+    "sources": []
   }
 }
 ```
@@ -462,6 +495,8 @@ Response:
   "confidence": 0.745,
   "is_incomplete": false,
   "is_uncertain": false,
+  "web_grounded": false,
+  "sources": [],
   "metadata": {
     "task": "continue",
     "memory_ids": [],
@@ -482,12 +517,16 @@ Response:
 | `confidence` | Mathematical confidence score from 0.0 (pure guess) to 1.0 (certain), calculated from token probabilities. |
 | `is_incomplete` | `true` if generation hit the token ceiling mid-sentence without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`). |
 | `is_uncertain` | `true` if confidence is below 0.40, showing Chit is uncertain on this topic. |
+| `web_grounded` | `true` if the answer was grounded using web search. |
+| `sources` | The web search snippets used to ground the answer. |
 | `metadata.task` | The task that was used. |
 | `metadata.memory_ids` | The IDs of memory notes that were shown to the model for this reply. Empty means none matched. |
 | `metadata.confidence` | The rounded sequence confidence score. |
 | `metadata.is_incomplete` | Whether generation stopped abruptly mid-sentence. |
 | `metadata.is_uncertain` | Whether model confidence is low. |
 | `metadata.needs_retrieval` | `true` when confidence is low or information void is detected, triggering web retrieval. |
+| `metadata.web_grounded` | Whether web search was triggered and used. |
+| `metadata.sources` | The web snippets injected into the prompt. |
 
 **Common problems**
 

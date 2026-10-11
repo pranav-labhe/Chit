@@ -7,8 +7,8 @@ problem solving, storing experience, teaching knowledge, and training.
 > **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
 > `/generate` and `/chat` format messages for a context-aware Chit response, while `/generate` can still
 > do raw continuation with `mode: "continue"`. It employs a bounded inference scheduler to handle concurrent
-> requests, a hybrid SQLite/Vector memory store for durable experiences, and token-level inference confidence calibration
-> with generation completeness detection to signal uncertainty and trigger retrieval. It learns from 
+> requests, a hybrid SQLite/Vector memory store for durable experiences, token-level inference confidence calibration
+> with generation completeness detection, and an Autonomous Internet Search (Self-RAG) retrieval engine to ground uncertain answers in real-time web facts. It learns from 
 > reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
 
 > 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.
@@ -74,7 +74,8 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 
 | I want to… | Use | Notes |
 | --- | --- | --- |
-| Ask Chit to understand, answer, or help solve something | `POST /generate` or `POST /chat` | Both format requests for Chit's response; `/chat` adds session history and memory. |
+| Ask Chit to understand, answer, or help solve something | `POST /generate` or `POST /chat` | Both format requests for Chit's response; `/chat` adds session history, memory, chain-of-thought, and autonomous web retrieval. |
+| Ground answers in live internet facts | `POST /chat` with `search: true` | Autonomously triggers Self-RAG or forces live DuckDuckGo web snippet retrieval. |
 | Continue text literally | `POST /generate` with `mode: "continue"` | Sends the prompt directly to the model without the assistant wrapper. |
 | Give Chit a fact **right now**, without retraining | `POST /memory` | Stored outside the model; recalled by assistant-mode `/generate` and `/chat`. Never changes the weights. |
 | Teach Chit new material and train on it | `POST /knowledge`, then `POST /knowledge/train` | Knowledge is queued, then baked into the weights when you train. |

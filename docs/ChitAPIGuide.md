@@ -65,11 +65,45 @@ Chit evaluates token-level softmax probabilities during generation to calibrate 
 - **`confidence`**: Geometric mean of chosen token probabilities in $[0.0, 1.0]$.
 - **`is_incomplete`**: Set to `true` if generation reached the token limit mid-sentence without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`).
 - **`is_uncertain`**: Set to `true` if confidence drops below 0.40, indicating model uncertainty on unseen or out-of-distribution topics.
-- **`needs_retrieval`**: Triggers when uncertainty is high or information is missing, activating upcoming Web Search integration.
+- **`needs_retrieval`**: Triggers when uncertainty is high or local memory has no match, autonomously initiating web search.
 
-**When to use Thinking:**
-- **Use `think: true`**: For multi-step math, word puzzles, logical deductions, or strict rule following where immediate token generation could lead to premature reasoning mistakes. Ensure a token budget (`tokens >= 120`) is provided so thoughts do not exhaust generation tokens before the answer.
-- **Use standard chat (`think: false`)**: For greeting, factual retrieval, conversation continuity, or general dialogue where fast, direct generation is optimal.
+### Autonomous Internet Search (Self-RAG)
+Chit features a built-in, zero-dependency autonomous web retrieval engine:
+- **Autonomous Two-Pass Self-RAG**: When asked about unknown entities or facts, Chit generates an initial response. If confidence is low ($C < 0.40$) and local memory has no answer (`needs_retrieval = true`), Chit automatically queries DuckDuckGo in the background, extracts and budgets the top factual snippets, injects them into `Known memory: - [Web] ...`, and regenerates a grounded answer.
+- **Explicit Web Search (`search: true`)**: You can also force real-time web retrieval on any chat turn by passing `"search": true` in the request body (or clicking "🌐 Search Web" in the UI).
+- **Web Grounding Metadata**: When an answer is grounded via search, the response includes `"web_grounded": true` and `"sources": ["..."]` containing the retrieved web snippets.
+
+**When to use Thinking & Search:**
+- **Use `think: true`**: For multi-step math, word puzzles, logical deductions, or strict rule following where immediate token generation could lead to premature reasoning mistakes.
+- **Use `search: true`**: When asking about real-time events, live facts, or specific topics outside the model's training data.
+- **Use standard chat**: For everyday conversation, greetings, and general queries. Chit will still autonomously search the web if it detects it doesn't know the answer!
+
+---
+
+## ⚡ Direct Generation (`/generate`)
+
+The `POST /generate` endpoint supports both single-shot assistant answers and raw text continuation.
+
+### Assistant Mode (`mode: "assistant"`, default)
+Assistant mode formats the request as an assistant turn (`User: ... \n Chit:`), recalls relevant long-term memories, and returns rich inference metadata.
+- **Web Search & Thinking**: Just like `/chat`, `/generate` supports `"search": true` for live web retrieval grounding and `"think": true` for chain-of-thought deduction.
+- **Rich Response Payload**:
+  ```json
+  {
+    "text": "Relevant memories can be included in the request context.",
+    "confidence": 0.912,
+    "web_grounded": false,
+    "sources": [],
+    "is_uncertain": false,
+    "is_incomplete": false,
+    "metadata": { "task": "chat", ... }
+  }
+  ```
+
+### Raw Continuation Mode (`mode: "continue"`)
+In `continue` mode, the prompt is sent directly to the model as an unformatted prefix.
+- Returns the standard raw schema: `{"text": "..."}`.
+- Setting `"search": true` or `"think": true` in `continue` mode is disallowed and rejected with HTTP `422 Unprocessable Entity`.
 
 ---
 

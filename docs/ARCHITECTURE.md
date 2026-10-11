@@ -106,17 +106,11 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | Module | Role | Key Components | Logic Flow |
 | :--- | :--- | :--- | :--- |
 | **`api.py`** | **Gateway** | FastAPI Routes | Handles HTTP requests $\rightarrow$ Auth $\rightarrow$ Bridge/Store $\rightarrow$ JSON Response (`ChatResponse`). |
-| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to `Runtime`. Calibrates confidence, incompleteness, and uncertainty signals ($C, \tau=0.40$). |
+| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to `Runtime`. Manages two-pass Self-RAG loops, confidence calibration, and context assembly. |
+| **`search.py`** | **Web Retrieval** | `search_web`, `budget_snippet` | Zero-dependency DuckDuckGo API (JSON + HTML fallback) with word-boundary context budgeting. |
 | **`inference.py`** | **Scheduler** | `InferenceManager` | Bounds FIFO admission and serializes model execution on the device worker. |
 | **`runtime.py`** | **Execution** | `ChitRuntime` | The interface for `generate` and `recall`. Bridges the Gap between Model and Memory. |
 | **`model.py`** | **Brain** | `ChitModel` | Transformer-based architecture. Handles tensor math, token log-probabilities, and finish reasons. |
-
-### 🎯 Inference Confidence & Completeness Calibration
-- **Token-Level Logit Tracking**: `ChitModel.generate()` calculates sequence confidence from token log-softmax probabilities under the raw predictive distribution ($T=1.0$):
-  $$C = \exp\left( \frac{1}{N} \sum_{t=1}^{N} \log P(x_t \mid x_{<t}) \right) \in [0.0, 1.0]$$
-- **Generation Completeness**: `Bridge.process()` detects truncation (`is_incomplete = True`) when generation terminates on length (`finish_reason == "length"`) without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`).
-- **Uncertainty Calibration**: Outputs with $C < 0.40$ are flagged as uncertain (`is_uncertain = True`).
-- **Web Retrieval Trigger**: Flags `needs_retrieval = True` on uncertainty or low chat confidence ($< 0.35$), providing the autonomous trigger for upcoming web retrieval integration.
 | **`memory.py`** | **Experience** | `SQLiteMemoryStore` | SQLite source of truth, FTS5 keyword retrieval and optional FAISS HNSW hybrid search. |
 | **`sessions.py`** | **Context** | `SessionStore` | SQLite transcript, fact and summary coverage/status; transactional retention. |
 | **`knowledge.py`** | **Learning** | `KnowledgeStore` | SQLite-based queue for training data. Manages the "teach" $\rightarrow$ "train" pipeline. |
@@ -124,6 +118,24 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | **`data.py`** | **Fuel** | `TextDataset` | Handles byte or BPE tokenization and configurable training windows. |
 | **`tokenizer.py`** | **Translator** | `ByteTokenizer`, `BpeTokenizer` | Converts text to byte IDs or versioned BPE IDs and back. |
 | **`ui.py`** | **Interface** | Admin Console | A single-page proxy UI to interact with the API without exposing keys. |
+
+### 🎯 Inference Confidence & Completeness Calibration
+- **Token-Level Logit Tracking**: `ChitModel.generate()` calculates sequence confidence from token log-softmax probabilities under the raw predictive distribution ($T=1.0$):
+  $$C = \exp\left( \frac{1}{N} \sum_{t=1}^{N} \log P(x_t \mid x_{<t}) \right) \in [0.0, 1.0]$$
+- **Generation Completeness**: `Bridge.process()` detects truncation (`is_incomplete = True`) when generation terminates on length (`finish_reason == "length"`) without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`).
+- **Uncertainty Calibration**: Outputs with $C < 0.40$ are flagged as uncertain (`is_uncertain = True`).
+- **Web Retrieval Trigger**: Flags `needs_retrieval = True` on uncertainty or low chat confidence ($< 0.35$), providing the autonomous trigger for Self-RAG web search.
+
+### 🌐 Autonomous Internet Search (Self-RAG)
+- **Zero-Dependency Web Retrieval**: `search.py` provides `search_web(query)` using Python's standard `urllib.request`. Dual strategy accesses DuckDuckGo Instant Answer JSON API with fallback to DuckDuckGo HTML snippet extraction, enforcing strict 3.5s timeouts and fail-safe exception handling.
+- **Dynamic Context Budgeting**: `budget_snippet()` enforces word-boundary truncation to fit snippets within small transformer context budgets (`min(120, max(60, int(block_size / 3)))`), cleanly terminating with punctuation.
+- **Two-Pass Autonomous Self-RAG Loop**: In `Bridge.process()`:
+  1. Pass 1 generates an initial hypothesis response.
+  2. If $C < 0.40$ and no local memory is present, Chit detects an information void (`needs_retrieval = True`).
+  3. Chit queries DuckDuckGo for top-2 budgeted snippets.
+  4. Injects snippets under `Known memory:\n- [Web] {snippet}`.
+  5. Pass 2 regenerates with deterministic greedy decoding ($T=0.0$), marking `web_grounded = True` and recording source snippets.
+- **Direct Search Mode**: Passing `search: true` in `Context` / `ChatRequest` (or clicking `🌐 Search Web` in UI) bypasses Pass 1 and searches immediately.
 
 ### Browser Console (`ui.py`, `ui/templates/index.html`, `ui/static/`)
 The browser console is a small backend-for-frontend (BFF) that sits in front of the Chit API. It runs on the UI port (8001 by default), while the API normally runs on 8000. `CHIT_UI_API_URL` can point the console at another API address. The UI can also be mounted into a host application; `CHIT_UI_BASE_PATH` supports a reverse-proxy or mounted URL prefix. Template and asset paths are resolved relative to the UI package, so serving the console does not depend on the process working directory.

@@ -58,6 +58,11 @@
                                 <span class="think-slider"></span>
                                 <span class="think-label">💭 Think</span>
                             </label>
+                            <label class="think-toggle search-toggle" title="Search the web for live facts before answering">
+                                <input type="checkbox" id="searchToggle">
+                                <span class="think-slider search-slider"></span>
+                                <span class="think-label search-label">🌐 Web</span>
+                            </label>
                             <button class="secondary" id="newChat">New conversation</button>
                             <span class="status" id="chatSession"></span>
                         </div>
@@ -103,12 +108,19 @@
                                 <label for="genTopK">Response variety</label>
                                 <input type="range" id="genTopK" min="1" max="256" value="50">
                             </div></div>
+                            <label class="check-row" style="margin-top: 8px;">
+                                <input type="checkbox" id="genSearch"> 🌐 Search web for live facts (Self-RAG)
+                            </label>
+                            <label class="check-row" style="margin-top: 4px;">
+                                <input type="checkbox" id="genThink"> 💭 Enable Chain-of-Thought thinking
+                            </label>
                         </details>
                         <div class="actions">
                             <button class="primary" id="runGenerate">Generate</button>
                             <span class="status" id="genStatus"></span>
                         </div>
                         <h3>Response</h3>
+                        <div id="genMeta" class="gen-meta" style="margin-bottom: 8px;"></div>
                         <pre class="result" id="genResult">Your response will appear here.</pre>
                     </div>
                 </section>

@@ -740,6 +740,19 @@ button:disabled { cursor: wait; opacity: .65; }
     color: var(--accent);
 }
 
+.search-toggle input:checked + .search-slider {
+    background: #3b82f6;
+}
+
+.search-toggle input:checked + .search-slider::after {
+    transform: translateX(12px);
+    background: #0d1726;
+}
+
+.search-toggle input:checked ~ .search-label {
+    color: #60a5fa;
+}
+
 .thought-container {
     background: #151d2a;
     border: 1px solid #28374d;
@@ -822,4 +835,34 @@ button:disabled { cursor: wait; opacity: .65; }
     border-color: #7aa2f7;
     color: #ffffff;
 }
+
+/* Grounded via Web Search Header */
+.web-grounded-header {
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    background: #142234;
+    border: 1px solid #23456b;
+    border-radius: 5px;
+    color: #7aa2f7;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+/* Generate Evidentiary Metadata */
+.gen-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.gen-meta:empty {
+    display: none;
+}
+
+
 

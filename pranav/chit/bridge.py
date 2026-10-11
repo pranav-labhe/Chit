@@ -1,9 +1,63 @@
 """Boundary between Atmini and Chit: context in, decision out."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .formats import render_chat_prompt
+from .search import search_web
+
+
+def _is_casual_or_conversational(text: str, facts: list[dict] | None = None) -> bool:
+    """Latency protection: identify greetings, conversational turns, identity, or math."""
+    clean = text.strip().lower()
+    if not clean or len(clean) < 2:
+        return True
+
+    # 1. Math / arithmetic deductions
+    if re.search(r'^\s*(what\s+is\s+)?\d+\s*[\+\-\*\/\^\%]\s*\d+', clean):
+        return True
+    if re.search(r'\b(calculate|compute|solve)\b\s+\d+', clean):
+        return True
+
+    # 2. Greetings, pleasantries, and short conversational replies
+    greetings = {
+        "hi", "hello", "hey", "howdy", "greetings", "yo", "sup",
+        "how are you", "how are you doing", "how do you do", "how is it going", "how's it going",
+        "what's up", "whats up",
+        "good morning", "good afternoon", "good evening", "good night",
+        "thank you", "thanks", "thanks a lot", "thank you very much",
+        "bye", "goodbye", "see you", "see ya", "cya",
+        "ok", "okay", "sure", "cool", "great", "nice", "awesome",
+        "yes", "no", "yep", "nope",
+    }
+    stripped_punct = re.sub(r'[\.\!\?\,\'\"]+', '', clean).strip()
+    if stripped_punct in greetings:
+        return True
+
+    # 3. Personal statements / introducing facts
+    personal_statements = (
+        "my name is", "i am ", "i'm ", "call me ", "i live in", "i work at",
+        "my favorite", "my preferred", "i like ", "i love "
+    )
+    if any(clean.startswith(prefix) for prefix in personal_statements):
+        return True
+
+    # 4. Identity & session-specific questions
+    identity_queries = {
+        "who am i", "what is my name", "what's my name", "whats my name",
+        "where do i live", "tell me about myself", "do you know me",
+        "who are you", "what is your name", "what's your name", "whats your name",
+        "what do you do", "what are you",
+    }
+    if stripped_punct in identity_queries:
+        return True
+
+    # If user has active facts in session and asks about themselves:
+    if facts and any(w in clean.split() for w in ("i", "me", "my", "myself")):
+        return True
+
+    return False
 
 
 @dataclass
@@ -16,6 +70,7 @@ class Context:
     facts: list[dict] = field(default_factory=list)  # explicit user statements; latest correction active
     summary: str = ""  # derived context, never a replacement for the retained transcript
     think: bool = False
+    search: bool = False
 
 
 @dataclass
@@ -85,6 +140,35 @@ class Bridge:
             effective_top_k = 1
         context = (getattr(self.runtime, "model_config", None) or {}).get("block_size")
         max_prompt_tokens = (context - 16) if (context and is_thinking and context > 32) else context
+        max_snippet_chars = min(120, max(60, int(context / 3))) if context else 100
+
+        # Fast-Path: Explicit web search request (e.g. user clicked "Search Web" in UI)
+        if c.search and c.task != "continue":
+            snippets = search_web(c.user_input, max_results=2, max_chars=max_snippet_chars)
+            if snippets:
+                grounded_mems = [m.get("content", "") for m in memories] + [f"[Web] {s}" for s in snippets]
+                search_prompt = render_chat_prompt(
+                    c.user_input, grounded_mems, task=c.task, history=c.history,
+                    max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
+                    facts=c.facts, summary=c.summary)
+                text, conf, finish_reason = self._generate_with_details(
+                    search_prompt, n_tokens, 0.0, 1, stop=stop if stop is not None else self.STOP)
+                final_text = text.strip()
+                trimmed_text = final_text.rstrip(" \t")
+                is_incomplete = (finish_reason == "length") and bool(trimmed_text) and not trimmed_text.endswith(self.TERMINAL_PUNCTUATION)
+                metadata = {
+                    "task": c.task,
+                    "memory_ids": [m.get("id") for m in memories],
+                    "confidence": round(conf, 3),
+                    "is_incomplete": is_incomplete,
+                    "is_uncertain": conf < self.UNCERTAINTY_THRESHOLD,
+                    "needs_retrieval": False,
+                    "web_grounded": True,
+                    "web_search_query": c.user_input,
+                    "sources": snippets,
+                }
+                return ChitDecision(final_text, confidence=round(conf, 3), metadata=metadata)
+
         prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
                                     history=c.history, max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
                                     facts=c.facts, summary=c.summary)
@@ -114,6 +198,8 @@ class Bridge:
                     "is_incomplete": is_incomplete,
                     "is_uncertain": is_uncertain,
                     "needs_retrieval": needs_retrieval,
+                    "web_grounded": False,
+                    "sources": [],
                 }
                 if thoughts and hasattr(self.runtime, "tokenizer"):
                     try:
@@ -133,6 +219,39 @@ class Bridge:
         is_incomplete = (finish_reason == "length") and bool(trimmed_text) and not trimmed_text.endswith(self.TERMINAL_PUNCTUATION)
         is_uncertain = conf < self.UNCERTAINTY_THRESHOLD
         needs_retrieval = is_uncertain or (c.task == "chat" and conf < 0.35)
+
+        # Autonomous Two-Pass Self-RAG:
+        # If Pass 1 is uncertain and local memories/facts are empty, trigger web search and regenerate grounded reply
+        # Latency protection: casual turns, greetings, self-introductions, and math deductions are skipped
+        if (needs_retrieval and not memories and not c.facts and c.task == "chat"
+                and not is_thinking and not _is_casual_or_conversational(c.user_input, c.facts)):
+            snippets = search_web(c.user_input, max_results=2, max_chars=max_snippet_chars)
+            if snippets:
+                grounded_mems = [f"[Web] {s}" for s in snippets]
+                grounded_prompt = render_chat_prompt(
+                    c.user_input, grounded_mems, task=c.task, history=c.history,
+                    max_tokens=max_prompt_tokens, tokenizer=self.runtime.tokenizer,
+                    facts=c.facts, summary=c.summary)
+                g_text, g_conf, g_finish = self._generate_with_details(
+                    grounded_prompt, n_tokens, 0.0, 1, stop=stop if stop is not None else self.STOP)
+                g_final = g_text.strip()
+                g_trimmed = g_final.rstrip(" \t")
+                g_incomplete = (g_finish == "length") and bool(g_trimmed) and not g_trimmed.endswith(self.TERMINAL_PUNCTUATION)
+                g_is_uncertain = g_conf < self.UNCERTAINTY_THRESHOLD
+                g_needs_retrieval = g_is_uncertain or (c.task == "chat" and g_conf < 0.35)
+                g_metadata = {
+                    "task": c.task,
+                    "memory_ids": [],
+                    "confidence": round(g_conf, 3),
+                    "is_incomplete": g_incomplete,
+                    "is_uncertain": g_is_uncertain,
+                    "needs_retrieval": g_needs_retrieval,
+                    "web_grounded": True,
+                    "web_search_query": c.user_input,
+                    "sources": snippets,
+                }
+                return ChitDecision(g_final, confidence=round(g_conf, 3), metadata=g_metadata)
+
         metadata = {
             "task": c.task,
             "memory_ids": [m.get("id") for m in memories],
@@ -140,5 +259,7 @@ class Bridge:
             "is_incomplete": is_incomplete,
             "is_uncertain": is_uncertain,
             "needs_retrieval": needs_retrieval,
+            "web_grounded": False,
+            "sources": [],
         }
         return ChitDecision(final_text, confidence=round(conf, 3), metadata=metadata)

@@ -24,7 +24,8 @@ def test_generate_defaults_to_assistant_request_and_uses_memory(client):
     }, headers=H)
 
     assert response.status_code == 200
-    assert response.json() == {"text": "reply"}
+    assert response.json()["text"] == "reply"
+    assert set(response.json()) == {"text", "confidence", "web_grounded", "sources", "is_uncertain", "is_incomplete", "metadata"}
     (prompt, tokens, temperature, top_k), kwargs = calls[0]
     assert prompt.startswith("Task: chat\nKnown memory:\n- The preferred color is amber.")
     assert "User: What is the preferred color?\nChit:" in prompt
@@ -61,7 +62,7 @@ def test_chat_keeps_response_fields_and_accepts_generation_length(client):
     response = client.post("/chat", json={"message": "Write a greeting.", "tokens": 19}, headers=H)
 
     assert response.status_code == 200
-    assert set(response.json()) == {"text", "session_id", "metadata", "confidence", "is_incomplete", "is_uncertain"}
+    assert set(response.json()) == {"text", "session_id", "metadata", "confidence", "is_incomplete", "is_uncertain", "web_grounded", "sources"}
     assert response.json()["text"] == "reply"
     assert response.json()["session_id"]
     assert calls[0][0][1] == 19
@@ -79,3 +80,29 @@ def test_chat_passes_markdown_verbatim_and_allows_blank_lines_in_response(client
     prompt, *_ = calls[0][0]
     assert message in prompt
     assert "\n\n" not in calls[0][1]["stop"]
+
+
+def test_generate_continue_mode_rejects_search_and_think(client):
+    _serve_context_sized_model(client)
+    res_search = client.post("/generate", json={"prompt": "abc", "mode": "continue", "search": True}, headers=H)
+    assert res_search.status_code == 422
+    assert "web search is not supported with mode 'continue'" in str(res_search.json())
+
+    res_think = client.post("/generate", json={"prompt": "abc", "mode": "continue", "think": True}, headers=H)
+    assert res_think.status_code == 422
+    assert "thinking is not supported with mode 'continue'" in str(res_think.json())
+
+
+def test_generate_assistant_mode_supports_search_and_think(client, monkeypatch):
+    _serve_context_sized_model(client)
+    fake_snippet = "Light travels at 299,792 km/s in vacuum."
+    monkeypatch.setattr("pranav.chit.bridge.search_web", lambda *a, **kw: [fake_snippet])
+
+    res = client.post("/generate", json={"prompt": "Speed of light?", "mode": "assistant", "search": True}, headers=H)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["web_grounded"] is True
+    assert fake_snippet in data["sources"]
+    assert "confidence" in data
+    assert "metadata" in data
+
