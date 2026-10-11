@@ -187,7 +187,7 @@ python -m pranav.chit.ui
 | GET | `/data` | Check the train/eval files on the server: size, hash, overlap, `ready_to_train` |
 | POST | `/data/split` | Split a corpus file from the data folder into train and eval (`overwrite`, `dry_run`) |
 | POST | `/generate` | Respond to a request; `mode: "continue"` opts into raw continuation. Supports `prompt`, `tokens`, `temperature`, `top_k`, `stop` |
-| POST | `/chat` | Chat template + recalled memory: `message`, `task` |
+| POST | `/chat` | Chat template + recalled memory: `message`, `task`, `session_id`, `think` (native Chain-of-Thought reasoning) |
 | POST | `/memory` | Store a fact (`content`, optional `tags`, `importance`) |
 | GET | `/memory/search?q=…` | Search memory |
 | DELETE | `/memory/{id}` | Delete a memory (the `id` is the UUID returned when you added it) |
@@ -221,6 +221,22 @@ $h = @{ "X-API-Key" = $env:CHIT_API_KEY }
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/generate -Headers $h `
   -ContentType "application/json" `
   -Body '{"prompt": "Explain how memory helps Chit.", "tokens": 60, "temperature": 0}'
+```
+
+**Chat with Chain-of-Thought Thinking (`"think": true`):**
+
+```bash
+# Linux / macOS / Git Bash
+curl -X POST http://localhost:8000/chat \
+  -H "X-API-Key: $CHIT_API_KEY" -H "Content-Type: application/json" \
+  -d '{"message": "Ravi has 8 apples. He gives 3 away. How many remain?", "think": true}'
+```
+```powershell
+# Windows PowerShell
+$h = @{ "X-API-Key" = $env:CHIT_API_KEY }
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/chat -Headers $h `
+  -ContentType "application/json" `
+  -Body '{"message": "Ravi has 8 apples. He gives 3 away. How many remain?", "think": true}'
 ```
 
 **Train, wait, then generate** (Python; `pip install requests` first):

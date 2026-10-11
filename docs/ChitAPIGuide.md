@@ -27,6 +27,36 @@ When you send a message to `/chat`, Chit performs the following steps:
 - **Task Switching:** Use the `task` parameter to change how Chit behaves. Use `"chat"` for general dialogue and `"continue"` for raw text completion.
 - **Handling Overload:** Because Chit uses a bounded inference queue, you may receive a `429 Too Many Requests` error during peak load. Implement a simple **exponential backoff** (wait 1s, then 2s, then 4s) in your client.
 
+### Deep Thinking & Chain-of-Thought
+Chit supports native test-time compute via Chain-of-Thought (CoT). Passing `"think": true` activates Chit's reasoning attention heads, generating an intermediate deduction scratchpad before the final answer.
+
+**Request Payload (`POST /chat`):**
+```json
+{
+  "message": "Ravi has 8 apples. He gives 3 to Soham. How many remain?",
+  "session_id": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+  "think": true
+}
+```
+
+**Response Payload:**
+```json
+{
+  "text": "5 apples.",
+  "session_id": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+  "metadata": {
+    "task": "chat",
+    "memory_ids": [],
+    "thoughts": "Ravi starts with 8 apples. He gives away 3. 8 minus 3 equals 5.",
+    "thought_tokens": 19
+  }
+}
+```
+
+**When to use Thinking:**
+- **Use `think: true`**: For multi-step math, word puzzles, logical deductions, or strict rule following where immediate token generation could lead to premature reasoning mistakes. Ensure a token budget (`tokens >= 120`) is provided so thoughts do not exhaust generation tokens before the answer.
+- **Use standard chat (`think: false`)**: For greeting, factual retrieval, conversation continuity, or general dialogue where fast, direct generation is optimal.
+
 ---
 
 ## 🧠 Managing Long-term Memory (`/memory`)

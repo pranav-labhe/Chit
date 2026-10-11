@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+- **Native Chain-of-Thought Thinking Engine**: Enabled test-time compute via `think: true` on `/chat` and task `"reasoning"`. Intermediate thought extraction in `Bridge.process()` decouples scratchpad tokens from user-facing text, populating `metadata.thoughts` and `metadata.thought_tokens` without polluting conversation dialogue history.
+- **Collapsible Thought Process UI**: Added a sleek `💭 Think` toggle switch in the browser console toolbar and a collapsible `<details class="thought-container">` widget directly above assistant responses in the chat view.
+- **Thinking Engine Test Suite**: Created `tests/test_thinking.py` covering reasoning triggers, fallback handling, clean session history retention, and task incompatibility validation.
+
 ## 0.2.1
 
 ### Security

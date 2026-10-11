@@ -689,12 +689,33 @@ if(requestedView)showView(requestedView,false);
 
 
 
-function addBubble(role, text, memoryIds = []) {
+function addBubble(role, text, metadata = {}) {
     const b = document.createElement('div');
     b.className = 'bubble ' + role;
     
-    if(role==='chit')b.innerHTML=safeMarkdown(text);else b.textContent=text;
+    // 1. If thoughts exist, prepend collapsible thought container at the top of the bubble
+    if (role === 'chit' && metadata && metadata.thoughts) {
+        const thoughtDetails = document.createElement('details');
+        thoughtDetails.className = 'thought-container';
+        
+        const tokenLabel = metadata.thought_tokens ? `${metadata.thought_tokens} tokens` : 'trace';
+        thoughtDetails.innerHTML = `
+            <summary>💭 Thought process (${tokenLabel})</summary>
+            <div class="thought-body">${safeMarkdown(metadata.thoughts)}</div>
+        `;
+        b.appendChild(thoughtDetails);
+    }
+    // 2. Main response body
+    const content = document.createElement('div');
+    content.className = 'bubble-content';
+    if (role === 'chit') {
+        content.innerHTML = safeMarkdown(text);
+    } else {
+        content.textContent = text;
+    }
+    b.appendChild(content);
 
+    // 3. Action buttons (Copy only copies the final answer, NOT the thoughts)
     if (role === 'chit') {
         const actions = document.createElement('div');
         actions.className = 'bubble-actions';
@@ -745,7 +766,8 @@ $('#sendChat').addEventListener('click', async () => {
     try {
         const tempOverride = window._nextChatTemperature;
         window._nextChatTemperature = undefined;
-        const payload = { message, session_id: chatId };
+        const think = $('#thinkToggle')?.checked || false;
+        const payload = { message, session_id: chatId, think };
         if (typeof tempOverride === 'number') payload.temperature = tempOverride;
 
         const r = await callApi('POST', '/chat', {}, payload);
@@ -783,7 +805,7 @@ $('#sendChat').addEventListener('click', async () => {
             breadcrumb.textContent=`Chit used ${recalled.length} saved ${recalled.length===1?'memory':'memories'} to shape this reply.`;
             $('#chatlog').appendChild(breadcrumb);
         }
-        addBubble('chit', r.data.text || '');
+        addBubble('chit', r.data.text || '', r.data?.metadata || {});
         
     } catch (e) {
         addBubble('system', e.message);

@@ -21,6 +21,7 @@ If you want Chit to learn a new language pattern, you **train** it. If you want 
 - **Memory**: A specific fact about a user or the world, saved in `memory.db`.
 - **Knowledge / Lesson**: A curated fact or rule in `knowledge.db` waiting to be permanently trained into the AI's weights later.
 - **Golden Set**: A strict 50-question test the Candidate must pass to become the Champion.
+- **Test-Time Compute / Chain-of-Thought (CoT)**: Conditioning the model to produce intermediate reasoning scratchpad tokens (`Reasoning: ...`) before emitting the final answer (`Answer: ...`), eliminating deduction errors at inference time without retraining.
 
 ---
 
@@ -42,22 +43,19 @@ flowchart TD
     Bridge --> Formats[formats.py\nBuilds prompt string]
     Formats --> Queue[inference.py\nTraffic Queue]
     Queue --> Runtime[runtime.py\nWrapper]
-    Runtime --> Model[model.py\nNeural Network]
-    
     Model -->|Streams response| User
 ```
 
 ### Context Budget & Prompt Trimming Hierarchy
-The AI has a strict reading limit (`block_size`, typically 256 or 512 tokens). When the `Bridge` gathers too much history and memory, `formats.py` deletes information in this strict priority order to prevent crashes:
+The AI has a strict reading limit (`block_size`, typically 256 or 512 tokens). When the `Bridge` gathers history and memory, `formats.py` trims information under a clean canonical `Task: {task}` scaffold in this strict priority order to prevent context overflow:
 
 1. **Oldest Session Turns**: Distant chat history is forgotten first.
-2. **Conversation Summary**: If a summary of old chats exists, it is dropped next.
-3. **Grounded Directive**: If the scaffold overflows the budget, the grounded directive `(answer concisely using known memory; do not speculate)` is dropped before touching memory.
-4. **Lowest-Ranked Memories**: Contextual facts with low semantic relevance are dropped.
-5. **Oldest Extracted Facts**: Direct core facts (like user preferences) are highly protected but dropped if desperate.
-6. **Current User Input**: As an absolute last resort, the user's current message is truncated (protecting open markdown code fences and UTF-8 multi-byte boundaries).
+2. **Conversation Summary**: If an extractive summary of old turns exists, it is dropped next.
+3. **Lowest-Ranked Memories**: Contextual facts with low semantic relevance are dropped.
+4. **Oldest Extracted Facts**: Direct core facts (like user preferences) are highly protected but dropped if desperate.
+5. **Current User Input**: As an absolute last resort, the user's current message is truncated (protecting open markdown code fences and UTF-8 multi-byte boundaries).
 
-When memories or session facts exist, the scaffold binds the model to known truth: `Task: {task} (answer concisely using known memory; do not speculate)`.
+When `think: true` is enabled, the Bridge automatically reserves additional token headroom within the prompt budget to accommodate the `Reasoning:` primer.
 
 ---
 
@@ -65,6 +63,7 @@ When memories or session facts exist, the scaffold binds the model to known trut
 
 Beyond moving data, the system performs several intelligent background tasks:
 
+- **Chain-of-Thought Thinking Engine (`bridge.py`)**: When `think=true` is requested, the Bridge injects the `Reasoning:` primer, allowing the model to generate scratchpad tokens before `Answer:`. The Bridge automatically decouples `metadata.thoughts` from user-facing text to give multi-step reasoning capabilities without polluting the conversational dialogue history.
 - **Fact Extraction (`facts.py`)**: It does *not* use AI to extract facts. It uses lightning-fast, deterministic Regular Expressions (Regex) to spot patterns like `name`, `location`, `preference`, `email`, `project`, and `goal` in user messages, rejecting common conversational false positives.
 - **Background Summarization (`summarization.py`)**: It runs a deduplicated extractive summarizer. When a chat session gets too long, it condenses the oldest messages into a short summary block so the AI doesn't have to re-read the whole conversation.
 - **Semantic Search (`embeddings.py` & `faiss_index.py`)**: When you save a memory, it is converted into a mathematical array (vector) using `SentenceTransformers`. When the user asks a question, the system finds the closest matching vectors using FAISS (a high-speed search library) or exact cosine similarity if FAISS isn't installed.

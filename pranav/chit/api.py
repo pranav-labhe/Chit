@@ -263,6 +263,7 @@ class ChatRequest(BaseModel):
                                description="maximum new tokens; byte-tokenizer models use one token per UTF-8 byte")
     session_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$", description=(
         "continue this conversation; omit to start a new one (its id is returned)"))
+    think: bool = Field(default=False, description="Enable chain-of-thought intermediate reasoning")
 
 
 Tag = Annotated[str, Field(min_length=1, max_length=50, pattern=r"^[\w.:/-]+$")]
@@ -385,6 +386,8 @@ async def chat(r: ChatRequest):
     use_session = r.task != "continue"  # a plain-text continuation has no conversation to remember
     if not use_session and r.session_id:
         raise HTTPException(status_code=422, detail=["sessions are not used with task 'continue'"])
+    if r.task == "continue" and r.think:
+        raise HTTPException(status_code=422, detail=["thinking is not supported with task 'continue'"])
     history: list[dict] = []
     session_context = None
     if use_session and r.session_id:
@@ -399,8 +402,9 @@ async def chat(r: ChatRequest):
             Context(user_input=r.message, task=r.task, history=history,
                     facts=(session_context["facts"] if session_context and session_context["facts_enabled"] else []),
                     summary=(session_context["summary"] if session_context and
-                             session_context["summary_enabled"] else "")),
-            r.temperature, max_new_tokens=r.tokens))
+                             session_context["summary_enabled"] else ""),
+                    think=r.think),
+            r.temperature, max_new_tokens=r.tokens, think=r.think))
     except InferenceOverloaded as exc:
         raise HTTPException(status_code=429, detail={"code": "inference_overloaded", "message": str(exc)},
                             headers={"Retry-After": "1"}) from exc
