@@ -41,7 +41,8 @@ def test_thinking_attaches_thoughts_and_preserves_clean_session(served):
 
         # Verify prompt had reasoning primer and proper stop sequences
         prompt, stop = prompts[0]
-        assert prompt.endswith("Chit: Reasoning:")
+        assert prompt.endswith("\nReasoning:")
+        assert prompt.startswith("Input: ")
         assert "\nChit:" not in stop
         assert "\nUser:" in stop
         assert "\nTask:" in stop
@@ -74,8 +75,7 @@ def test_thinking_fallback_when_no_answer_boundary(served):
         assert r.status_code == 200
         data = r.json()
         assert data["text"] == "Direct reasoning deduction without an explicit answer delimiter."
-        assert data["metadata"]["thoughts"] == "Direct reasoning deduction without an explicit answer delimiter."
-        assert data["metadata"]["thought_tokens"] > 0
+        assert "thoughts" not in data.get("metadata", {}) or data["metadata"]["thoughts"] is None
     finally:
         rt.generate = original_gen
 
@@ -114,5 +114,7 @@ def test_bridge_process_unit_reasoning():
     assert decision.text == "Done."
     assert decision.metadata["thoughts"] == "Step 1: Compute."
     assert decision.metadata["thought_tokens"] == len(runtime.tokenizer.encode("Step 1: Compute."))
-    assert recorded["prompt"].endswith("Chit: Reasoning:")
-    assert recorded["stop"] == ["\nUser:", "\nTask:"]
+    assert recorded["prompt"].endswith("\nReasoning:")
+    assert recorded["prompt"].startswith("Input: ")
+    assert recorded["stop"] == ["\nInput:", "\nUser:", "\nTask:"]
+

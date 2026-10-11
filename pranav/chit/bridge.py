@@ -64,29 +64,30 @@ class Bridge:
                                     facts=c.facts, summary=c.summary)
 
         if is_thinking:
-            prompt = prompt + " Reasoning:"
-            stop_seqs = stop if stop is not None else self.REASONING_STOP
-            raw = self.runtime.generate(prompt, n_tokens, t, effective_top_k,
+            # Native reasoning scaffold that activates the Answer: boundary
+            reasoning_prompt = f"Input: {c.user_input.strip()}\nReasoning:"
+            stop_seqs = stop if stop is not None else ["\nInput:", "\nUser:", "\nTask:"]
+            raw = self.runtime.generate(reasoning_prompt, n_tokens, t, effective_top_k,
                                          stop=stop_seqs).strip()
             if "Answer:" in raw:
                 parts = raw.split("Answer:", 1)
                 thoughts = parts[0].strip()
                 answer = parts[1].strip()
-            else:
-                thoughts = raw
-                answer = raw
 
-            metadata = {
-                "task": c.task,
-                "memory_ids": [m.get("id") for m in memories],
-                "thoughts": thoughts,
-            }
-            if thoughts and hasattr(self.runtime, "tokenizer"):
-                try:
-                    metadata["thought_tokens"] = len(self.runtime.tokenizer.encode(thoughts))
-                except Exception:
-                    metadata["thought_tokens"] = len(thoughts)
-            return ChitDecision(text=answer, metadata=metadata)
+                metadata = {
+                    "task": c.task,
+                    "memory_ids": [m.get("id") for m in memories],
+                    "thoughts": thoughts,
+                }
+                if thoughts and hasattr(self.runtime, "tokenizer"):
+                    try:
+                        metadata["thought_tokens"] = len(self.runtime.tokenizer.encode(thoughts))
+                    except Exception:
+                        metadata["thought_tokens"] = len(thoughts)
+                return ChitDecision(text=answer, metadata=metadata)
+
+            # If no Answer: boundary was produced (e.g. greetings or non-logic chat),
+            # fall through to standard chat generation so no duplicate/irrelevant thought box is shown.
 
         text = self.runtime.generate(prompt, n_tokens, t, effective_top_k,
                                      stop=stop if stop is not None else self.STOP).strip()
