@@ -354,17 +354,18 @@ class SQLiteMemoryStore:
         except sqlite3.OperationalError:
             return []
 
-    def search(self, q: str, limit: int = 5, tags: list[str] | None = None) -> list[dict]:
+    def search(self, q: str, limit: int = 5, tags: list[str] | None = None,
+               min_relevance: float | None = None) -> list[dict]:
         terms = _terms(q)
         if not q.strip() or limit <= 0 or (not terms and self.embedding_provider is None):
             return []
-        want = set(tags or [])
         want = set(tags or [])
         lexical_items = self._fts_search(terms, limit, want)
         items_by_id = {m["id"]: m for m in lexical_items}
         scored = []
         vectors = {}
         query_vector = None
+        all_items_cached: list[dict] | None = None
         if self.embedding_provider is not None:
             try:
                 import numpy as np
@@ -382,11 +383,13 @@ class SQLiteMemoryStore:
                             items_by_id.update({r["id"]: self._decode(r) for r in rows})
                     else:
                         items = self.all()
+                        all_items_cached = items
+                        items_by_id.update({m["id"]: m for m in items})
                         with self._conn() as db:
                             records = db.execute("""SELECT memory_id,dimension,vector,content_hash FROM memory_embeddings
                                 WHERE model_version=? AND status='ready'""",
                                                  (self.embedding_provider.model_version,)).fetchall()
-                        by_id = {m["id"]: m for m in items}
+                        by_id = items_by_id
                         valid_ids, valid_vectors = [], []
                         for row in records:
                             item = by_id.get(row["memory_id"])
@@ -404,7 +407,9 @@ class SQLiteMemoryStore:
                 query_vector = None
                 vectors = {}
         if not self._fts_available or (self.embedding_provider is not None and self._faiss_index is None):
-            items_by_id.update({m["id"]: m for m in self.all()})
+            if all_items_cached is None:
+                all_items_cached = self.all()
+            items_by_id.update({m["id"]: m for m in all_items_cached})
         for m in items_by_id.values():
             if want and not want.issubset(m["tags"]):
                 continue
@@ -420,6 +425,8 @@ class SQLiteMemoryStore:
                     max_lexical = max(1, len(terms))
                     relevance = self.semantic_weight * ((similarity + 1.0) / 2.0)
                     relevance += (1.0 - self.semantic_weight) * (lexical / max_lexical)
+                if relevance <= 0.0 or (min_relevance is not None and relevance < min_relevance):
+                    continue
                 scored.append(((relevance, lexical, m["importance"], m["created_at"]), m))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [m for _, m in scored[:limit]]
@@ -482,7 +489,8 @@ class MemoryStore:
             self._save(kept)
             return True
 
-    def search(self, q: str, limit: int = 5, tags: list[str] | None = None) -> list[dict]:
+    def search(self, q: str, limit: int = 5, tags: list[str] | None = None,
+               min_relevance: float | None = None) -> list[dict]:
         """Keyword search: rank by shared terms (stopwords ignored), then importance, then recency."""
         terms = _terms(q)
         if not terms:
@@ -494,6 +502,8 @@ class MemoryStore:
                 continue
             score = len(terms & (_terms(m.get("content", "")) | {t.lower() for t in m.get("tags", [])}))
             if score:
+                if min_relevance is not None and score < min_relevance:
+                    continue
                 scored.append(((score, m.get("importance", 0.0), m.get("created_at", "")), m))
         scored.sort(key=lambda z: z[0], reverse=True)
         return [m for _, m in scored[:limit]]

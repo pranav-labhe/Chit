@@ -43,14 +43,36 @@ class ChitRuntime:
         return runtime
 
     def generate(self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8, top_k: int | None = 50,
-                 stop: list[str] | None = None) -> str:
+                 stop: list[str] | None = None, repetition_penalty: float = 1.0) -> str:
         """Return only the newly generated text, cut at the first ``stop`` string if given."""
         ids = self.tokenizer.encode(prompt) or self.tokenizer.encode("\n")  # model needs >= 1 token
         x = torch.tensor([ids], dtype=torch.long, device=self.device)
-        y = self.model.generate(x, max_new_tokens, temperature, top_k)
-        text = self.tokenizer.decode(y[0, x.size(1):].tolist())
-        for s in stop or ():
-            if s and s in text:
+        prompt_len = x.size(1)
+        clean_stops = [s for s in (stop or ()) if s]
+
+        stop_fn = None
+        if clean_stops:
+            generated_ids: list[int] = []
+            if isinstance(self.tokenizer, ByteTokenizer):
+                stop_bytes = [s.encode("utf-8") for s in clean_stops]
+                def _stop(idx: torch.Tensor) -> bool:
+                    generated_ids.append(int(idx[0, -1].item()))
+                    gen_data = bytes(generated_ids)
+                    return any(sb in gen_data for sb in stop_bytes)
+                stop_fn = _stop
+            else:
+                def _stop(idx: torch.Tensor) -> bool:
+                    generated_ids.append(int(idx[0, -1].item()))
+                    text = self.tokenizer.decode(generated_ids)
+                    return any(s in text for s in clean_stops)
+                stop_fn = _stop
+
+        y = self.model.generate(x, max_new_tokens, temperature, top_k,
+                                stop_fn=stop_fn, repetition_penalty=repetition_penalty,
+                                prompt_len=prompt_len)
+        text = self.tokenizer.decode(y[0, prompt_len:].tolist())
+        for s in clean_stops:
+            if s in text:
                 text = text[:text.index(s)]
         return text
 

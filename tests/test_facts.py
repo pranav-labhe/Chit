@@ -70,3 +70,23 @@ def test_legacy_sessions_database_migrates_idempotently(tmp_path):
     assert store.history("s1")[0]["content"] == "My name is Asha."
     assert store.facts("s1")["facts"] == []  # migration preserves data; explicit refresh is user-controlled
     assert SessionStore(path).get("s1")["summary"] == ""
+
+
+def test_expanded_fact_patterns_and_anti_false_positive():
+    # 1. Expanded patterns match correctly
+    text = "Call me Vikram. I am based in Bengaluru. My email is vikram@example.com. I am working on Chit."
+    facts = {f["key"]: f["value"] for f in extract_explicit_facts(text)}
+    assert facts == {
+        "name": "Vikram",
+        "location": "Bengaluru",
+        "email": "vikram@example.com",
+        "project": "Chit",
+    }
+
+    # 2. Case-sensitive "I am <Name>" extraction
+    assert extract_explicit_facts("Hello, I am Priya.") == [{"key": "name", "value": "Priya"}]
+
+    # 3. Anti-false-positive rejection of common state words
+    false_positives = "I am Sorry, I am Tired, I am Ready, and I am Done."
+    assert extract_explicit_facts(false_positives) == []
+

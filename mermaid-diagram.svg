@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1130.7569999999998 1417.7" width="1130.7569999999998" height="1417.7" style="--bg:#FFFFFF;--fg:#3B3B3B;--line:#3B3B3B;--accent:#005FB8;--muted:#3B3B3BCC;--surface:#F8F8F8;--border:#3B3B3B;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="Browser" data-label="Client Tier">
+  <rect x="532.0024999999998" y="40" width="321.44399999999996" height="96.9" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="532.0024999999998" y="40" width="321.44399999999996" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="544.0024999999998" y="54" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Client Tier</text>
+</g>
+<g class="subgraph" data-id="Service_Tier_Process_Boundaries_Port_8001__Port_8000" data-label="Service Tier [&quot;Process Boundaries (Port 8001 / Port 8000)&quot;]">
+  <rect x="569.423" y="265.20000000000005" width="297.84374999999994" height="317.7" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="569.423" y="265.20000000000005" width="297.84374999999994" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="581.423" y="279.20000000000005" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Service Tier [&quot;Process Boundaries (Port 8001 / Port 8000)&quot;]</text>
+</g>
+<g class="subgraph" data-id="Cognitive_Layer_Inference__Orchestration" data-label="Cognitive Layer [&quot;Inference &amp; Orchestration&quot;]">
+  <rect x="185.45837500000005" y="642.9" width="441.04299999999995" height="521" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="185.45837500000005" y="642.9" width="441.04299999999995" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="197.45837500000005" y="656.9" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Cognitive Layer [&quot;Inference &amp; Orchestration&quot;]</text>
+</g>
+<g class="subgraph" data-id="Storage_Tier_The_Notebook_SQLite__Artifacts" data-label="Storage Tier [&quot;The Notebook (SQLite &amp; Artifacts)&quot;]">
+  <rect x="40" y="1223.9" width="981.0809999999999" height="127.80000000000001" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="40" y="1223.9" width="981.0809999999999" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="52" y="1237.9" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Storage Tier [&quot;The Notebook (SQLite &amp; Artifacts)&quot;]</text>
+</g>
+<polyline class="edge" data-from="UI_Browser" data-to="UI_Server" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="HTTP requests" points="692.7244999999998,120.9 692.7244999999999,309.20000000000005" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="API_Server" data-to="Bridge" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="701.4295,566.9000000000001 701.4295,624.9000000000001 330.6193750000001,624.9000000000001 330.6193750000001,686.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Bridge" data-to="SessionsDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="330.619375,740.6999999999999 330.619375,764.7 188.4955,764.7 188.4955,1267.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Bridge" data-to="MemoryDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="330.619375,740.6999999999999 330.619375,764.7 457.0335,764.7 457.0335,1267.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="API_Server" data-to="KnowledgeDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="751.3752499999999,566.9000000000001 751.3752499999999,1205.9 685.928,1205.9 685.9279999999999,1267.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="KnowledgeDB" data-to="API_Server" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="POST /knowledge/train" points="685.9279999999999,1335.7 685.9279999999999,1369.7 1031.081,1369.7 1031.081,247.20000000000005 810.0259999999998,247.20000000000005 810.0260000000001,460.20000000000016 784.6724166666665,460.20000000000016 784.6724166666665,496.20000000000016" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="API_Server" data-to="Checkpoints" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="trains candidate" points="801.3209999999999,566.9000000000001 801.3209999999999,1137.6000000000001 905.9304999999999,1137.6000000000001 905.9304999999998,1267.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="UI_Server" data-to="API_Server" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="POST /_ui/proxy + X-API-Key" points="692.7245,379.90000000000003 692.7245,460.20000000000005 718.0780833333333,460.20000000000005 718.0780833333333,496.20000000000005" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Bridge" data-to="Formats" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="330.619375,740.6999999999999 330.619375,764.7 449.106875,764.7 449.106875,788.7" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Formats" data-to="Inference" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="449.106875,842.5 449.106875,890.5" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Inference" data-to="Runtime" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="449.106875,944.3 449.10687500000006,992.3" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Runtime" data-to="Model" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="449.10687500000006,1046.1 449.106875,1094.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<g class="edge-label" data-from="UI_Browser" data-to="UI_Server" data-label="HTTP requests">
+  <rect x="647.2244999999998" y="185.9" width="90.712" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="692.5804999999998" y="201.05" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">HTTP requests</text>
+</g>
+<g class="edge-label" data-from="KnowledgeDB" data-to="API_Server" data-label="POST /knowledge/train">
+  <rect x="967.5809999999998" y="1144.6000000000001" width="126.35199999999999" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1030.7569999999998" y="1159.7500000000002" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">POST /knowledge/train</text>
+</g>
+<g class="edge-label" data-from="API_Server" data-to="Checkpoints" data-label="trains candidate">
+  <rect x="858.9304999999999" y="1144.6000000000004" width="93.08800000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="905.4744999999999" y="1159.7500000000005" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">trains candidate</text>
+</g>
+<g class="edge-label" data-from="UI_Server" data-to="API_Server" data-label="POST /_ui/proxy + X-API-Key">
+  <rect x="615.2244999999999" y="422.9000000000001" width="154.864" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="692.6564999999999" y="438.05000000000007" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">POST /_ui/proxy + X-API-Key</text>
+</g>
+<g class="node" data-id="UI_Browser" data-label="Single Page Console (HTML / app.js / CSS)" data-shape="rectangle">
+  <rect x="548.0024999999998" y="84" width="289.44399999999996" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="692.7244999999998" y="102.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Single Page Console (HTML / app.js / CSS)</text>
+</g>
+<g class="node" data-id="UI_Server" data-label="UI BFF: ui.py (Port 8001)
+HttpOnly Cookie Session Auth
+Proxy Allowlist" data-shape="rectangle">
+  <rect x="585.423" y="309.20000000000005" width="214.60299999999995" height="70.7" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="692.7245" y="344.55000000000007" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="692.7245" dy="-12.350000000000001">UI BFF: ui.py (Port 8001)</tspan><tspan x="692.7245" dy="16.900000000000002">HttpOnly Cookie Session Auth</tspan><tspan x="692.7245" dy="16.900000000000002">Proxy Allowlist</tspan></text>
+</g>
+<g class="node" data-id="API_Server" data-label="Gateway: api.py (Port 8000)
+Stateless X-API-Key
+Single Worker Engine" data-shape="rectangle">
+  <rect x="651.48375" y="496.20000000000005" width="199.783" height="70.7" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="751.3752499999999" y="531.5500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="751.3752499999999" dy="-12.350000000000001">Gateway: api.py (Port 8000)</tspan><tspan x="751.3752499999999" dy="16.900000000000002">Stateless X-API-Key</tspan><tspan x="751.3752499999999" dy="16.900000000000002">Single Worker Engine</tspan></text>
+</g>
+<g class="node" data-id="Bridge" data-label="bridge.py
+Context Assembly &amp; Priority Trimming" data-shape="rectangle">
+  <rect x="201.45837500000005" y="686.9" width="258.32199999999995" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="330.619375" y="713.8" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="330.619375" dy="-3.9000000000000012">bridge.py</tspan><tspan x="330.619375" dy="16.900000000000002">Context Assembly &amp; Priority Trimming</tspan></text>
+</g>
+<g class="node" data-id="Formats" data-label="formats.py
+Scaffold Formatting &amp; Truncation" data-shape="rectangle">
+  <rect x="333.654375" y="788.7" width="230.90499999999997" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="449.106875" y="815.6" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="449.106875" dy="-3.9000000000000012">formats.py</tspan><tspan x="449.106875" dy="16.900000000000002">Scaffold Formatting &amp; Truncation</tspan></text>
+</g>
+<g class="node" data-id="Inference" data-label="inference.py
+FIFO Bounded Queue (Max 32)" data-shape="rectangle">
+  <rect x="338.841375" y="890.5" width="220.53099999999998" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="449.106875" y="917.4" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="449.106875" dy="-3.9000000000000012">inference.py</tspan><tspan x="449.106875" dy="16.900000000000002">FIFO Bounded Queue (Max 32)</tspan></text>
+</g>
+<g class="node" data-id="Runtime" data-label="runtime.py
+ChitRuntime" data-shape="rectangle">
+  <rect x="394.045875" y="992.3" width="110.122" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="449.106875" y="1019.1999999999999" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="449.106875" dy="-3.9000000000000012">runtime.py</tspan><tspan x="449.106875" dy="16.900000000000002">ChitRuntime</tspan></text>
+</g>
+<g class="node" data-id="Model" data-label="model.py
+ChitModel (Transformer / RoPE / Flash Attention)" data-shape="rectangle">
+  <rect x="287.71237500000007" y="1094.1" width="322.78899999999993" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="449.10687500000006" y="1121" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="449.10687500000006" dy="-3.9000000000000012">model.py</tspan><tspan x="449.10687500000006" dy="16.900000000000002">ChitModel (Transformer / RoPE / Flash Attention)</tspan></text>
+</g>
+<g class="node" data-id="MemoryDB" data-label="data/memory.db
+FTS5 + FAISS HNSW / Cosine" data-shape="cylinder">
+  <rect x="348.99100000000004" y="1274.9" width="216.08499999999995" height="53.80000000000001" fill="var(--_node-fill)" stroke="none" />
+  <line x1="348.99100000000004" y1="1274.9" x2="348.99100000000004" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="565.076" y1="1274.9" x2="565.076" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="457.0335" cy="1328.7" rx="108.04249999999998" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="457.0335" cy="1274.9" rx="108.04249999999998" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="457.0335" y="1301.8000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="457.0335" dy="-3.9000000000000012">data/memory.db</tspan><tspan x="457.0335" dy="16.900000000000002">FTS5 + FAISS HNSW / Cosine</tspan></text>
+</g>
+<g class="node" data-id="SessionsDB" data-label="data/sessions.db
+Turns + Facts + Extractive Summaries" data-shape="cylinder">
+  <rect x="56" y="1274.9" width="264.991" height="53.80000000000001" fill="var(--_node-fill)" stroke="none" />
+  <line x1="56" y1="1274.9" x2="56" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="320.991" y1="1274.9" x2="320.991" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="188.4955" cy="1328.7" rx="132.4955" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="188.4955" cy="1274.9" rx="132.4955" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="188.4955" y="1301.8000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="188.4955" dy="-3.9000000000000012">data/sessions.db</tspan><tspan x="188.4955" dy="16.900000000000002">Turns + Facts + Extractive Summaries</tspan></text>
+</g>
+<g class="node" data-id="KnowledgeDB" data-label="data/knowledge.db
+Curated Lessons Queue" data-shape="cylinder">
+  <rect x="593.076" y="1274.9" width="185.70399999999998" height="53.80000000000001" fill="var(--_node-fill)" stroke="none" />
+  <line x1="593.076" y1="1274.9" x2="593.076" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="778.78" y1="1274.9" x2="778.78" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="685.928" cy="1328.7" rx="92.85199999999999" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="685.928" cy="1274.9" rx="92.85199999999999" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="685.928" y="1301.8000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="685.928" dy="-3.9000000000000012">data/knowledge.db</tspan><tspan x="685.928" dy="16.900000000000002">Curated Lessons Queue</tspan></text>
+</g>
+<g class="node" data-id="Checkpoints" data-label="checkpoints/
+Champion &amp; Candidates (pt)" data-shape="cylinder">
+  <rect x="806.78" y="1274.9" width="198.30099999999996" height="53.80000000000001" fill="var(--_node-fill)" stroke="none" />
+  <line x1="806.78" y1="1274.9" x2="806.78" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="1005.0809999999999" y1="1274.9" x2="1005.0809999999999" y2="1328.7" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="905.9304999999999" cy="1328.7" rx="99.15049999999998" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="905.9304999999999" cy="1274.9" rx="99.15049999999998" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="905.9304999999999" y="1301.8000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="905.9304999999999" dy="-3.9000000000000012">checkpoints/</tspan><tspan x="905.9304999999999" dy="16.900000000000002">Champion &amp; Candidates (pt)</tspan></text>
+</g>
+</svg>

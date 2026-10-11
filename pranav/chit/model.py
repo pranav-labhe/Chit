@@ -1,6 +1,7 @@
 """Decoder-only Transformer trained from scratch for Chit."""
 from __future__ import annotations
 
+from typing import Callable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -128,7 +129,10 @@ class ChitModel(nn.Module):
 
     @torch.no_grad()
     def generate(self, idx: torch.Tensor, max_new_tokens: int, temperature: float = 0.8,
-                 top_k: int | None = 50, generator: torch.Generator | None = None) -> torch.Tensor:
+                 top_k: int | None = 50, generator: torch.Generator | None = None,
+                 stop_fn: Callable[[torch.Tensor], bool] | None = None,
+                 repetition_penalty: float = 1.0,
+                 prompt_len: int | None = None) -> torch.Tensor:
         """Sample ``max_new_tokens`` tokens after ``idx`` (shape ``(b, t)``, t >= 1).
 
         ``temperature <= 0`` means greedy decoding. The module's train/eval mode is
@@ -136,12 +140,21 @@ class ChitModel(nn.Module):
         """
         if idx.dim() != 2 or idx.size(1) == 0:
             raise ValueError("idx must have shape (batch, t) with t >= 1")
+        if prompt_len is None:
+            prompt_len = idx.size(1)
         was_training = self.training
         self.eval()
         try:
             for _ in range(max_new_tokens):
                 logits, _ = self(idx[:, -self.block_size:])
                 logits = logits[:, -1, :]
+                if repetition_penalty > 1.0:
+                    for b in range(idx.size(0)):
+                        gen_tokens = idx[b, prompt_len:]
+                        if gen_tokens.numel() > 0:
+                            seen = torch.unique(gen_tokens)
+                            vals = logits[b, seen]
+                            logits[b, seen] = torch.where(vals > 0, vals / repetition_penalty, vals * repetition_penalty)
                 if temperature <= 0:
                     nxt = logits.argmax(dim=-1, keepdim=True)
                 else:
@@ -151,6 +164,8 @@ class ChitModel(nn.Module):
                         logits = logits.masked_fill(logits < kth, float("-inf"))
                     nxt = torch.multinomial(F.softmax(logits, dim=-1), 1, generator=generator)
                 idx = torch.cat((idx, nxt), dim=1)
+                if stop_fn is not None and stop_fn(idx):
+                    break
         finally:
             self.train(was_training)
         return idx

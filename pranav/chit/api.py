@@ -1093,7 +1093,7 @@ import asyncio
 import subprocess
 from fastapi import BackgroundTasks
 
-@app.get("/candidates")
+@app.get("/candidates", dependencies=[Depends(require_training_access)])
 async def list_candidates():
     """List finished training jobs and their evaluation status."""
     jobs_dir = Path(JOBS_DIR)
@@ -1170,7 +1170,7 @@ def _run_eval_background(job_id: str):
     except Exception as e:
         log.error(f"Evaluation exception for {job_id}: {e}")
 
-@app.post("/candidates/{job_id}/evaluate")
+@app.post("/candidates/{job_id}/evaluate", dependencies=[Depends(require_training_access)])
 async def evaluate_candidate(job_id: str, background_tasks: BackgroundTasks):
     """Trigger the Golden Gate evaluation for a candidate in the background."""
     ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
@@ -1184,7 +1184,7 @@ async def evaluate_candidate(job_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(_run_eval_background, job_id)
     return {"status": "evaluating", "job_id": job_id}
 
-@app.post("/candidates/{job_id}/promote")
+@app.post("/candidates/{job_id}/promote", dependencies=[Depends(require_training_access)])
 async def promote_candidate_route(job_id: str):
     """Promote a candidate to Champion safely if it passes the Golden Gate."""
     from pranav.chit.tools.promote_candidate import promote
@@ -1218,7 +1218,7 @@ async def promote_candidate_route(job_id: str):
 
 
 
-@app.post("/admin/rollback")
+@app.post("/admin/rollback", dependencies=[Depends(require_training_access)])
 async def rollback_champion_route(to_sha256: str):
     """Rollback the active champion to a previous version."""
     from pranav.chit.tools.rollback_champion import rollback
@@ -1231,7 +1231,7 @@ async def rollback_champion_route(to_sha256: str):
     _load_served_model()
     return manifest
 
-@app.post("/admin/reload")
+@app.post("/admin/reload", dependencies=[Depends(require_training_access)])
 async def reload_champion_route():
     """Reload the active champion from disk into memory."""
     try:

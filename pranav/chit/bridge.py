@@ -47,7 +47,9 @@ class Bridge:
             text = self.runtime.generate(c.user_input, n_tokens, t, top_k,
                                          stop=stop if stop is not None else ["\n"])
             return ChitDecision(text, metadata={"task": c.task, "memory_ids": []})
-        memories = (c.memories or self.runtime.recall(c.user_input, self.max_memories))[: self.max_memories]
+        memories = (c.memories or self.runtime.recall(c.user_input, self.max_memories, min_relevance=0.35))[: self.max_memories]
+        if (memories or c.facts) and temperature is None:
+            t = 0.0
         context = (getattr(self.runtime, "model_config", None) or {}).get("block_size")
         prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
                                     history=c.history, max_tokens=context, tokenizer=self.runtime.tokenizer,

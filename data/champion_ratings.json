@@ -1,0 +1,506 @@
+{
+  "golden_set_sha256": "80478d585467f29fdf685a5003ce5278b8b471223d38dbc4f8531f2ded48611f",
+  "checkpoint_sha256": "46283b7cc30533572035e1b72c366b436eded6c868521162b0f777b610b8d663",
+  "ratings": [
+    {
+      "id": "G001",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G002",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G003",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G004",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G005",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G006",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G007",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G008",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G009",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G010",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G011",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G012",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G013",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G014",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G015",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G016",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G017",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G018",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G019",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G020",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G021",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G022",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G023",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G024",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G025",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G026",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G027",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G028",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G029",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G030",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G031",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G032",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G033",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G034",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G035",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G036",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G037",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G038",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G039",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G040",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G041",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G042",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G043",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G044",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G045",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G046",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G047",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G048",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G049",
+      "passed": false,
+      "critical_failure": true,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    },
+    {
+      "id": "G050",
+      "passed": false,
+      "critical_failure": false,
+      "reviewers": [
+        "auto_reviewer_1",
+        "auto_reviewer_2"
+      ],
+      "notes": "Auto-rated via heuristic."
+    }
+  ]
+}

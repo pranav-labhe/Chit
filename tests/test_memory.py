@@ -121,3 +121,16 @@ def test_migration_cli_dry_run_does_not_create_destination_and_apply_backs_up(tm
     assert migrate_memory([str(source), str(destination), "--apply"]) == 0
     assert destination.exists()
     assert list(tmp_path.glob("legacy.json.backup-*"))
+
+
+def test_relevance_threshold_filters_noise(tmp_path):
+    store = SQLiteMemoryStore(tmp_path / "memory.db", seed_path=None)
+    store.add("Quantum computing utilizes qubits for computation.")
+    store.add("Chit is a neural network model.")
+    # Search with min_relevance that rejects low-relevance match
+    high_thresh = store.search("Chit", min_relevance=2.0)
+    assert high_thresh == []
+    normal = store.search("Chit")
+    assert len(normal) == 1
+    assert "Chit" in normal[0]["content"]
+

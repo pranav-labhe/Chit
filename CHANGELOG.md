@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.1
+
+### Security
+- **Training Access Gating**: Gated sensitive `/candidates`, `/candidates/{job_id}/evaluate`, `/candidates/{job_id}/promote`, `/admin/rollback`, and `/admin/reload` endpoints with `require_training_access` dependency to prevent unauthorized model evaluation and promotion.
+
+### Fixed
+- **Auto-Rater Output Key**: Resolved `KeyError: 'output'` in `auto_rate.py` by supporting both `response` and legacy `output` keys, handling unscorable prompts safely without `AttributeError`.
+- **UI Proxy Methods**: Allowed `PATCH` HTTP method in UI proxy (`/_ui/proxy`) for complete API coverage.
+- **Memory Store Query Hygiene**: Eliminated duplicate `want = set(tags or [])` in `memory.py` and cached `self.all()` results in fallback vector searches to eliminate redundant second full-table scans.
+- **Knowledge Store Add Many**: Eliminated redundant post-insert `SELECT *` query in `add_many()` in `knowledge.py`, constructing `AddResult` directly in memory.
+
+### Performance
+- **Autoregressive Early Stopping**: Implemented token-level boundary callbacks (`stop_fn`) in `ChitModel.generate()` and `ChitRuntime.generate()` to halt generation immediately upon emitting stop sequences (`\nUser:`, `\nChit:`, etc.), saving wasted forward passes.
+
+### Grounding & Retrieval
+- **Prompt-Scoped Repetition Penalty**: Added `prompt_len` parameter to `ChitModel.generate()` so repetition penalties only penalize newly generated tokens (`idx[b, prompt_len:]`), allowing retrieved context, entities, and memories to remain unpenalized.
+- **Retrieval Relevance Thresholding**: Wired `min_relevance=0.35` in `Bridge.process()` and `SQLiteMemoryStore.search()` to filter out low-confidence semantic noise.
+- **Dynamic Greedy Decoding**: Automatically engages deterministic greedy decoding (`temperature=0.0`) when memories or facts are present in `Bridge.process()` (unless explicitly overridden).
+- **Grounded Prompt Directive**: Injected `Task: {task} (answer concisely using known memory; do not speculate)` into the prompt scaffold when memories or facts exist, with automatic fallback protection against scaffold bloat on small context windows.
+- **Deterministic Fact Extraction**: Expanded regex patterns in `facts.py` for name, location, email, and project, with strict anti-false-positive filtering for common conversational words.
+
 ## 0.2.0
 
 ### Added

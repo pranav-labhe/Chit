@@ -90,3 +90,36 @@ def test_rope_checkpoint_round_trip():
     with pytest.raises(ValueError, match="even attention head"):
         ChitModel(vocab_size=256, block_size=8, n_layer=1, n_head=1, n_embd=3,
                   position_encoding="rope")
+
+
+def test_generate_stop_fn_halts_early():
+    m = ChitModel(**CFG).eval()
+    x = torch.tensor([[1, 2, 3]])
+    # Prompt is 3 tokens. If max_new_tokens=20, but stop_fn triggers at total length 6:
+    out = m.generate(x, 20, stop_fn=lambda idx: idx.size(1) >= 6)
+    assert out.shape == (1, 6)  # exactly 3 prompt + 3 generated
+
+
+def test_generate_repetition_penalty_reduces_repeated_token_logits():
+    torch.manual_seed(42)
+    m = ChitModel(**CFG).eval()
+    # If repetition penalty is applied, greedy generation avoids immediate cycles
+    x = torch.tensor([[5, 5, 5]])
+    standard = m.generate(x, 10, temperature=0, repetition_penalty=1.0)
+    penalized = m.generate(x, 10, temperature=0, repetition_penalty=2.5)
+    assert standard.shape == penalized.shape == (1, 13)
+    # The penalized generation should differ from unpenalized
+    assert not torch.equal(standard, penalized)
+
+
+def test_generate_repetition_penalty_does_not_penalize_prompt_tokens():
+    torch.manual_seed(42)
+    m = ChitModel(**CFG).eval()
+    x = torch.tensor([[5, 5, 5]])
+    # When prompt_len=3, the first generated token is not penalized against the prompt tokens
+    # so generating 1 token with or without repetition penalty produces identical first token
+    t1_std = m.generate(x, 1, temperature=0, repetition_penalty=1.0)
+    t1_pen = m.generate(x, 1, temperature=0, repetition_penalty=5.0, prompt_len=3)
+    assert torch.equal(t1_std, t1_pen)
+
+

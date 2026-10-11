@@ -161,12 +161,18 @@ class KnowledgeStore:
                 if existing:
                     results.append(AddResult(self._row(existing), created=False))
                     continue
-                row = (uuid.uuid4().hex, kind, json.dumps(payload, ensure_ascii=False), h,
-                       json.dumps(tags, ensure_ascii=False), source, "pending", _now())
+                row_id = uuid.uuid4().hex
+                now = _now()
                 db.execute("INSERT INTO knowledge (id, kind, payload, content_hash, tags, source, status, created_at)"
-                           " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", row)
-                results.append(AddResult(self._row(db.execute(
-                    "SELECT * FROM knowledge WHERE id = ?", (row[0],)).fetchone()), created=True))
+                           " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                           (row_id, kind, json.dumps(payload, ensure_ascii=False), h,
+                            json.dumps(tags, ensure_ascii=False), source, "pending", now))
+                entry = {
+                    "id": row_id, "kind": kind, "payload": payload,
+                    "tags": tags, "source": source, "status": "pending",
+                    "created_at": now, "trained_at": None, "trained_job_id": None,
+                }
+                results.append(AddResult(entry, created=True))
         return results
 
     def add(self, kind: str, payload: dict, tags: list[str] | None = None, source: str | None = None) -> AddResult:

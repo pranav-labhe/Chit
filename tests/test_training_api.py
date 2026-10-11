@@ -77,3 +77,26 @@ def test_training_requires_auth(client, monkeypatch):
     assert client.post("/train", json=body(), headers={"X-API-Key": "wrong"}).status_code == 401
     monkeypatch.setattr(api, "API_KEY", None)
     assert client.post("/train", json=body()).status_code == 403  # no key configured -> disabled
+
+
+@pytest.mark.parametrize("method,path,kwargs", [
+    ("GET", "/candidates", {}),
+    ("POST", "/candidates/0123456789abcdef0123456789abcdef/evaluate", {}),
+    ("POST", "/candidates/0123456789abcdef0123456789abcdef/promote", {}),
+    ("POST", "/admin/rollback", {"params": {"to_sha256": "dummy"}}),
+    ("POST", "/admin/reload", {}),
+])
+def test_candidate_and_admin_endpoints_require_auth(client, monkeypatch, method, path, kwargs):
+    # Missing API key -> 401
+    assert client.request(method, path, **kwargs).status_code == 401
+    # Invalid API key -> 401
+    assert client.request(method, path, headers={"X-API-Key": "wrong"}, **kwargs).status_code == 401
+    # Unconfigured API key and ALLOW_UNAUTHENTICATED_TRAINING=False -> 403
+    monkeypatch.setattr(api, "API_KEY", None)
+    assert client.request(method, path, **kwargs).status_code == 403
+
+    # Authenticated request with valid key passes auth check
+    monkeypatch.setattr(api, "API_KEY", api.API_KEY or "test-key")
+    from conftest import H
+    res_auth = client.request(method, path, headers=H, **kwargs)
+    assert res_auth.status_code not in (401, 403)

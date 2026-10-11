@@ -82,7 +82,7 @@ HIST = [{"role": "user", "content": "My name is Asha."}, {"role": "assistant", "
 
 
 def test_prompt_without_history_is_unchanged():
-    assert render_chat_prompt("Hi", ["a fact"]) == "Task: chat\nKnown memory:\n- a fact\nUser: Hi\nChit:"
+    assert render_chat_prompt("Hi", ["a fact"]) == "Task: chat (answer concisely using known memory; do not speculate)\nKnown memory:\n- a fact\nUser: Hi\nChit:"
 
 
 def test_prompt_includes_history_in_order():
@@ -126,6 +126,18 @@ def test_trimming_never_starts_on_an_orphan_reply():
     full = render_chat_prompt("Now", [], history=hist)
     cut = render_chat_prompt("Now", [], history=hist, max_bytes=len(full) - 3)
     assert "Chit: Hello Asha." not in cut and "User: Q2" in cut
+
+
+def test_prompt_truncation_protects_open_code_fences_and_multibyte_tokens():
+    from pranav.chit.tokenizer import ByteTokenizer
+    tok = ByteTokenizer()
+    message = "Here is my code:\n```python\nx = 'नमस्ते ' * 20\nprint(x)\n```\nExplanation follows..."
+    # Budget that cuts inside the message but allows closing the code fence
+    prompt = render_chat_prompt(message, [], max_tokens=150, tokenizer=tok)
+    assert len(tok.encode(prompt)) <= 150
+    # Code fences should not be left unclosed (even number of ```)
+    assert prompt.count("```") % 2 == 0
+
 
 
 # ------------------------------------------------------------------ API

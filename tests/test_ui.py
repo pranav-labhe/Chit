@@ -206,3 +206,34 @@ def test_page_guide_buttons_and_telemetry_in_rendered_ui():
     for metric_id in ["sysCpu", "sysMem", "sysDisk"]:
         assert f'id="{metric_id}"' in html
 
+
+def test_proxy_routes_patch_method(monkeypatch):
+    observed = {}
+
+    def upstream(request):
+        observed["method"] = request.method
+        observed["url"] = str(request.url)
+        observed["key"] = request.headers.get("x-api-key")
+        observed["body"] = request.content.decode()
+        return httpx.Response(200, json={"session_id": "0123456789abcdef0123456789abcdef", "facts_enabled": True})
+
+    monkeypatch.setattr(ui, "_new_http_client", lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(upstream), follow_redirects=False))
+
+    with TestClient(ui.app) as client:
+        client.post("/_ui/login", json={"api_key": KEY})
+        response = client.post("/_ui/proxy", json={
+            "method": "PATCH",
+            "path": "/sessions/0123456789abcdef0123456789abcdef/facts",
+            "body": {"enabled": True},
+        })
+
+    assert response.status_code == 200
+    assert response.json() == {"session_id": "0123456789abcdef0123456789abcdef", "facts_enabled": True}
+    assert observed == {
+        "method": "PATCH",
+        "url": "http://127.0.0.1:8000/sessions/0123456789abcdef0123456789abcdef/facts",
+        "key": KEY,
+        "body": json.dumps({"enabled": True}, separators=(",", ":")),
+    }
+

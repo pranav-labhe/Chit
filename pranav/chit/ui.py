@@ -114,7 +114,7 @@ class LoginRequest(BaseModel):
 
 class ProxyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    method: Literal["GET", "POST", "DELETE"]
+    method: Literal["GET", "POST", "DELETE", "PATCH"]
     path: str = Field(min_length=1, max_length=256)
     query: dict[str, Any] = Field(default_factory=dict)
     body: Any = None

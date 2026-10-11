@@ -52,9 +52,12 @@ The AI has a strict reading limit (`block_size`, typically 256 or 512 tokens). W
 
 1. **Oldest Session Turns**: Distant chat history is forgotten first.
 2. **Conversation Summary**: If a summary of old chats exists, it is dropped next.
-3. **Lowest-Ranked Memories**: Contextual facts with low semantic relevance are dropped.
-4. **Oldest Extracted Facts**: Direct core facts (like user preferences) are highly protected but dropped if desperate.
-5. **Current User Input**: As an absolute last resort, the user's current message is truncated.
+3. **Grounded Directive**: If the scaffold overflows the budget, the grounded directive `(answer concisely using known memory; do not speculate)` is dropped before touching memory.
+4. **Lowest-Ranked Memories**: Contextual facts with low semantic relevance are dropped.
+5. **Oldest Extracted Facts**: Direct core facts (like user preferences) are highly protected but dropped if desperate.
+6. **Current User Input**: As an absolute last resort, the user's current message is truncated (protecting open markdown code fences and UTF-8 multi-byte boundaries).
+
+When memories or session facts exist, the scaffold binds the model to known truth: `Task: {task} (answer concisely using known memory; do not speculate)`.
 
 ---
 
@@ -62,9 +65,11 @@ The AI has a strict reading limit (`block_size`, typically 256 or 512 tokens). W
 
 Beyond moving data, the system performs several intelligent background tasks:
 
-- **Fact Extraction (`facts.py`)**: It does *not* use AI to extract facts. It uses lightning-fast, deterministic Regular Expressions (Regex) to spot patterns like `name`, `location`, `preference`, and `goal` in user messages.
+- **Fact Extraction (`facts.py`)**: It does *not* use AI to extract facts. It uses lightning-fast, deterministic Regular Expressions (Regex) to spot patterns like `name`, `location`, `preference`, `email`, `project`, and `goal` in user messages, rejecting common conversational false positives.
 - **Background Summarization (`summarization.py`)**: It runs a deduplicated extractive summarizer. When a chat session gets too long, it condenses the oldest messages into a short summary block so the AI doesn't have to re-read the whole conversation.
 - **Semantic Search (`embeddings.py` & `faiss_index.py`)**: When you save a memory, it is converted into a mathematical array (vector) using `SentenceTransformers`. When the user asks a question, the system finds the closest matching vectors using FAISS (a high-speed search library) or exact cosine similarity if FAISS isn't installed.
+- **Retrieval Thresholding & Grounding (`bridge.py` & `memory.py`)**: Enforces `min_relevance` thresholding (default `0.35` in Bridge) to filter out low-confidence semantic noise. Automatically engages deterministic greedy decoding (`temperature=0.0`) when memories or facts are present.
+- **Generation Quality & Early Stopping (`runtime.py` & `model.py`)**: Implements token-level early stopping via boundary callback `stop_fn` to prevent wasted forward passes past stop boundaries. Employs prompt-scoped repetition penalties (`idx[b, prompt_len:]`) that penalize repeated generation tokens without penalizing prompt/memory tokens.
 
 ---
 
@@ -116,6 +121,7 @@ erDiagram
 Because Chit is a personal assistant, protecting its data is critical.
 - **Backend API (Port 8000)**: Completely stateless. Every request must include the `CHIT_API_KEY` either as an `X-API-Key` header or a `Bearer` token.
 - **Browser UI (Port 8001)**: Stateful. Users log in with the API key. The server verifies it and issues a strictly locked-down cookie (`chit_console_key`). This cookie is `HttpOnly` (immune to JavaScript XSS) and `SameSite=Strict` (immune to CSRF).
+- **Training & Admin Access Gating**: Sensitive candidate evaluation, promotion, rollback, and reload endpoints (`/candidates`, `/candidates/{job_id}/evaluate`, `/candidates/{job_id}/promote`, `/admin/rollback`, `/admin/reload`) require the `require_training_access` dependency to prevent unauthorized manipulation of production weights.
 
 ---
 
@@ -232,7 +238,7 @@ flowchart LR
 
 ## 11. Testing Philosophy & Safeguards
 
-The project contains 137 tests driven by `pytest`.
+The project contains 155 tests driven by `pytest`.
 - **Mocks & Safety (`conftest.py`)**: Intercepts database paths and redirects them to in-memory databases (`:memory:`). Running tests will never overwrite your live `memory.db`.
 - **API Key Overrides**: Tests use a dummy key (`KEY = "test-ui-key"`).
 
@@ -263,25 +269,27 @@ The project contains 137 tests driven by `pytest`.
 - **Run UI (8001)**: `python -m uvicorn pranav.chit.ui:app --port 8001 --workers 1`
 - **Run tests**: `python -m pytest`
 - **Train model**: `python -m pranav.chit.tools.train --config configs/chit_strong.json`
+- **Golden Evaluation**: `python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/latest.pt --eval-file data/eval.txt --golden-set data/golden_set.json --output data/eval_report.json`
+- **Auto-Rating**: `python -m pranav.chit.tools.auto_rate --eval-report data/eval_report.json --output data/ratings.json`
 - **Evaluate**: Use the 'Evaluate Model' button in the Studio UI (Calls `POST /candidates/{job_id}/evaluate`)
 - **Promote**: Use the 'Promote to Live' button in the Studio UI (Calls `POST /candidates/{job_id}/promote`)
 
 ## Model Candidates and Administration
 
-These routes allow you to review completed training runs and safely swap the live model in production.
+These routes allow you to review completed training runs and safely swap the live model in production. Sensitive administrative routes require the `require_training_access` dependency.
 
 ### GET /candidates
-Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their candidate checkpoint modification timestamps (`checkpoint_timestamp`), and their Golden Gate evaluation scores.
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their candidate checkpoint modification timestamps (`checkpoint_timestamp`), and their Golden Gate evaluation scores. Requires `require_training_access` dependency.
 
 ### POST /candidates/{job_id}/evaluate
-Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. Requires `require_training_access` dependency.
 
 ### POST /candidates/{job_id}/promote
-Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation. Requires `require_training_access` dependency.
 
 ### POST /admin/rollback
-Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
-- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly. Requires `require_training_access` dependency.
+- **Parameters:** `to_sha256` (the exact hash of the previous model to restore).
 
 ### POST /admin/reload
-Force-reloads the active Champion model from the disk into memory.
+Force-reloads the active Champion model from the disk into memory. Requires `require_training_access` dependency.

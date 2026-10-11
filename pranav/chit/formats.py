@@ -39,6 +39,9 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
     session_facts = [f for f in (facts or []) if f.get("key") and f.get("value")]
     summary = summary.strip()
 
+    is_tiny = (max_tokens is not None and max_tokens < 64) or (max_bytes is not None and max_bytes < 64)
+    use_grounded_contract = (bool(mems) or bool(session_facts)) and not is_tiny
+
     def build() -> str:
         mem = "\n".join(f"- {m}" for m in mems) or "- (none)"
         fact_block = ("User-stated facts (latest correction wins):\n" +
@@ -46,7 +49,8 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
             if session_facts else ""
         summary_block = f"Earlier conversation summary (derived context):\n{summary}\n" if summary else ""
         past = "".join(f"{USER if r == 'user' else ASSISTANT} {c.strip()}\n" for r, c in turns)
-        return f"Task: {task}\nKnown memory:\n{mem}\n{fact_block}{summary_block}{past}{USER} {user_input.strip()}\n{ASSISTANT}"
+        header_task = f"{task} (answer concisely using known memory; do not speculate)" if use_grounded_contract and (mems or session_facts) else task
+        return f"Task: {header_task}\nKnown memory:\n{mem}\n{fact_block}{summary_block}{past}{USER} {user_input.strip()}\n{ASSISTANT}"
 
     user_input = user_input.strip()
     prompt = build()
@@ -62,6 +66,9 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
         if count(prompt) > max_tokens and summary:
             summary = ""
             prompt = build()
+        if count(prompt) > max_tokens and use_grounded_contract:
+            use_grounded_contract = False
+            prompt = build()
         while count(prompt) > max_tokens and mems:
             mems.pop()
             prompt = build()
@@ -73,7 +80,19 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
             user_input = ""
             budget = max_tokens - count(build())
             if budget >= 0:
-                user_input = tokenizer.decode(original[:budget])
+                sliced_ids = original[:budget]
+                if getattr(tokenizer, "name", "") == "byte-utf8":
+                    user_input = bytes(sliced_ids).decode("utf-8", errors="ignore")
+                else:
+                    user_input = tokenizer.decode(sliced_ids)
+                if user_input.count("```") % 2 == 1:
+                    closed = user_input + "\n```"
+                    temp = user_input
+                    user_input = closed
+                    if count(build()) <= max_tokens:
+                        user_input = closed
+                    else:
+                        user_input = temp
                 prompt = build()
         return prompt
     if max_bytes is None:
@@ -85,6 +104,9 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
         prompt = build()
     if len(prompt.encode("utf-8")) > max_bytes and summary:
         summary = ""
+        prompt = build()
+    if len(prompt.encode("utf-8")) > max_bytes and use_grounded_contract:
+        use_grounded_contract = False
         prompt = build()
     while len(prompt.encode("utf-8")) > max_bytes and mems:
         mems.pop()  # search returns the best match first, so drop from the end
@@ -103,5 +125,9 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
         budget = max_bytes - len(scaffold.encode("utf-8"))
         if budget >= 0:
             user_input = original.encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+            if user_input.count("```") % 2 == 1:
+                closed = user_input + "\n```"
+                if len(scaffold.encode("utf-8")) + len(closed.encode("utf-8")) <= max_bytes:
+                    user_input = closed
             prompt = build()
     return prompt
