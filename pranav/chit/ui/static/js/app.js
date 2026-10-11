@@ -997,6 +997,12 @@ $('#doMemSearch').addEventListener('click', async () => {
 
 $('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#sendChat').click()}});
 $('#newChat').addEventListener('click',()=>{chatId=null;$('#chatlog').replaceChildren();$('#chatSession').textContent='New conversation'});
+$('#genMode')?.addEventListener('change',()=>{
+    const isCont=$('#genMode').value==='continue';
+    const s=$('#genSearch'),t=$('#genThink');
+    if(s){s.disabled=isCont;if(isCont)s.checked=false;s.parentElement.style.opacity=isCont?'0.45':'1';s.parentElement.title=isCont?'Web search is only available in assistant mode':'';}
+    if(t){t.disabled=isCont;if(isCont)t.checked=false;t.parentElement.style.opacity=isCont?'0.45':'1';t.parentElement.title=isCont?'Thinking is only available in assistant mode':'';}
+});
 $('#runGenerate').addEventListener('click',async()=>{
     const status=$('#genStatus');status.textContent='Generating…';status.classList.remove('error');
     try{

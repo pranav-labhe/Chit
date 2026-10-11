@@ -17,6 +17,7 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
 COPY pranav/ pranav/
 COPY configs/ configs/
 COPY data/ data/
+COPY docs/ChitAPIGuide.md docs/ChitAPIGuide.md
 COPY pyproject.toml README.md ./
 
 ARG CHIT_WITH_EMBEDDINGS=0
