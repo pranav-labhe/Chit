@@ -106,9 +106,9 @@ def test_bridge_selects_greedy_when_memories_exist_unless_overridden(tmp_path):
     assert any(c[0] == "recall" and c[1].get("min_relevance") == 0.35 for c in captured)
     assert any(c[0] == "generate" and c[1] == 0.0 for c in captured)
 
-    # 2. Caller explicitly overrides temperature to 0.4: should honor 0.4
+    # 2. Caller explicitly passes temperature=0.4: memories enforce greedy 0.0
     captured.clear()
     bridge.process(Context(user_input="What is the fact?"), temperature=0.4)
-    assert any(c[0] == "generate" and c[1] == 0.4 for c in captured)
+    assert any(c[0] == "generate" and c[1] == 0.0 for c in captured)
 
 

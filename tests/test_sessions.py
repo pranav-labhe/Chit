@@ -82,7 +82,11 @@ HIST = [{"role": "user", "content": "My name is Asha."}, {"role": "assistant", "
 
 
 def test_prompt_without_history_is_unchanged():
-    assert render_chat_prompt("Hi", ["a fact"]) == "Task: chat (answer concisely using known memory; do not speculate)\nKnown memory:\n- a fact\nUser: Hi\nChit:"
+    assert render_chat_prompt("Hi", ["a fact"]) == "Task: chat\nKnown memory:\n- a fact\nUser: Hi\nChit:"
+
+
+def test_prompt_without_memory_omits_known_memory_block():
+    assert render_chat_prompt("Hi", []) == "Task: chat\nUser: Hi\nChit:"
 
 
 def test_prompt_includes_history_in_order():
@@ -109,7 +113,7 @@ def test_prompt_trims_oldest_turns_first_and_keeps_message():
 def test_prompt_truncates_long_utf8_message_to_fit_when_scaffold_fits():
     p = render_chat_prompt("नमस्ते " * 100, [], max_bytes=128)
     assert len(p.encode("utf-8")) <= 128
-    assert p.startswith("Task: chat\nKnown memory:\n- (none)\nUser: नमस्ते")
+    assert p.startswith("Task: chat\nUser: नमस्ते")
     assert p.endswith("\nChit:")
 
 

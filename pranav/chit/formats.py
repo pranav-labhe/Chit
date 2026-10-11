@@ -43,14 +43,13 @@ def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",
     use_grounded_contract = (bool(mems) or bool(session_facts)) and not is_tiny
 
     def build() -> str:
-        mem = "\n".join(f"- {m}" for m in mems) or "- (none)"
+        mem_block = ("Known memory:\n" + "\n".join(f"- {m}" for m in mems) + "\n") if mems else ""
         fact_block = ("User-stated facts (latest correction wins):\n" +
                       "\n".join(f"- {f['key']}: {f['value']}" for f in session_facts) + "\n") \
             if session_facts else ""
         summary_block = f"Earlier conversation summary (derived context):\n{summary}\n" if summary else ""
         past = "".join(f"{USER if r == 'user' else ASSISTANT} {c.strip()}\n" for r, c in turns)
-        header_task = f"{task} (answer concisely using known memory; do not speculate)" if use_grounded_contract and (mems or session_facts) else task
-        return f"Task: {header_task}\nKnown memory:\n{mem}\n{fact_block}{summary_block}{past}{USER} {user_input.strip()}\n{ASSISTANT}"
+        return f"Task: {task}\n{mem_block}{fact_block}{summary_block}{past}{USER} {user_input.strip()}\n{ASSISTANT}"
 
     user_input = user_input.strip()
     prompt = build()

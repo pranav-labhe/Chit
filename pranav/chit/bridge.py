@@ -39,21 +39,25 @@ class Bridge:
         self.temperature = temperature
 
     def process(self, c: Context, temperature: float | None = None, *,
-                max_new_tokens: int | None = None, top_k: int | None = 50,
+                max_new_tokens: int | None = None, top_k: int | None = None,
                 stop: list[str] | None = None) -> ChitDecision:
         t = self.temperature if temperature is None else temperature
         n_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
+        is_byte_tokenizer = getattr(self.runtime.tokenizer, "vocab_size", 256) <= 256
+        effective_top_k = top_k if top_k is not None else (1 if is_byte_tokenizer else 50)
+
         if c.task == "continue":  # plain-text model: the message is the start of a sentence, no chat wrapper
-            text = self.runtime.generate(c.user_input, n_tokens, t, top_k,
+            text = self.runtime.generate(c.user_input, n_tokens, t, effective_top_k,
                                          stop=stop if stop is not None else ["\n"])
             return ChitDecision(text, metadata={"task": c.task, "memory_ids": []})
         memories = (c.memories or self.runtime.recall(c.user_input, self.max_memories, min_relevance=0.35))[: self.max_memories]
-        if (memories or c.facts) and temperature is None:
+        if memories or c.facts:
             t = 0.0
+            effective_top_k = 1
         context = (getattr(self.runtime, "model_config", None) or {}).get("block_size")
         prompt = render_chat_prompt(c.user_input, [m.get("content", "") for m in memories], task=c.task,
                                     history=c.history, max_tokens=context, tokenizer=self.runtime.tokenizer,
                                     facts=c.facts, summary=c.summary)
-        text = self.runtime.generate(prompt, n_tokens, t, top_k,
+        text = self.runtime.generate(prompt, n_tokens, t, effective_top_k,
                                      stop=stop if stop is not None else self.STOP).strip()
         return ChitDecision(text, metadata={"task": c.task, "memory_ids": [m.get("id") for m in memories]})

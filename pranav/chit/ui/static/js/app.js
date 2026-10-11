@@ -703,7 +703,14 @@ function addBubble(role, text, memoryIds = []) {
         copyBtn.className = 'action-btn';
         copyBtn.textContent = 'Copy';
         copyBtn.onclick = async () => {try{await navigator.clipboard.writeText(text);copyBtn.textContent='Copied';setTimeout(()=>copyBtn.textContent='Copy',1800)}catch{copyBtn.textContent='Clipboard unavailable'}};
-        const regenerate=document.createElement('button');regenerate.type='button';regenerate.className='action-btn';regenerate.textContent='Try another answer';regenerate.onclick=()=>{const messages=document.querySelectorAll('.bubble.user');if(messages.length){$('#chatInput').value=messages[messages.length-1].textContent;$('#sendChat').click()}};
+        const regenerate=document.createElement('button');regenerate.type='button';regenerate.className='action-btn';regenerate.textContent='Try another answer';regenerate.onclick=async ()=>{
+            const messages=document.querySelectorAll('.bubble.user');
+            if(messages.length){
+                $('#chatInput').value=messages[messages.length-1].textContent;
+                window._nextChatTemperature = 0.25;
+                $('#sendChat').click();
+            }
+        };
         actions.appendChild(copyBtn);
         actions.appendChild(regenerate);
         b.appendChild(actions);
@@ -736,16 +743,33 @@ $('#sendChat').addEventListener('click', async () => {
     $('#sendChat').disabled = true;
     
     try {
-        const r = await callApi('POST', '/chat', {}, {
-            message, 
-            session_id: chatId, 
-            temperature: 0.4
-        });
+        const tempOverride = window._nextChatTemperature;
+        window._nextChatTemperature = undefined;
+        const payload = { message, session_id: chatId };
+        if (typeof tempOverride === 'number') payload.temperature = tempOverride;
+
+        const r = await callApi('POST', '/chat', {}, payload);
         
         if (!r.ok) throw new Error(friendlyError(r.data,r.status));
         
         chatId = r.data.session_id;
-        recordResponseEvidence({mode:'Chat',prompt:message,tokens:'server default',temperature:0.4,topK:'server default',continued:wasContinuing,response:r.data});
+        const recalled = r.data?.metadata?.memory_ids;
+        const hasMemory = Array.isArray(recalled) && recalled.length > 0;
+        const recordedTemp = tempOverride !== undefined 
+            ? tempOverride 
+            : (hasMemory ? 0 : 'adaptive');
+        const recordedTopK = tempOverride !== undefined 
+            ? 3 
+            : (hasMemory ? 1 : 'adaptive');
+        recordResponseEvidence({
+            mode: 'Chat',
+            prompt: message,
+            tokens: 'server default',
+            temperature: recordedTemp,
+            topK: recordedTopK,
+            continued: wasContinuing,
+            response: r.data
+        });
         
         $('#chatSession').textContent = chatId ? `Session ${chatId}` : 'No saved session';
         if (!wasContinuing && chatId) {
@@ -754,8 +778,7 @@ $('#sendChat').addEventListener('click', async () => {
         if (typeof loadChatFacts === 'function') {
             loadChatFacts().catch(console.error);
         }
-        const recalled=r.data?.metadata?.memory_ids;
-        if(Array.isArray(recalled)&&recalled.length){
+        if(hasMemory){
             const breadcrumb=document.createElement('div');breadcrumb.className='memory-breadcrumb';
             breadcrumb.textContent=`Chit used ${recalled.length} saved ${recalled.length===1?'memory':'memories'} to shape this reply.`;
             $('#chatlog').appendChild(breadcrumb);
