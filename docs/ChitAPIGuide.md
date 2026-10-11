@@ -44,14 +44,28 @@ Chit supports native test-time compute via Chain-of-Thought (CoT). Passing `"thi
 {
   "text": "5 apples.",
   "session_id": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+  "confidence": 0.942,
+  "is_incomplete": false,
+  "is_uncertain": false,
   "metadata": {
     "task": "chat",
     "memory_ids": [],
     "thoughts": "Ravi starts with 8 apples. He gives away 3. 8 minus 3 equals 5.",
-    "thought_tokens": 19
+    "thought_tokens": 19,
+    "confidence": 0.942,
+    "is_incomplete": false,
+    "is_uncertain": false,
+    "needs_retrieval": false
   }
 }
 ```
+
+### Inference Confidence & Completeness Detection
+Chit evaluates token-level softmax probabilities during generation to calibrate mathematical uncertainty and completeness:
+- **`confidence`**: Geometric mean of chosen token probabilities in $[0.0, 1.0]$.
+- **`is_incomplete`**: Set to `true` if generation reached the token limit mid-sentence without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`).
+- **`is_uncertain`**: Set to `true` if confidence drops below 0.40, indicating model uncertainty on unseen or out-of-distribution topics.
+- **`needs_retrieval`**: Triggers when uncertainty is high or information is missing, activating upcoming Web Search integration.
 
 **When to use Thinking:**
 - **Use `think: true`**: For multi-step math, word puzzles, logical deductions, or strict rule following where immediate token generation could lead to premature reasoning mistakes. Ensure a token budget (`tokens >= 120`) is provided so thoughts do not exhaust generation tokens before the answer.

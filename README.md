@@ -7,7 +7,8 @@ problem solving, storing experience, teaching knowledge, and training.
 > **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
 > `/generate` and `/chat` format messages for a context-aware Chit response, while `/generate` can still
 > do raw continuation with `mode: "continue"`. It employs a bounded inference scheduler to handle concurrent
-> requests and a hybrid SQLite/Vector memory store for durable, fast-access experiences. It learns from 
+> requests, a hybrid SQLite/Vector memory store for durable experiences, and token-level inference confidence calibration
+> with generation completeness detection to signal uncertainty and trigger retrieval. It learns from 
 > reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
 
 > 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.

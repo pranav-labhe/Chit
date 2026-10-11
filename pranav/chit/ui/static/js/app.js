@@ -715,7 +715,18 @@ function addBubble(role, text, metadata = {}) {
     }
     b.appendChild(content);
 
-    // 3. Action buttons (Copy only copies the final answer, NOT the thoughts)
+    // 3. Uncertainty / Incompleteness Warning Notice
+    if (role === 'chit' && (metadata.is_uncertain || metadata.is_incomplete)) {
+        const notice = document.createElement('div');
+        notice.className = 'retrieval-notice';
+        const reasonText = metadata.is_incomplete 
+            ? '⚡ Generation was truncated mid-sentence.' 
+            : `⚠️ Chit has low confidence in this answer (${Math.round((metadata.confidence || 0) * 100)}%).`;
+        notice.innerHTML = `<span>${reasonText}</span>`;
+        b.appendChild(notice);
+    }
+
+    // 4. Action buttons (Copy only copies the final answer, NOT the thoughts)
     if (role === 'chit') {
         const actions = document.createElement('div');
         actions.className = 'bubble-actions';
@@ -734,6 +745,26 @@ function addBubble(role, text, metadata = {}) {
         };
         actions.appendChild(copyBtn);
         actions.appendChild(regenerate);
+
+        if (typeof metadata.confidence === 'number') {
+            const confBadge = document.createElement('span');
+            confBadge.className = 'conf-badge ' + (metadata.is_uncertain ? 'conf-low' : 'conf-high');
+            confBadge.textContent = `${Math.round(metadata.confidence * 100)}% conf`;
+            actions.appendChild(confBadge);
+        }
+
+        if (metadata.needs_retrieval || metadata.is_uncertain) {
+            const webBtn = document.createElement('button');
+            webBtn.type = 'button';
+            webBtn.className = 'action-btn retrieval-btn';
+            webBtn.innerHTML = '🌐 Search Web';
+            webBtn.title = 'Chit is uncertain. Search the internet for live facts.';
+            webBtn.onclick = () => {
+                alert('Web Retrieval Tool will be integrated in the upcoming phase.');
+            };
+            actions.appendChild(webBtn);
+        }
+
         b.appendChild(actions);
     }
     

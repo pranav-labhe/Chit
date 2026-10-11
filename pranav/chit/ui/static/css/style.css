@@ -773,3 +773,53 @@ button:disabled { cursor: wait; opacity: .65; }
     overflow-wrap: anywhere;
 }
 
+/* Confidence & Uncertainty Badges */
+.conf-badge {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 600;
+    margin-left: 6px;
+    align-self: center;
+}
+
+.conf-high {
+    background: #162a22;
+    color: #9cddc4;
+    border: 1px solid #234b3b;
+}
+
+.conf-low {
+    background: #332314;
+    color: #fca311;
+    border: 1px solid #5a3e1a;
+}
+
+/* Uncertainty / Incompleteness Warning Notice */
+.retrieval-notice {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #1f1b16;
+    border: 1px dashed #6b4d1b;
+    border-radius: 6px;
+    color: #e5b869;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Web Search Trigger Button */
+.action-btn.retrieval-btn {
+    background: #1a273b;
+    color: #7aa2f7;
+    border: 1px solid #364b6e;
+    font-weight: 600;
+}
+
+.action-btn.retrieval-btn:hover {
+    background: #253856;
+    border-color: #7aa2f7;
+    color: #ffffff;
+}
+

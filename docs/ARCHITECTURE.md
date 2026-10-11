@@ -105,11 +105,18 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 
 | Module | Role | Key Components | Logic Flow |
 | :--- | :--- | :--- | :--- |
-| **`api.py`** | **Gateway** | FastAPI Routes | Handles HTTP requests $\rightarrow$ Auth $\rightarrow$ Bridge/Store $\rightarrow$ JSON Response. |
-| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to the `Runtime`. Manages token limits and temperature. |
+| **`api.py`** | **Gateway** | FastAPI Routes | Handles HTTP requests $\rightarrow$ Auth $\rightarrow$ Bridge/Store $\rightarrow$ JSON Response (`ChatResponse`). |
+| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to `Runtime`. Calibrates confidence, incompleteness, and uncertainty signals ($C, \tau=0.40$). |
 | **`inference.py`** | **Scheduler** | `InferenceManager` | Bounds FIFO admission and serializes model execution on the device worker. |
 | **`runtime.py`** | **Execution** | `ChitRuntime` | The interface for `generate` and `recall`. Bridges the Gap between Model and Memory. |
-| **`model.py`** | **Brain** | `ChitModel` | Transformer-based architecture. Handles the actual tensor math (Forward pass). |
+| **`model.py`** | **Brain** | `ChitModel` | Transformer-based architecture. Handles tensor math, token log-probabilities, and finish reasons. |
+
+### 🎯 Inference Confidence & Completeness Calibration
+- **Token-Level Logit Tracking**: `ChitModel.generate()` calculates sequence confidence from token log-softmax probabilities under the raw predictive distribution ($T=1.0$):
+  $$C = \exp\left( \frac{1}{N} \sum_{t=1}^{N} \log P(x_t \mid x_{<t}) \right) \in [0.0, 1.0]$$
+- **Generation Completeness**: `Bridge.process()` detects truncation (`is_incomplete = True`) when generation terminates on length (`finish_reason == "length"`) without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`).
+- **Uncertainty Calibration**: Outputs with $C < 0.40$ are flagged as uncertain (`is_uncertain = True`).
+- **Web Retrieval Trigger**: Flags `needs_retrieval = True` on uncertainty or low chat confidence ($< 0.35$), providing the autonomous trigger for upcoming web retrieval integration.
 | **`memory.py`** | **Experience** | `SQLiteMemoryStore` | SQLite source of truth, FTS5 keyword retrieval and optional FAISS HNSW hybrid search. |
 | **`sessions.py`** | **Context** | `SessionStore` | SQLite transcript, fact and summary coverage/status; transactional retention. |
 | **`knowledge.py`** | **Learning** | `KnowledgeStore` | SQLite-based queue for training data. Manages the "teach" $\rightarrow$ "train" pipeline. |

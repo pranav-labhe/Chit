@@ -432,7 +432,17 @@ Response:
 {
   "text": "...the model's reply...",
   "session_id": "eefa8d7646ca4a99bf1ef6b514cf75c5",
-  "metadata": {"task": "chat", "memory_ids": []}
+  "confidence": 0.892,
+  "is_incomplete": false,
+  "is_uncertain": false,
+  "metadata": {
+    "task": "chat",
+    "memory_ids": [],
+    "confidence": 0.892,
+    "is_incomplete": false,
+    "is_uncertain": false,
+    "needs_retrieval": false
+  }
 }
 ```
 **Keep that `session_id`.** Send it with your next message:
@@ -446,7 +456,21 @@ Response:
 ```
 Response:
 ```json
-{"text": " model inside Atmini.", "session_id": null, "metadata": {"task": "continue", "memory_ids": []}}
+{
+  "text": " model inside Atmini.",
+  "session_id": null,
+  "confidence": 0.745,
+  "is_incomplete": false,
+  "is_uncertain": false,
+  "metadata": {
+    "task": "continue",
+    "memory_ids": [],
+    "confidence": 0.745,
+    "is_incomplete": false,
+    "is_uncertain": false,
+    "needs_retrieval": false
+  }
+}
 ```
 
 **What you get back**
@@ -455,8 +479,15 @@ Response:
 | --- | --- |
 | `text` | The model's reply. |
 | `session_id` | The conversation this was saved to. `null` when you used `task: "continue"` (nothing is saved). |
+| `confidence` | Mathematical confidence score from 0.0 (pure guess) to 1.0 (certain), calculated from token probabilities. |
+| `is_incomplete` | `true` if generation hit the token ceiling mid-sentence without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`). |
+| `is_uncertain` | `true` if confidence is below 0.40, showing Chit is uncertain on this topic. |
 | `metadata.task` | The task that was used. |
 | `metadata.memory_ids` | The IDs of memory notes that were shown to the model for this reply. Empty means none matched. |
+| `metadata.confidence` | The rounded sequence confidence score. |
+| `metadata.is_incomplete` | Whether generation stopped abruptly mid-sentence. |
+| `metadata.is_uncertain` | Whether model confidence is low. |
+| `metadata.needs_retrieval` | `true` when confidence is low or information void is detected, triggering web retrieval. |
 
 **Common problems**
 

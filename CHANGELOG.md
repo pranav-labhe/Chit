@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+### Added
+- **Inference Confidence Calibration**: Grounded mathematical sequence confidence scoring in `ChitModel.generate()` using the geometric mean of token-level softmax probabilities $C = \exp(\frac{1}{N} \sum_{t=1}^N \log P(x_t \mid x_{<t}))$ at $T=1.0$ before temperature or penalty adjustments.
+- **Generation Completeness Detection**: Implemented terminal punctuation boundary checks (`.`, `!`, `?`, `"`, `'`, `\n`) combined with `finish_reason == "length"` in `Bridge.process()` to detect mid-sentence truncation (`is_incomplete`).
+- **Uncertainty Calibration & Retrieval Trigger**: Calibrated uncertainty threshold $\tau = 0.40$ (`is_uncertain`), populating `needs_retrieval` when Chit encounters out-of-distribution prompts or low certainty, serving as the trigger for upcoming Web Retrieval.
+- **Dual API Exposure & Response Schema**: Exposed `confidence`, `is_incomplete`, and `is_uncertain` at the top level of `POST /chat` as well as within `metadata`, accompanied by the new typed `ChatResponse` model in `api.py`.
+- **Web UI Badging & Retrieval Affordance**: Rendered confidence badges (`conf-high` / `conf-low`), amber warning notices for truncated/uncertain answers, and an interactive `🌐 Search Web` action trigger in `app.js` and `style.css`.
+- **Confidence Test Suite**: Added `tests/test_confidence.py` with 12 comprehensive unit tests covering token probability tracking, finish reasons, CoT confidence, and backward compatibility.
+
 ## 0.3.0
 
 ### Added

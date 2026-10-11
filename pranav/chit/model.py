@@ -132,7 +132,8 @@ class ChitModel(nn.Module):
                  top_k: int | None = 50, generator: torch.Generator | None = None,
                  stop_fn: Callable[[torch.Tensor], bool] | None = None,
                  repetition_penalty: float = 1.0,
-                 prompt_len: int | None = None) -> torch.Tensor:
+                 prompt_len: int | None = None,
+                 return_details: bool = False) -> torch.Tensor | tuple[torch.Tensor, float, str]:
         """Sample ``max_new_tokens`` tokens after ``idx`` (shape ``(b, t)``, t >= 1).
 
         ``temperature <= 0`` means greedy decoding. The module's train/eval mode is
@@ -144,30 +145,46 @@ class ChitModel(nn.Module):
             prompt_len = idx.size(1)
         was_training = self.training
         self.eval()
+        finish_reason = "length"
+        total_log_probs: list[torch.Tensor] = []
         try:
             for _ in range(max_new_tokens):
                 logits, _ = self(idx[:, -self.block_size:])
                 logits = logits[:, -1, :]
+                raw_log_probs = F.log_softmax(logits, dim=-1)
+                sampling_logits = logits
                 if repetition_penalty > 1.0:
+                    sampling_logits = logits.clone()
                     for b in range(idx.size(0)):
                         gen_tokens = idx[b, prompt_len:]
                         if gen_tokens.numel() > 0:
                             seen = torch.unique(gen_tokens)
-                            vals = logits[b, seen]
-                            logits[b, seen] = torch.where(vals > 0, vals / repetition_penalty, vals * repetition_penalty)
+                            vals = sampling_logits[b, seen]
+                            sampling_logits[b, seen] = torch.where(vals > 0, vals / repetition_penalty, vals * repetition_penalty)
                 if temperature <= 0:
-                    nxt = logits.argmax(dim=-1, keepdim=True)
+                    nxt = sampling_logits.argmax(dim=-1, keepdim=True)
                 else:
-                    logits = logits / temperature
+                    scaled_logits = sampling_logits / temperature
                     if top_k:
-                        kth = torch.topk(logits, min(top_k, logits.size(-1))).values[:, -1:]
-                        logits = logits.masked_fill(logits < kth, float("-inf"))
-                    nxt = torch.multinomial(F.softmax(logits, dim=-1), 1, generator=generator)
+                        kth = torch.topk(scaled_logits, min(top_k, scaled_logits.size(-1))).values[:, -1:]
+                        scaled_logits = scaled_logits.masked_fill(scaled_logits < kth, float("-inf"))
+                    nxt = torch.multinomial(F.softmax(scaled_logits, dim=-1), 1, generator=generator)
+                token_log_p = raw_log_probs.gather(dim=-1, index=nxt)
+                total_log_probs.append(token_log_p)
                 idx = torch.cat((idx, nxt), dim=1)
                 if stop_fn is not None and stop_fn(idx):
+                    finish_reason = "stop"
                     break
         finally:
             self.train(was_training)
+        if return_details:
+            if total_log_probs:
+                stacked = torch.stack(total_log_probs, dim=1)
+                seq_conf = stacked.mean(dim=1).exp().mean().item()
+                confidence = float(max(0.0, min(1.0, seq_conf)))
+            else:
+                confidence = 1.0
+            return idx, confidence, finish_reason
         return idx
 
 

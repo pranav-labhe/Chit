@@ -43,7 +43,8 @@ class ChitRuntime:
         return runtime
 
     def generate(self, prompt: str, max_new_tokens: int = 100, temperature: float = 0.8, top_k: int | None = 50,
-                 stop: list[str] | None = None, repetition_penalty: float = 1.0) -> str:
+                 stop: list[str] | None = None, repetition_penalty: float = 1.0,
+                 return_details: bool = False) -> str | tuple[str, float, str]:
         """Return only the newly generated text, cut at the first ``stop`` string if given."""
         ids = self.tokenizer.encode(prompt) or self.tokenizer.encode("\n")  # model needs >= 1 token
         x = torch.tensor([ids], dtype=torch.long, device=self.device)
@@ -67,13 +68,34 @@ class ChitRuntime:
                     return any(s in text for s in clean_stops)
                 stop_fn = _stop
 
-        y = self.model.generate(x, max_new_tokens, temperature, top_k,
-                                stop_fn=stop_fn, repetition_penalty=repetition_penalty,
-                                prompt_len=prompt_len)
+        try:
+            gen_res = self.model.generate(x, max_new_tokens, temperature, top_k,
+                                          stop_fn=stop_fn, repetition_penalty=repetition_penalty,
+                                          prompt_len=prompt_len, return_details=return_details)
+        except TypeError:
+            gen_res = self.model.generate(x, max_new_tokens, temperature, top_k,
+                                          stop_fn=stop_fn, repetition_penalty=repetition_penalty,
+                                          prompt_len=prompt_len)
+
+        if isinstance(gen_res, tuple):
+            y, confidence, finish_reason = gen_res
+        else:
+            y = gen_res
+            confidence = 1.0
+            finish_reason = "length"
+
         text = self.tokenizer.decode(y[0, prompt_len:].tolist())
+        stopped_by_cut = False
         for s in clean_stops:
             if s in text:
                 text = text[:text.index(s)]
+                stopped_by_cut = True
+
+        if stopped_by_cut:
+            finish_reason = "stop"
+
+        if return_details:
+            return text, confidence, finish_reason
         return text
 
     def remember(self, *a, **k):

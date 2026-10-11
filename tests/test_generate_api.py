@@ -61,7 +61,7 @@ def test_chat_keeps_response_fields_and_accepts_generation_length(client):
     response = client.post("/chat", json={"message": "Write a greeting.", "tokens": 19}, headers=H)
 
     assert response.status_code == 200
-    assert set(response.json()) == {"text", "session_id", "metadata"}
+    assert set(response.json()) == {"text", "session_id", "metadata", "confidence", "is_incomplete", "is_uncertain"}
     assert response.json()["text"] == "reply"
     assert response.json()["session_id"]
     assert calls[0][0][1] == 19

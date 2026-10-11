@@ -313,7 +313,17 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
 {
   "text": "...",
   "session_id": "eefa8d7646ca4a99bf1ef6b514cf75c5",
-  "metadata": {"task": "chat", "memory_ids": []}
+  "confidence": 0.892,
+  "is_incomplete": false,
+  "is_uncertain": false,
+  "metadata": {
+    "task": "chat",
+    "memory_ids": [],
+    "confidence": 0.892,
+    "is_incomplete": false,
+    "is_uncertain": false,
+    "needs_retrieval": false
+  }
 }
 ```
 ```bash
@@ -328,7 +338,21 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
   -d '{"message": "Chit is the", "task": "continue", "temperature": 0}'
 ```
 ```json
-{"text": " model inside Atmini.", "session_id": null, "metadata": {"task": "continue", "memory_ids": []}}
+{
+  "text": " model inside Atmini.",
+  "session_id": null,
+  "confidence": 0.745,
+  "is_incomplete": false,
+  "is_uncertain": false,
+  "metadata": {
+    "task": "continue",
+    "memory_ids": [],
+    "confidence": 0.745,
+    "is_incomplete": false,
+    "is_uncertain": false,
+    "needs_retrieval": false
+  }
+}
 ```
 
 **Response fields**
@@ -337,8 +361,15 @@ curl -X POST $BASE/chat -H "X-API-Key: $KEY" -H "Content-Type: application/json"
 | --- | --- | --- |
 | `text` | string | The model's reply. For `continue`, the part that follows `message`. |
 | `session_id` | string or null | The conversation this exchange was saved to. `null` for `task: "continue"`. Send it back to continue the conversation. |
+| `confidence` | number or null | Sequence-level confidence score in $[0.0, 1.0]$ based on geometric mean token probability. |
+| `is_incomplete` | boolean | True if generation hit max token length without terminal punctuation. |
+| `is_uncertain` | boolean | True if confidence is below the uncertainty threshold (0.40). |
 | `metadata.task` | string | The task that was used. |
 | `metadata.memory_ids` | array of strings | Ids of the memories that were put into the prompt. |
+| `metadata.confidence` | number | Rounded confidence score. |
+| `metadata.is_incomplete` | boolean | Incompleteness status. |
+| `metadata.is_uncertain` | boolean | Uncertainty status. |
+| `metadata.needs_retrieval` | boolean | True when retrieval is recommended due to uncertainty or information void. |
 
 **Errors.** `404` `session not found` (unknown or deleted `session_id`). `422` `session_id` is not 32 hex characters, or it was
 combined with `task: "continue"`. `503` no model is loaded.

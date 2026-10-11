@@ -266,6 +266,16 @@ class ChatRequest(BaseModel):
     think: bool = Field(default=False, description="Enable chain-of-thought intermediate reasoning")
 
 
+class ChatResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    text: str
+    session_id: str | None = None
+    confidence: float | None = None
+    is_incomplete: bool = False
+    is_uncertain: bool = False
+    metadata: dict = Field(default_factory=dict)
+
+
 Tag = Annotated[str, Field(min_length=1, max_length=50, pattern=r"^[\w.:/-]+$")]
 
 
@@ -417,7 +427,14 @@ async def chat(r: ChatRequest):
                 _state["summarizer"].submit(session_id)
         except SessionNotFound:  # deleted while the reply was being generated
             raise HTTPException(status_code=404, detail="session not found")
-    return {"text": d.text, "session_id": session_id, "metadata": d.metadata}
+    return {
+        "text": d.text,
+        "session_id": session_id,
+        "confidence": d.confidence,
+        "is_incomplete": d.metadata.get("is_incomplete", False),
+        "is_uncertain": d.metadata.get("is_uncertain", False),
+        "metadata": d.metadata,
+    }
 
 
 # --------------------------------------------------------------------------- sessions
