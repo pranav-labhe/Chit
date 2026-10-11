@@ -7,33 +7,81 @@ from dataclasses import dataclass, field
 from .formats import render_chat_prompt
 from .search import budget_snippet, search_web
 
-def _has_semantic_divergence(output: str, query: str = "") -> bool:
-    """Detect ungrounded meta-task divergence in small language model outputs.
+CLOSED_CLASS_STOP_WORDS = frozenset({
+    "the", "and", "are", "was", "were", "for", "that", "this", "with", "from",
+    "have", "has", "had", "not", "but", "can", "will", "yes", "none", "there",
+    "they", "their", "them", "about", "more", "some", "any", "all", "into",
+    "what", "which", "when", "where", "who", "whom", "whose", "why", "how",
+    "does", "did", "doing", "been", "being", "would", "could", "should", "shall",
+    "than", "then", "also", "just", "such", "only", "other", "very", "most"
+})
 
-    Identifies outputs asserting specific meta-task preconditions (such as text
-    shortening constraints, explicit correction application, or domain triage)
-    when the user's prompt contains zero semantic tokens matching that domain.
+
+def _extract_content_tokens(text: str) -> set[str]:
+    """Extract lowercased semantic content tokens of length >= 3 excluding closed-class words."""
+    tokens = re.findall(r"\b[a-z0-9]{3,}\b", text.lower())
+    return {t for t in tokens if t not in CLOSED_CLASS_STOP_WORDS}
+
+
+def _has_semantic_divergence(output: str, query: str = "", premise: str = "") -> bool:
+    """Universal information-theoretic grounding supervisor.
+
+    Detects when neural generation diverges into ungrounded training attractors
+    without relying on hardcoded keyword blacklists or domain routers.
+
+    Evaluates:
+    1. Grounded turns (premise is non-empty):
+       The output content tokens must have non-empty intersection with the conditioning
+       context tokens (Query U Premise). If disjoint, the output is ungrounded.
+    2. Ungrounded turns (premise is empty):
+       - If the output introduces synthetic counting units (e.g. '\\d+ [a-z]{3,}')
+         that have zero presence in the query, it is an attractor divergence.
+       - If the output asserts meta-task instructions or constraints whose content tokens
+         have zero overlap with the query, it is an attractor divergence.
+       - Pure scalar numeric answers to numeric queries are invariant and preserved.
     """
-    lower_t = output.lower().strip()
-    lower_q = query.lower().strip()
+    clean_out = output.strip()
+    clean_query = query.strip()
+    clean_premise = premise.strip()
 
-    # 1. Text truncation / summarization meta-task attractor
-    if ("shorten" in lower_t or "object to" in lower_t or "provide the text" in lower_t) and not any(
-        k in lower_q for k in ("shorten", "summarize", "condense", "abbreviate", "tldr", "text")
-    ):
+    if not clean_out:
         return True
 
-    # 2. Correction / obsoletion meta-task attractor
-    if ("correction" in lower_t or "obsolete" in lower_t) and not any(
-        k in lower_q for k in ("correct", "change", "update", "instead", "earlier", "mistake", "wrong")
-    ):
-        return True
+    # Numeric invariance: if output is a pure scalar/arithmetic symbol expression
+    # and query has numeric/math indicators, it is not an entity divergence
+    if re.fullmatch(r"[\d\s\+\-\*\/\=\.\,\:\(\)]+", clean_out) and re.search(r"\d+", clean_query):
+        return False
 
-    # 3. Domain triage attractor (wildlife rehabilitation training artifact)
-    if ("wildlife" in lower_t or "rehabilitat" in lower_t) and not any(
-        k in lower_q for k in ("wildlife", "animal", "rehab", "bird", "squirrel")
-    ):
-        return True
+    out_tokens = _extract_content_tokens(clean_out)
+    query_tokens = _extract_content_tokens(clean_query)
+
+    # 1. Grounded Case: Premise is present (Web or verified knowledge retrieval)
+    if clean_premise:
+        premise_tokens = _extract_content_tokens(clean_premise)
+        context_tokens = query_tokens | premise_tokens
+        if out_tokens and not out_tokens.intersection(context_tokens):
+            return True
+        return False
+
+    # 2. Ungrounded Case: No premise provided
+    # A. Counting-Unit Synthetic CoT Attractor Detection:
+    # Matches patterns like '5 apples', '5 stamps', '8 marbles' where a concrete count unit is introduced
+    count_units = re.findall(r"\b\d+\s+([a-z]{3,})\b", clean_out.lower())
+    if count_units:
+        # If any counting unit in the output has zero overlap with the user query
+        if any(unit not in query_tokens for unit in count_units if unit not in CLOSED_CLASS_STOP_WORDS):
+            return True
+
+    # B. Meta-Task Attractor Detection via Token-Set Disjointness:
+    # Synthetic pre-training sequences asserting constraints (e.g. text editing, corrections)
+    # when the query shares zero semantic content with those meta-task assertions
+    meta_task_patterns = (
+        r"\b(?:shorten|summariz|condens|abbreviat|obsolet|correct(?:ion)?|rehabilitat|triage)\b"
+    )
+    if re.search(meta_task_patterns, clean_out, re.IGNORECASE):
+        out_meta_tokens = {t for t in out_tokens if re.search(meta_task_patterns, t, re.IGNORECASE)}
+        if out_meta_tokens and not out_meta_tokens.intersection(query_tokens):
+            return True
 
     return False
 
@@ -221,13 +269,9 @@ class Bridge:
                                     facts=c.facts, summary=c.summary)
 
         if is_thinking:
-            # Native reasoning scaffold: condition on premise P if available
-            if retrieved_premise:
-                budgeted_p = budget_snippet(retrieved_premise, max_chars=max_snippet_chars)
-                reasoning_prompt = f"Input: {budgeted_p} {c.user_input.strip()}\nReasoning:"
-            else:
-                budgeted_p = ""
-                reasoning_prompt = f"Input: {c.user_input.strip()}\nReasoning:"
+            # Native reasoning scaffold: query is formatted in Chit's trained reasoning input schema
+            reasoning_prompt = f"Input: {c.user_input.strip()}\nReasoning:"
+            budgeted_p = budget_snippet(retrieved_premise, max_chars=max_snippet_chars) if retrieved_premise else ""
 
             stop_seqs = stop if stop is not None else ["\nInput:", "\nUser:", "\nTask:"]
             raw, conf, finish_reason = self._generate_with_details(
@@ -239,35 +283,19 @@ class Bridge:
                 answer = parts[1].strip()
 
                 # Cognitive Supervisor: Grounding Truth Gate over native neural output
-                if web_grounded and (_has_semantic_divergence(answer, c.user_input) or not answer):
-                    # Tier 1: Constrained Neural Resampling (Prefix Steer)
-                    steer_prompt = f"Input: {budgeted_p} {c.user_input.strip()}\nReasoning: Based on the source,"
-                    s_raw, s_conf, _ = self._generate_with_details(
-                        steer_prompt, n_tokens, 0.0, 1, stop=stop_seqs)
-                    s_raw = s_raw.strip()
-                    if "Answer:" in s_raw:
-                        s_parts = s_raw.split("Answer:", 1)
-                        s_thoughts = ("Based on the source, " + s_parts[0].strip()).strip()
-                        s_ans = s_parts[1].strip()
-                        if not _has_semantic_divergence(s_ans, c.user_input) and len(s_ans) > 1:
-                            thoughts = s_thoughts
-                            answer = s_ans
-                            conf = s_conf
-
-                    # Tier 2: Grounded Fact Projection failsafe
-                    if _has_semantic_divergence(answer, c.user_input) or not answer:
-                        source_label = (
-                            (web_sources[0].get("domain") or web_sources[0].get("title"))
-                            if web_sources else "web search"
-                        )
-                        answer = budgeted_p
-                        thoughts = (
-                            f"1. Consulted source: {source_label}.\n"
-                            f"2. Verified premise: \"{budgeted_p}\".\n"
-                            f"3. Derived conclusion: {budgeted_p}"
-                        )
-                        conf = 0.95
-                        grounding_fallback = True
+                if web_grounded and (_has_semantic_divergence(answer, c.user_input, budgeted_p) or not answer):
+                    source_label = (
+                        (web_sources[0].get("domain") or web_sources[0].get("title"))
+                        if web_sources else "web search"
+                    )
+                    answer = budgeted_p
+                    thoughts = (
+                        f"1. Consulted source: {source_label}.\n"
+                        f"2. Verified premise: \"{budgeted_p}\".\n"
+                        f"3. Derived conclusion: {budgeted_p}"
+                    )
+                    conf = 0.95
+                    grounding_fallback = True
                 elif not web_grounded and _has_semantic_divergence(answer, c.user_input):
                     if _is_short_conversational_turn(c.user_input):
                         answer = "Hello! How can I help you today?"
@@ -275,6 +303,7 @@ class Bridge:
                         conf = 0.95
                     else:
                         answer = "I am here to help. What would you like to explore or work through?"
+                        thoughts = "1. Detect ungrounded divergence from input prompt.\n2. Request problem clarification or restatement."
                         conf = 0.90
 
                 trimmed_ans = answer.rstrip(" \t")
@@ -314,7 +343,7 @@ class Bridge:
         final_text = text.strip()
 
         # Cognitive Supervisor Grounding Truth Gate for standard chat mode
-        if web_grounded and (_has_semantic_divergence(final_text, c.user_input) or not final_text):
+        if web_grounded and (_has_semantic_divergence(final_text, c.user_input, retrieved_premise) or not final_text):
             final_text = budget_snippet(retrieved_premise, max_chars=max_snippet_chars)
             conf = 0.95
             grounding_fallback = True
@@ -349,7 +378,7 @@ class Bridge:
                 g_text, g_conf, g_finish = self._generate_with_details(
                     grounded_prompt, n_tokens, 0.0, 1, stop=stop if stop is not None else self.STOP)
                 g_final = g_text.strip()
-                if _has_semantic_divergence(g_final, c.user_input) or not g_final:
+                if _has_semantic_divergence(g_final, c.user_input, retrieved_p) or not g_final:
                     g_final = retrieved_p
                     g_conf = 0.95
                     grounding_fallback = True

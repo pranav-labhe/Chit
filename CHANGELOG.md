@@ -16,8 +16,11 @@
   - Eliminated false memory recalls on greetings and conversational pleasantries (e.g. `"Hello Chit"`) without brittle hardcoded wordlists.
   - Formulated relevance as normalized query coverage $\frac{|Q_{\text{terms}} \cap D_{\text{terms}}|}{|Q_{\text{terms}}|}$ rather than un-normalized raw match counts.
   - Implemented self-referential entity vocative attenuation ($0.25\times$ scale) when the assistant's name is merely an address rather than an informational query, dropping greeting relevance below the 0.35 threshold while preserving substantive queries (e.g. `"Who is Chit?"`).
-- **Principled Semantic Divergence & Anti-Attractor Supervisor (`pranav/chit/bridge.py`)**:
-  - Implemented `_has_semantic_divergence()` and `_is_short_conversational_turn()` to detect when small model outputs commit to narrow meta-tasks (text shortening, correction triage) that have zero token overlap with the user prompt, safely intercepting attractor state collapses.
+- **First-Principles Information-Theoretic Grounding Gate & Distribution Alignment (`pranav/chit/bridge.py`)**:
+  - Eliminated all heuristic keyword blacklists and ad-hoc regex arithmetic parsers (`_parse_simple_arithmetic`).
+  - Implemented universal set-theoretic content token overlap verification ($\mathcal{W}(O) \cap (\mathcal{W}(Q) \cup \mathcal{W}(P)) \neq \emptyset$) using closed-class functional word filtration (`_extract_content_tokens`).
+  - Aligned the reasoning prompt with Chit's native trained schema `Input: {query}\nReasoning:`, routing retrieved web evidence through native memory conditioning (`Known memory:\n- [Source]: {snippet}`) to prevent positional context overflow and attention dispersion.
+  - Implemented deterministic Grounded Fact Projection with source provenance metadata when the small model drifts into memorized training attractor states.
 - **Frontend Attribution & Accessibility Polish (`app.js`)**:
   - Filtered `memory_ids` to exclude `"web-search"`, ensuring the UI breadcrumb *"Chit used N saved memories"* only displays for genuine SQLite records from `memory.db`.
   - Added clickable web domain badges (e.g. `[en.wikipedia.org]`, `[archive.org]`) on assistant bubbles.

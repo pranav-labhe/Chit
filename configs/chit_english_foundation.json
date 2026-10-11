@@ -24,7 +24,7 @@
   },
   "data": {
     "train_file": "data/train.txt",
-    "eval_file": "data/eval.txt",
+    "eval_file": "data/english_foundation/eval_suite.json",
     "sources": [
       {"path": "data/english_foundation/structural.txt", "weight": 0.3},
       {"path": "data/english_foundation/lexical_prose.txt", "weight": 0.3},

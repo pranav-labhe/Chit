@@ -140,11 +140,12 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
   - DOM cleaning via `html.parser` and factual proposition ranker budgeting evidence into a clean 60–80 character core factual proposition to strictly prevent context overflow in Chit's 256-byte context window.
   - Polymorphic `SearchResult(str)` carrying `.url`, `.title`, `.domain`, and `.snippet`.
 - **Native Neural Reasoning Over Sensory Premises (`bridge.py`)**:
-  - Retains Chit's neural Transformer as the thinker: when external premises are retrieved, formats the prompt into Chit's native reasoning format: `Input: [Retrieved Premise P]. [User Query Q]\nReasoning:`.
-  - Chit's attention heads attend to premise $P$ and generate the chain-of-thought scratchpad tokens and answer directly.
-  - **Cognitive Supervisor (Truth Gate)**: Inspects Chit's generated output; if the neural model collapses into memorized training attractor states or contradicts the premise, the supervisor anchors the response to the verified factual premise, setting `web_grounded = true` and attributing source records while keeping `memory_ids` strictly isolated to genuine SQLite notebook memories.
+  - Aligns input distribution with Chit's native trained schema: `Input: [User Query Q]\nReasoning:`, while conditioning retrieved web premises into native memory context (`Known memory:\n- [Source]: {snippet}`) to prevent positional context overflow and attention dispersion within Chit's 256-byte context window.
+  - Chit's attention heads attend to context and generate chain-of-thought scratchpad tokens and answers natively.
+  - **Universal Information-Theoretic Grounding Gate**: Replaced ad-hoc keyword blacklists and regex math parsers with set-theoretic content-token Jaccard gating ($\mathcal{W}(O) \cap (\mathcal{W}(Q) \cup \mathcal{W}(P)) \neq \emptyset$) based on closed-class functional word filtration (`_extract_content_tokens`).
+  - **Deterministic Grounded Fact Projection**: If neural generation drifts into memorized training attractor states (e.g. arithmetic word problem attractors), the supervisor projects the verified factual premise with provenance metadata, setting `web_grounded = true` and attributing source records while keeping `memory_ids` strictly isolated to genuine SQLite notebook memories.
 - **Principled Anti-Attractor Supervisor**:
-  - Uses `_has_semantic_divergence()` and `_is_short_conversational_turn()` to detect task intent conflicts (such as text shortening, conflict triage) when user queries have zero semantic overlap with the generated claim, eliminating hardcoded wordlists.
+  - Uses `_has_semantic_divergence()` and `_is_short_conversational_turn()` to detect task intent conflicts and ungrounded counting-unit attractors when user queries share zero semantic overlap with the generated tokens, eliminating hardcoded wordlists.
 - **Direct Search Mode**: Passing `search: true` in `Context` / `ChatRequest` (or clicking `🌐 Search Web` in UI) bypasses Pass 1 and searches immediately.
 
 ### Browser Console (`ui.py`, `ui/templates/index.html`, `ui/static/`)

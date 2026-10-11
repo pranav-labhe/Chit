@@ -75,7 +75,7 @@ def test_bridge_search_and_thinking_pipeline_unified(monkeypatch):
     assert decision.metadata["web_grounded"] is True
     assert decision.metadata["sources"] == fake_snippets
     assert decision.metadata["memory_ids"] == []
-    assert rt.history[0]["prompt"] == "Input: Mars has two moons, Phobos and Deimos. How many moons does Mars have?\nReasoning:"
+    assert rt.history[0]["prompt"] == "Input: How many moons does Mars have?\nReasoning:"
 
 
 def test_bridge_pure_greeting_with_memory_store(tmp_path):
@@ -127,5 +127,53 @@ def test_bridge_non_greeting_queries_recall_memory():
     assert len(recalled) == 1
     assert decision.metadata["memory_ids"] == ["seed-001"]
     assert "Known memory:" in rt.history[0]["prompt"]
+
+
+def test_bridge_arithmetic_attractor_intercepted_on_web_reasoning(monkeypatch):
+    fake_snippet = "Nasadiya Sukta (RV 10.129) takes a near-agnostic stand on the creation."
+    monkeypatch.setattr("pranav.chit.bridge.search_web", lambda *a, **kw: [fake_snippet])
+
+    # Model hallucinates memorized "5 apples." training attractor
+    rt = MockRuntime([
+        "Ravi starts with 8 apples. He gives away 3.\nAnswer: 5 apples."
+    ])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(user_input="Explain the creation hymn Nasadiya Sukta in Rigveda ?", search=True, think=True))
+    assert decision.metadata["web_grounded"] is True
+    assert decision.metadata["grounding_fallback"] is True
+    assert "5 apples" not in decision.text
+    assert "Nasadiya Sukta" in decision.text
+    assert "Verified premise:" in decision.metadata["thoughts"]
+
+
+def test_bridge_arithmetic_stamps_attractor_intercepted():
+    # Model hallucinates "5 stamps." attractor for simple arithmetic
+    rt = MockRuntime([
+        "4 divided by 2 equals 5.\nAnswer: 5 stamps."
+    ])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(user_input="What is 1 + 1 ?", think=True))
+    assert "stamps" not in decision.text
+    assert decision.metadata["confidence"] >= 0.90
+    assert "Detect ungrounded divergence" in decision.metadata["thoughts"]
+
+
+def test_bridge_universal_grounding_preserves_legitimate_word_problems():
+    # Legitimate math word problem matching the query context is preserved
+    rt = MockRuntime([
+        "12 minus 4 equals 8.\nAnswer: 8 marbles."
+    ])
+    bridge = Bridge(rt)
+
+    decision = bridge.process(Context(
+        user_input="Sara has 12 marbles and gives away 4. How many marbles does Sara have?",
+        think=True
+    ))
+    assert decision.text == "8 marbles."
+    assert decision.metadata["thoughts"] == "12 minus 4 equals 8."
+    assert "grounding_fallback" not in decision.metadata
+
 
 
