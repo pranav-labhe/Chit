@@ -87,6 +87,7 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Training & jobs", "name": "Cancel training job", "method": "POST", "path": "/train/{job_id}/cancel", "pattern": r"^/train/[0-9a-f]{32}/cancel$", "query": {}, "body": None, "confirm": True},
     {"category": "Training & jobs", "name": "List candidates", "method": "GET", "path": "/candidates", "pattern": r"^/candidates$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Evaluate candidate", "method": "POST", "path": "/candidates/{job_id}/evaluate", "pattern": r"^/candidates/[0-9a-f]{32}/evaluate$", "query": {}, "body": None, "confirm": True},
+    {"category": "Training & jobs", "name": "Benchmark candidate bridge", "method": "POST", "path": "/candidates/{job_id}/benchmark", "pattern": r"^/candidates/[0-9a-f]{32}/benchmark$", "query": {}, "body": None, "confirm": True},
     {"category": "Training & jobs", "name": "Promote candidate", "method": "POST", "path": "/candidates/{job_id}/promote", "pattern": r"^/candidates/[0-9a-f]{32}/promote$", "query": {}, "body": None, "confirm": True},
     {"category": "Health & model", "name": "Rollback champion", "method": "POST", "path": "/admin/rollback", "pattern": r"^/admin/rollback$", "query": {"to_sha256": ""}, "body": None, "confirm": True},
     {"category": "Health & model", "name": "Reload champion", "method": "POST", "path": "/admin/reload", "pattern": r"^/admin/reload$", "query": {}, "body": None, "confirm": True},

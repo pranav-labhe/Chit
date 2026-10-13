@@ -14,7 +14,7 @@ authority for what is deployed.
 
 1. [Conventions](#1-conventions)
 2. [Endpoint index](#2-endpoint-index)
-3. [Health and model](#3-health-and-model) — `GET /health`, `GET /ready`, `GET /model`
+3. [Health and model](#3-health-and-model) — `GET /health`, `GET /ready`, `GET /model`, `GET /sys_metrics`
 4. [Text generation](#4-text-generation) — `POST /generate`, `POST /chat`
 5. [Sessions](#5-sessions) — `/sessions`
 6. [Memory](#6-memory) — `/memory`
@@ -25,6 +25,7 @@ authority for what is deployed.
 11. [Errors](#11-errors)
 12. [Recommended workflows](#12-recommended-workflows)
 13. [Server settings](#13-server-settings)
+14. [Model candidates and administration](#14-model-candidates-and-administration) — `/candidates`, `/admin`
 
 ---
 
@@ -41,8 +42,8 @@ an error and never silently ignored.
 | Access level | Endpoints | Rule |
 | --- | --- | --- |
 | Public | `GET /health` | No key needed. |
-| Key | `/ready`, `/model`, `/generate`, `/chat`, `/sessions*`, `/memory*` | If the server has `CHIT_API_KEY` set, the header is required (`401` otherwise). If the server has no key, these are open. |
-| Training | `/train*`, `/knowledge*`, `/data*` | Same key rule, plus: if the server has **no** key configured these return `403`, unless it was started with `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` (local development only). |
+| Key | `/ready`, `/model`, `/sys_metrics`, `/generate`, `/chat`, `/sessions*`, `/memory*` | If the server has `CHIT_API_KEY` set, the header is required (`401` otherwise). If the server has no key, these are open. |
+| Training | `/train*`, `/knowledge*`, `/data*`, `/candidates*` | Same key rule, plus: if the server has **no** key configured these return `403`, unless it was started with `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` (local development only). |
 
 **Concurrency.** A bounded FIFO inference queue runs one generation at a time per process/device.
 Requests are rejected with `429` when the queue is full or queue wait expires. The server runs one
@@ -72,6 +73,7 @@ instead of `curl`.
 | GET | `/health` | Public | Is the server up, is a model loaded, is a job running |
 | GET | `/ready` | Key | Is the model, stores, and inference scheduler ready |
 | GET | `/model` | Key | Size, settings and training history of the loaded model |
+| GET | `/sys_metrics` | Key | Real-time CPU, Memory, and Disk telemetry |
 | POST | `/generate` | Key | Generate a response to a request; `mode: "continue"` opts into raw text continuation |
 | POST | `/chat` | Key | Assistant request with memory and session history (or raw continuation via `task: "continue"`) |
 | POST | `/sessions` | Key | Start an empty conversation |
@@ -94,6 +96,10 @@ instead of `curl`.
 | POST | `/knowledge/train` | Training | Train on the stored knowledge |
 | GET | `/data` | Training | Check the train/eval files on the server |
 | POST | `/data/split` | Training | Split a corpus file into train and eval files |
+| GET | `/candidates` | Training | List completed candidates, Golden Gate evaluations, and bridge benchmarks |
+| POST | `/candidates/{job_id}/evaluate` | Training | Run behavioral Golden Gate evaluation and auto-trigger bridge benchmark |
+| POST | `/candidates/{job_id}/benchmark` | Training | Run 65-case bridge fidelity benchmark and calibration analysis |
+| POST | `/candidates/{job_id}/promote` | Training | Promote candidate to Champion and auto-fit isotonic calibration |
 
 ---
 
@@ -1205,16 +1211,18 @@ Set as environment variables on the server (not request parameters).
 | `CHIT_HISTORY_TURNS` | `8` | Most recent session messages offered to the model as context. |
 | `CHIT_DATA_DIR` | `data` | Folder that `POST /data/split` reads corpus files from. |
 
-## Model Candidates and Administration
+## 14. Model candidates and administration
 
-These routes allow you to review completed training runs and safely swap the live model in production.
+These routes allow you to review completed training runs, run behavioral and bridge quality benchmarks, and safely manage live model checkpoints in production. **Access:** training.
 
 ### GET /candidates
-Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, and Golden Gate evaluation scores.
+
+**Purpose.** Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their checkpoint modification timestamps, manifests, Golden Gate evaluation scores, and bridge fidelity benchmark reports.
 
 **Request**
 ```http
 GET /candidates HTTP/1.1
+X-API-Key: YOUR_API_KEY
 ```
 
 **Response (200 OK)**
@@ -1234,6 +1242,15 @@ GET /candidates HTTP/1.1
           "gate_pass": true,
           "case_ratings": []
         }
+      },
+      "bridge_benchmark": {
+        "arithmetic_exact_match": 1.0,
+        "expected_calibration_error": 0.082,
+        "loop_rate": 0.0,
+        "truncated_before_stop_rate": 0.0,
+        "replacement_char_rate": 0.0,
+        "canned_reply_rate": 0.0,
+        "p95_latency_ms": 38.4
       }
     }
   ]
@@ -1241,14 +1258,41 @@ GET /candidates HTTP/1.1
 ```
 
 ### POST /candidates/{job_id}/evaluate
-Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. 
+
+**Purpose.** Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts (`data/golden_set.json`), and automatically launches background bridge fidelity benchmarking.
+
+**Request**
+```http
+POST /candidates/4a71f01c87d4469eb070ad68832a875d/evaluate HTTP/1.1
+X-API-Key: YOUR_API_KEY
+```
+
+### POST /candidates/{job_id}/benchmark
+
+**Purpose.** Runs an on-demand Bridge Quality & Fidelity Benchmark across 65 evaluation cases (50 Golden Gate cases + 15 math, long-context, and web probes). Measures exact math accuracy, expected calibration error (ECE), loops, cutoffs, and latency.
+
+**Request**
+```http
+POST /candidates/4a71f01c87d4469eb070ad68832a875d/benchmark HTTP/1.1
+X-API-Key: YOUR_API_KEY
+```
 
 ### POST /candidates/{job_id}/promote
-Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation.
+
+**Purpose.** Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. Automatically re-fits isotonic regression probability calibration into `data/calibration.json` using the candidate's benchmark data, ensuring live inferences immediately serve calibrated confidence scores.
+**Requirement:** The candidate must pass the Golden Gate evaluation.
+
+**Request**
+```http
+POST /candidates/4a71f01c87d4469eb070ad68832a875d/promote HTTP/1.1
+X-API-Key: YOUR_API_KEY
+```
 
 ### POST /admin/rollback
-Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
-- **Parameters:** 	o_sha256 (the exact hash of the previous model to restore).
+
+**Purpose.** Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly.
+- **Parameters:** `to_sha256` (the exact SHA-256 hash of the previous model checkpoint to restore).
 
 ### POST /admin/reload
-Force-reloads the active Champion model from the disk into memory.
+
+**Purpose.** Force-reloads the active Champion model from disk (`checkpoints/latest.pt`) into memory.

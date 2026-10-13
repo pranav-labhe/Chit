@@ -5,11 +5,12 @@ with its own weights, memory, learning path, and conversation context. Its API s
 problem solving, storing experience, teaching knowledge, and training.
 
 > **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
-> `/generate` and `/chat` format messages for a context-aware Chit response, while `/generate` can still
-> do raw continuation with `mode: "continue"`. It employs a bounded inference scheduler to handle concurrent
-> requests, a hybrid SQLite/Vector memory store with normalized query coverage and vocative filtering for durable experiences, token-level inference confidence calibration
-> with generation completeness detection, and a multi-tier Autonomous Web Metasearch and SSRF-guarded crawler to feed sensory premises directly into native neural reasoning. It learns from 
-> reviewed data, memory, and dialogue; its context window and available training compute shape how much it can learn and use at once.
+> It uses a **Compound AI System** where neural model capability is augmented by a faithful Bridge pipeline:
+> - **Modular Pipeline**: An explicit Intent Router, working-memory budgeter (reserving space in Chit's 256-byte context), and an invariant verifier with a transparent recovery ladder.
+> - **Exact Tools**: Symbolic math (e.g. arithmetic queries) is offloaded to a safe, deterministic AST calculator with zero `eval`/`exec`, eliminating neural math guessing.
+> - **Calibrated Confidence**: Self-assessed token probabilities are calibrated through isotonic regression (`data/calibration.json`) so confidence scores reflect real-world accuracy.
+> - **Memory & Autonomous Metasearch**: Hybrid SQLite/Vector memory store with normalized query coverage and vocative filtering, paired with an SSRF-guarded crawler and metasearch cascade for autonomous web grounding.
+> - **Zero-Orphan Promotion**: Newly trained candidates are evaluated against safety gates, benchmarked across 65 probe cases in the Studio UI, and auto-calibrated upon promotion.
 
 > 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.
 

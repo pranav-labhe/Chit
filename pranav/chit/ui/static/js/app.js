@@ -398,6 +398,58 @@ async function renderJobs() {
                 `<b>Safety Test:</b> <span style="color:${c.evaluation.behavioral_gate?.gate_pass ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${c.evaluation.behavioral_gate?.gate_pass ? 'Passed' : 'Failed'}</span> (Checked ${c.evaluation.behavioral_gate?.case_ratings?.length || 0} rules)` : 
                 `<i>Safety Test: Not tested yet</i>`;
                 
+            let bridgeHtml = '';
+            if (c.bridge_benchmark) {
+                if (c.bridge_benchmark.status === 'running') {
+                    bridgeHtml = `
+                        <div style="margin: 6px 0; font-size: 12px;">
+                            <b>Bridge Quality & Calibration:</b> <span style="color:var(--accent); font-weight:bold;">Running bridge evaluation and calibration analysis in background…</span>
+                        </div>`;
+                } else if (c.bridge_benchmark.status === 'failed') {
+                    bridgeHtml = `
+                        <div style="margin: 6px 0; font-size: 12px;">
+                            <b>Bridge Quality & Calibration:</b> <span style="color:var(--danger); font-weight:bold;">Analysis failed: ${safeMarkdown(c.bridge_benchmark.error || 'Unknown error')}</span>
+                        </div>`;
+                } else {
+                    const b = c.bridge_benchmark;
+                    const mathPct = Math.round((b.arithmetic_exact_match !== undefined ? b.arithmetic_exact_match : 0) * 100);
+                    const eceVal = b.expected_calibration_error !== undefined ? b.expected_calibration_error.toFixed(3) : 'N/A';
+                    const latVal = b.p95_latency_ms ? (b.p95_latency_ms / 1000).toFixed(1) + 's' : 'N/A';
+                    const truncPct = Math.round((b.truncated_before_stop_rate !== undefined ? b.truncated_before_stop_rate : 0) * 100);
+                    const loopPct = Math.round((b.loop_rate !== undefined ? b.loop_rate : 0) * 100);
+
+                    bridgeHtml = `
+                        <div style="margin: 6px 0; font-size: 12px; line-height: 1.6;">
+                            <b>Bridge Quality & Calibration:</b>
+                            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px;">
+                                <span class="metric-badge" style="background:#1e3a29; border:1px solid #28a745; color:#a3e9b9; padding:2px 8px; border-radius:4px; cursor:help;" 
+                                      title="Math Exactness: Percentage of arithmetic questions answered 100% accurately using symbolic calculator tools without hallucinations.">
+                                    🧮 Math Exactness: ${mathPct}%
+                                </span>
+                                <span class="metric-badge" style="background:#1a334d; border:1px solid #17a2b8; color:#a6d8f0; padding:2px 8px; border-radius:4px; cursor:help;" 
+                                      title="Calibration Error (ECE): Measures how honest the model's confidence scores are. Lower is better (0.0 means perfect truthfulness).">
+                                    🎯 Calibration Error (ECE): ${eceVal}
+                                </span>
+                                <span class="metric-badge" style="background:#3d2f1f; border:1px solid #ffc107; color:#ffe8a1; padding:2px 8px; border-radius:4px; cursor:help;" 
+                                      title="P95 Latency: 95% of user queries finish faster than this duration. Lower is faster.">
+                                    ⚡ Speed (P95): ${latVal}
+                                </span>
+                                <span class="metric-badge" style="background:#332630; border:1px solid #6c757d; color:#e0d0da; padding:2px 8px; border-radius:4px; cursor:help;" 
+                                      title="Truncation Rate: Percentage of replies cut short by memory budget limits before finishing terminal punctuation.">
+                                    ✂️ Incomplete: ${truncPct}%
+                                </span>
+                                <span class="metric-badge" style="background:#262a33; border:1px solid #6c757d; color:#d0d7e0; padding:2px 8px; border-radius:4px; cursor:help;" 
+                                      title="Degenerate Loops: Frequency of repetitive looping words or token stuttering. 0% is ideal.">
+                                    🔁 Word Loops: ${loopPct}%
+                                </span>
+                            </div>
+                        </div>`;
+                }
+            } else {
+                bridgeHtml = `<div style="font-size:12px; margin: 4px 0; color:var(--text-muted, #888);"><i>Bridge Quality & Calibration: Not analyzed yet</i></div>`;
+            }
+
+            const isBenchmarking = c.bridge_benchmark?.status === 'running';
             const candDiv = document.createElement('div');
             candDiv.style.marginTop = '10px';
             candDiv.style.paddingTop = '10px';
@@ -406,9 +458,20 @@ async function renderJobs() {
             candDiv.innerHTML = `
                 <div style="font-size:12px; margin-bottom:4px; display:inline-block;" class="job-ai-stamp" id="candStamp_${job.id}"><b>Job Checkpoint:</b> ${ts} ${liveBadge}</div><br>
                 <div style="font-size:12px; margin: 4px 0;">${evalHtml}</div>
-                <div class="actions" style="margin-top: 8px;">
-                    <button class="secondary eval-btn" data-id="${job.id}">Test this AI version</button>
-                    <button class="primary promote-btn" data-id="${job.id}" ${c.evaluation?.behavioral_gate?.gate_pass ? '' : 'disabled'}>Make this the Live AI</button>
+                ${bridgeHtml}
+                <div style="font-size:11px; color:var(--text-muted, #aaa); margin: 6px 0; line-height: 1.4; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 4px; border-left: 2px solid var(--accent);">
+                    💡 <b>What is the Bridge?</b> The Bridge coordinates communication between your chat/generate prompts and Chit's neural brain. Benchmarking measures how effectively it prevents word loops, enforces memory budgets, offloads arithmetic, and calibrates confidence for user-friendly, accurate output.
+                </div>
+                <div class="actions" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button class="secondary eval-btn" data-id="${job.id}" title="Tests candidate against the 50 Golden Set behavioral safety rules.">Test safety rules</button>
+                    <button class="secondary bench-btn" data-id="${job.id}" ${isBenchmarking ? 'disabled' : ''} 
+                            title="The Bridge sits between your chat/generate requests and Chit's brain. Click to benchmark how well it guides the model and automatically prepare confidence calibration.">
+                        ${isBenchmarking ? '📊 Analyzing bridge…' : '📊 Benchmark Bridge & Calibrate'}
+                    </button>
+                    <button class="primary promote-btn" data-id="${job.id}" ${c.evaluation?.behavioral_gate?.gate_pass ? '' : 'disabled'}
+                            title="Promotes this candidate to be the live served model and activates its calibrated confidence curve.">
+                        Make this the Live AI
+                    </button>
                 </div>
             `;
             
@@ -425,6 +488,21 @@ async function renderJobs() {
         e.target.disabled = true;
         await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/evaluate`})});
         alert('Test started in the background. Refresh in a minute.');
+    }));
+
+    document.querySelectorAll('.bench-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        e.target.textContent = '📊 Analyzing bridge…';
+        e.target.disabled = true;
+        const res = await req('/_ui/proxy', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:'POST',path:`/candidates/${id}/benchmark`})});
+        if (res.ok) {
+            alert('Bridge benchmark started in the background. The Bridge is testing exact math, ECE confidence calibration, memory truncation, and speed. Refresh in a minute to see results.');
+            setTimeout(renderJobs, 1000);
+        } else {
+            alert('Could not start benchmark: ' + (res.data?.detail || res.status));
+            e.target.textContent = '📊 Benchmark Bridge & Calibrate';
+            e.target.disabled = false;
+        }
     }));
     
     document.querySelectorAll('.promote-btn').forEach(btn => btn.addEventListener('click', async (e) => {
@@ -450,7 +528,22 @@ async function renderJobs() {
     }));
     
     // Add dynamically injected buttons to tooltip system
-    document.querySelectorAll('.eval-btn, .promote-btn, .job-ai-stamp').forEach(addHelpTrigger);
+    document.querySelectorAll('.eval-btn, .bench-btn, .promote-btn, .job-ai-stamp').forEach(addHelpTrigger);
+
+    // Auto-poll while training jobs or candidate benchmarks are running
+    const hasActiveTask = rJobs.data.jobs.some(j => ['queued', 'running'].includes(j.state)) ||
+                          Object.values(cands).some(c => c.bridge_benchmark?.status === 'running');
+    if (hasActiveTask) {
+        if (!window._jobsPollTimer) {
+            window._jobsPollTimer = setTimeout(() => {
+                window._jobsPollTimer = null;
+                renderJobs();
+            }, 3000);
+        }
+    } else if (window._jobsPollTimer) {
+        clearTimeout(window._jobsPollTimer);
+        window._jobsPollTimer = null;
+    }
 }
 
 $('#startTrain').addEventListener('click', async () => {

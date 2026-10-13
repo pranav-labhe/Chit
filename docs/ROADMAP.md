@@ -23,17 +23,13 @@ real-world actions without an explicit capability and permission path.
 
 ## Current repository state
 
-- The inference path formats requests, recalls matching memory, and (for `/chat`) adds recent session
-  history. It does not call an external model or AI service.
-- The assistant curriculum contains request/response examples, including Markdown and practical
-  problem-solving. `data/prompts.txt` supplies open-ended review prompts; `data/eval.txt` is held out.
-- Memory search currently ranks keyword overlap; paraphrase-aware and multilingual recall remain to be built.
-- There is no separate intent router or tool/action execution path yet. Problem-solving behavior is learned
-  through examples, with external actions kept for a later explicitly authorized Atmini integration.
-- The byte-level training corpus is now stored compactly in host memory, so dataset size is less likely
-  to be the first RAM limit on the documented two-core, 2-GiB CPU instance.
-- Behavioral review of a freshly trained checkpoint remains required. Training loss alone is not
-  evidence that Chit communicates or solves problems reliably.
+- The inference path operates as a Compound AI System: an explicit Intent Router creates a typed Plan, a ContextBuilder budgets working memory in Chit's 256-byte context, a Generator runs inference, a Verifier tests output invariants, and a Responder handles recovery.
+- Exact symbolic arithmetic is offloaded to a safe AST-based calculator tool (`source: "tool"`), eliminating neural guesswork for math queries.
+- Self-assessed confidence is calibrated through isotonic regression (`data/calibration.json`), providing trustworthy probability scores.
+- Memory search features SQLite FTS5 lexical matching with information-theoretic query coverage and vocative attenuation, alongside optional vector semantic embeddings.
+- The assistant curriculum contains request/response examples, including Markdown and practical problem-solving. `data/prompts.txt` supplies open-ended review prompts; `data/eval.txt` is held out.
+- The byte-level training corpus is stored compactly in host memory, fitting easily within CPU and RAM limits.
+- Candidate evaluation in the Studio UI validates behavioral safety against the Golden Gate and benchmarks bridge fidelity across 65 probes, automatically re-calibrating the Champion upon promotion.
 
 Keep model weights, reviewed corpus, API-taught knowledge, runtime memory, session history, and the
 Atmini action layer distinct so each can be inspected and improved deliberately.

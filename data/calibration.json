@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sample_count": 65,
+  "mapping": [
+    {
+      "raw": 0.0,
+      "calibrated": 0.13846153846153847
+    },
+    {
+      "raw": 0.999,
+      "calibrated": 0.1385
+    },
+    {
+      "raw": 1.0,
+      "calibrated": 0.1385
+    }
+  ]
+}

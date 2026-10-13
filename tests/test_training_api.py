@@ -82,6 +82,7 @@ def test_training_requires_auth(client, monkeypatch):
 @pytest.mark.parametrize("method,path,kwargs", [
     ("GET", "/candidates", {}),
     ("POST", "/candidates/0123456789abcdef0123456789abcdef/evaluate", {}),
+    ("POST", "/candidates/0123456789abcdef0123456789abcdef/benchmark", {}),
     ("POST", "/candidates/0123456789abcdef0123456789abcdef/promote", {}),
     ("POST", "/admin/rollback", {"params": {"to_sha256": "dummy"}}),
     ("POST", "/admin/reload", {}),

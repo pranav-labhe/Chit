@@ -90,9 +90,19 @@ Back up `checkpoints/`, `data/sessions.db`, `data/knowledge.db`, the configured 
 
 ## Validation tools
 
+- `python -m pranav.chit.tools.benchmark_bridge` measures bridge pipeline fidelity across 65 evaluation cases (recording math exact match, expected calibration error, loop rate, cutoff rate, and p95 latency).
+- `python -m pranav.chit.tools.calibrate_confidence` fits isotonic regression probability calibration over validation runs, serializing mappings to `data/calibration.json`.
 - `python -m pranav.chit.tools.benchmark_inference` measures sequential and bounded-queue CPU/CUDA inference latency. Results are host-specific; it is not a production SLO test.
 - `python -m pranav.chit.tools.benchmark_memory` creates temporary synthetic SQLite corpora and measures exact hybrid-search latency without modifying project memory.
 - `python -m pranav.chit.tools.evaluate_tokenizer_pair` compares held-out bits per byte and alternating greedy-generation timings for matched byte/BPE checkpoints.
 - `data/golden_set.json` is the frozen 50-case behavioral acceptance set. Follow `docs/GOLDEN_SET.md` for the 85% overall threshold and critical-case gate. Keep its prompts and references out of training and tokenizer corpora.
+
+## Candidate Review, Benchmarking & Zero-Orphan Promotion
+
+To prevent manual command-line steps from being forgotten after training, candidate evaluation and promotion natively manage bridge fidelity and confidence calibration:
+
+1. **Automatic Benchmarking on Evaluation**: Calling `POST /candidates/{job_id}/evaluate` (or clicking 'Evaluate Model' in the Studio UI) runs the Golden Gate safety test and automatically launches `benchmark_bridge` in the background, writing results to `checkpoints/jobs/<job_id>/bridge_benchmark.json`.
+2. **On-Demand Benchmark**: Calling `POST /candidates/{job_id}/benchmark` (or clicking 'Benchmark Bridge & Calibrate' in the Studio UI) benchmarks the candidate at any time.
+3. **Auto-Calibration on Promotion**: When promoting an approved candidate with `POST /candidates/{job_id}/promote`, the server hot-swaps the model weights and immediately re-fits `data/calibration.json` using the candidate's benchmark data. The newly promoted Champion immediately serves truthful confidence scores with zero manual steps.
 
 Current local benchmark reports are under `docs/benchmarks/`. Re-run them on the target deployment hardware and representative data before setting user-facing latency promises or promoting a model.

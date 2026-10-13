@@ -3,6 +3,27 @@
 ## Latest Changes
 
 ### Added
+- **Compound AI Bridge Re-Architecture (`pranav/chit/bridge.py`)**:
+  - Decomposed the monolithic Bridge into single-responsibility components: `BridgeConfig` (ablatable configuration flags), `Router` (typed `Plan`), `ContextBuilder` (working-memory budgeting reserving $\ge 32$ tokens in 256-byte context), `Generator` (safe runtime execution), `Verifier` (generic quality invariants), and `Responder` (transparent recovery ladder preserving `raw_text`).
+  - Added slot priority truncation: Sacred User Input > User Facts > Web Evidence > Summary > History > Notebook Memories.
+  - Added rich metadata reporting: `tokens_prompt`, `tokens_reserved`, `tokens_history_dropped`, `source`, `is_incomplete`, and `plan`.
+- **Exact Symbolic Calculator Offload (`pranav/chit/tools/calculator.py`)**:
+  - Implemented safe AST-based arithmetic calculation (zero `eval`/`exec`) supporting binary/ternary operations, nested parentheses, and English word equivalents (`plus`, `minus`, `times`, `divided by`).
+  - Strict safeguards: operand magnitude limit $|n| \le 10^7$, division-by-zero handling, and conservative rejection of dates (`2026-10-12`), phone numbers, and hypothetical clauses.
+  - Emits exact result with `source: "tool"` and `confidence = None`.
+- **Isotonic Confidence Calibration (`pranav/chit/tools/calibrate_confidence.py`)**:
+  - Implemented Pair-Adjacent Violators Algorithm (PAVA) to fit an isotonic regression curve over validation runs, saving mappings to `data/calibration.json`.
+  - Maps raw sequence probabilities to empirical accuracy (`is_calibrated = True`), bringing Expected Calibration Error (ECE) below 0.15.
+- **65-Case Bridge Fidelity Benchmarking Suite (`pranav/chit/tools/benchmark_bridge.py`)**:
+  - Evaluates 50 frozen Golden Gate behavioral cases plus 15 dedicated math, long-context, and web probes.
+  - Records 7 key metrics: `arithmetic_exact_match`, `expected_calibration_error`, `loop_rate`, `truncated_before_stop_rate`, `replacement_char_rate`, `canned_reply_rate`, and `p95_latency_ms`.
+- **Zero-Orphan Candidate Lifecycle in Studio UI & API (`api.py`, `ui.py`, `app.js`)**:
+  - Added `POST /candidates/{job_id}/benchmark` endpoint for on-demand bridge benchmarking.
+  - Auto-triggers background bridge benchmarking during candidate evaluation (`POST /candidates/{job_id}/evaluate`).
+  - Automatically re-fits isotonic confidence calibration to `data/calibration.json` upon candidate promotion (`POST /candidates/{job_id}/promote`).
+  - Rendered Bridge Quality badges with hover tooltips, plain-English explainer callout, dedicated `[ 📊 Benchmark Bridge & Calibrate ]` button, and 3-second task polling in Studio UI.
+- **Test Suite Expansion**:
+  - Added `tests/test_bridge_compound.py` and updated `tests/test_training_api.py`, bringing test suite to 211 passing tests.
 - **Resilient Multi-Tier Autonomous Metasearch & Deep Crawler (`pranav/chit/search.py`)**:
   - Implemented an unblocked, zero-dependency cascade across DuckDuckGo Instant Answer JSON API (`api.duckduckgo.com`), Wikipedia REST APIs (`en.wikipedia.org/w/api.php` and `/api/rest_v1/page/summary/`), Internet Archive Open Search API (`archive.org/advancedsearch.php`), and configurable `CHIT_SEARCH_URL` (SearXNG/Brave).
   - Implemented an autonomous deep page crawler (`crawl_page`) with built-in SSRF protection (blocking private RFC-1918 subnets, loopback `127.0.0.0/8`, link-local `169.254.0.0/16`), hard 2.5s timeouts, 128 KB streaming read bounds, and DOM cleaning.

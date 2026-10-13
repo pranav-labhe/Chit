@@ -108,7 +108,7 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | Module | Role | Key Components | Logic Flow |
 | :--- | :--- | :--- | :--- |
 | **`api.py`** | **Gateway** | FastAPI Routes | Handles HTTP requests $\rightarrow$ Auth $\rightarrow$ Bridge/Store $\rightarrow$ JSON Response (`ChatResponse`). |
-| **`bridge.py`** | **Orchestrator** | `Bridge` Class | Connects API requests to `Runtime`. Manages sensory premise conditioning, cognitive supervision, confidence calibration, and context assembly. |
+| **`bridge.py`** | **Orchestrator** | `Bridge`, `Router`, `ContextBuilder`, `Generator`, `Verifier`, `Responder` | Compound AI pipeline connecting API requests to `Runtime`. Manages planning, working-memory budgeting, symbolic math offload, invariant verification, and calibrated confidence. |
 | **`search.py`** | **Web Retrieval** | `search_web`, `crawl_page`, `budget_snippet` | Resilient multi-tier metasearch (DDG JSON, Wikipedia REST, Archive.org, external) and autonomous SSRF-guarded crawler with compact proposition extraction. |
 | **`inference.py`** | **Scheduler** | `InferenceManager` | Bounds FIFO admission and serializes model execution on the device worker. |
 | **`runtime.py`** | **Execution** | `ChitRuntime` | The interface for `generate` and `recall`. Bridges the Gap between Model and Memory. |
@@ -121,12 +121,50 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | **`tokenizer.py`** | **Translator** | `ByteTokenizer`, `BpeTokenizer` | Converts text to byte IDs or versioned BPE IDs and back. |
 | **`ui.py`** | **Interface** | Admin Console | A single-page proxy UI to interact with the API without exposing keys. |
 
-### 🎯 Inference Confidence & Completeness Calibration
-- **Token-Level Logit Tracking**: `ChitModel.generate()` calculates sequence confidence from token log-softmax probabilities under the raw predictive distribution ($T=1.0$):
-  $$C = \exp\left( \frac{1}{N} \sum_{t=1}^{N} \log P(x_t \mid x_{<t}) \right) \in [0.0, 1.0]$$
-- **Generation Completeness**: `Bridge.process()` detects truncation (`is_incomplete = True`) when generation terminates on length (`finish_reason == "length"`) without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`).
-- **Uncertainty Calibration**: Outputs with $C < 0.40$ are flagged as uncertain (`is_uncertain = True`).
-- **Web Retrieval Trigger**: Flags `needs_retrieval = True` on uncertainty or low chat confidence ($< 0.35$), providing the autonomous trigger for Self-RAG web search.
+### 🧩 The Compound AI System & Bridge Pipeline (`bridge.py`)
+Small language models (like Chit's 4.87M parameter byte Transformer) have tight limits. Rather than forcing the neural weights to solve everything alone, Chit uses a **Compound AI System**:
+$$\text{System Quality} = (\text{Model Capability} \times \text{Pipeline Fidelity}) - \text{Pipeline Damage}$$
+
+The Bridge breaks down request handling into single-responsibility components:
+1. **`BridgeConfig`**: Dataclass controlling all pipeline features (`enable_calculator`, `enable_generic_verifier`, `enable_calibration`, `reserve_generation_budget`, `open_chat_top_k`, etc.). Everything can be turned on or off for benchmarking and ablations.
+2. **`Router`**: Maps user context and configuration to an explicit typed `Plan`:
+   - `intent`: `"continue"`, `"casual"`, `"math"`, `"lookup"`, `"think"`, or `"chat"`.
+   - `strategy`: `"tool"`, `"recall"`, `"search"`, `"think"`, or `"direct"`.
+   - `decoding`: Deterministic greedy ($T=0.0$, $\text{top\_k}=1$) for facts/memory, or bounded sampling ($T > 0$, $\text{top\_k}=20$) for open conversation.
+   - `reasons`: Human-readable audit trail stored in `decision.metadata["plan"]`.
+3. **`ContextBuilder` (Working-Memory Budgeting)**:
+   - In Chit's 256-byte context window, sliding text generation pushes out prompt tokens, destroying causal attention.
+   - The builder calculates a reserved generation budget:
+     $$\text{gen\_reserve} = \min(\text{max\_new\_tokens}, \max(32, \min(96, \lfloor\text{block\_size} \times 0.4\rfloor)))$$
+   - Capping prompt size at $\text{max\_prompt} = \text{block\_size} - \text{gen\_reserve}$.
+   - Truncates context according to strict priorities (User question is sacred; followed by facts, web evidence, summary, history, and finally SQLite notebook memories).
+   - Tracks token counts: `tokens_prompt`, `tokens_reserved`, and `tokens_history_dropped`.
+4. **`Generator`**: Interfaces cleanly with `ChitRuntime`, extracting generated text, raw log-probabilities, and finish reasons without swallowing unexpected system errors.
+5. **`Verifier`**: Checks candidate responses against generic invariants:
+   - `is_empty`: Blank or whitespace only.
+   - `is_repetitive`: Stuttering or repeated n-gram loops ($> 3$ repetitions).
+   - `has_replacement_char`: UTF-8 decode error artifacts (`\ufffd`).
+   - `is_truncated`: Cut off by length cap without ending punctuation (`.`, `!`, `?`, `"`, `\n`).
+   - `is_disjoint_from_evidence`: Zero content-token overlap with provided evidence on grounded turns.
+6. **`Responder` (Transparent Recovery Ladder)**:
+   - If verification fails:
+     - **Step 1 (Resample):** Tries one gentle resample with perturbed temperature ($T=0.2$).
+     - **Step 2 (Extractive Projection):** If verified web or memory premise exists, projects the primary factual sentence with source citation (`source: "extractive"`).
+     - **Step 3 (Honest Abstain):** If ungrounded, returns an honest clarification request (`source: "abstain"`), never a fake canned string.
+   - **Full Transparency**: Always preserves `metadata["raw_text"]` with the model's original unaltered output.
+
+### 🧮 Symbolic Calculator Offload (`tools/calculator.py`)
+Small language models struggle with exact multi-digit arithmetic.
+- When the `Router` detects a pure arithmetic query (e.g. `"What is 45 * 12?"` or `"100 divided by 4"`), it offloads calculation to a safe symbolic tool.
+- **Safety**: Uses AST inspection with **zero `eval()` and zero `exec()`**.
+- **Guards**: Bounds numbers to $|n| \le 10^7$, rejects division by zero, and guards against false positives (dates like `2026-10-12`, phone numbers, version strings).
+- **Result**: Emits the exact mathematical answer with `source: "tool"` and `confidence = None`.
+
+### 🎯 Calibrated Confidence & Probability Mapping (`tools/calibrate_confidence.py`)
+- **Raw Sequence Probability**: The geometric mean of raw token probabilities:
+  $$C_{\text{raw}} = \exp\left( \frac{1}{N} \sum_{t=1}^{N} \log P(x_t \mid x_{<t}) \right)$$
+- **Isotonic Probability Calibration**: Fits an isotonic regression curve over evaluated validation pairs `(raw_confidence, was_correct)`. The mapping is serialized to `data/calibration.json`.
+- **Runtime Score**: When `data/calibration.json` exists, the Bridge maps raw confidence to calibrated confidence (`is_calibrated = True`), so confidence scores truthfully reflect real-world accuracy (Expected Calibration Error $< 0.15$).
 
 ### 🌐 Autonomous Internet Search & Resilient Crawler
 - **Multi-Tier Metasearch Cascade (`search.py`)**:
@@ -142,10 +180,6 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 - **Native Neural Reasoning Over Sensory Premises (`bridge.py`)**:
   - Aligns input distribution with Chit's native trained schema: `Input: [User Query Q]\nReasoning:`, while conditioning retrieved web premises into native memory context (`Known memory:\n- [Source]: {snippet}`) to prevent positional context overflow and attention dispersion within Chit's 256-byte context window.
   - Chit's attention heads attend to context and generate chain-of-thought scratchpad tokens and answers natively.
-  - **Universal Information-Theoretic Grounding Gate**: Replaced ad-hoc keyword blacklists and regex math parsers with set-theoretic content-token Jaccard gating ($\mathcal{W}(O) \cap (\mathcal{W}(Q) \cup \mathcal{W}(P)) \neq \emptyset$) based on closed-class functional word filtration (`_extract_content_tokens`).
-  - **Deterministic Grounded Fact Projection**: If neural generation drifts into memorized training attractor states (e.g. arithmetic word problem attractors), the supervisor projects the verified factual premise with provenance metadata, setting `web_grounded = true` and attributing source records while keeping `memory_ids` strictly isolated to genuine SQLite notebook memories.
-- **Principled Anti-Attractor Supervisor**:
-  - Uses `_has_semantic_divergence()` and `_is_short_conversational_turn()` to detect task intent conflicts and ungrounded counting-unit attractors when user queries share zero semantic overlap with the generated tokens, eliminating hardcoded wordlists.
 - **Direct Search Mode**: Passing `search: true` in `Context` / `ChatRequest` (or clicking `🌐 Search Web` in UI) bypasses Pass 1 and searches immediately.
 
 ### Browser Console (`ui.py`, `ui/templates/index.html`, `ui/static/`)
@@ -209,6 +243,9 @@ window counts in metadata. The English foundation preset uses separate grammar/p
 and project-fact files; it does not replace the shared train/eval files.
 
 ### 🛠️ Tools & Utils (`pranav/chit/tools/`)
+- **`calculator.py`**: Safe AST-based symbolic arithmetic calculator without `eval` or `exec`.
+- **`calibrate_confidence.py`**: Isotonic regression probability calibration tool (PAVA) writing to `data/calibration.json`.
+- **`benchmark_bridge.py`**: 65-case bridge pipeline fidelity evaluator (ECE, math exact match, loops, latency).
 - **`train.py`**: CLI for triggering training.
 - **`teach.py`**: CLI for adding knowledge.
 - **`split.py`**: Utility to split corpus into train/eval sets.
@@ -235,14 +272,14 @@ and project-fact files; it does not replace the shared train/eval files.
 ## 7. Data Flow & Lifecycles
 
 ### 🔄 Inference Flow (`/chat` or `/generate`)
-`User Request` $\rightarrow$ `api.py` $\rightarrow$ `bridge.py` (Prompt Engineering) $\rightarrow$ `runtime.py` $\rightarrow$ `memory.py` (Recall) $\rightarrow$ `InferenceManager` (bounded admission) $\rightarrow$ `model.py` (Generate) $\rightarrow$ `sessions.py` (Save) $\rightarrow$ `User`.
+`User Request` $\rightarrow$ `api.py` $\rightarrow$ `bridge.py` (Router $\rightarrow$ ContextBuilder $\rightarrow$ Generator $\rightarrow$ Verifier $\rightarrow$ Responder) $\rightarrow$ `runtime.py` $\rightarrow$ `InferenceManager` (bounded admission) $\rightarrow$ `model.py` (Generate) $\rightarrow$ `sessions.py` (Save) $\rightarrow$ `User`.
 
-- **Orchestration**: `bridge.py` maps a `Context` (input, history, memories) to a `ChitDecision` (text, metadata, recalled memory IDs).
-- **Prompt Engineering**: Uses `render_chat_prompt` to wrap raw inputs into a formatted template.
+- **Orchestration**: `bridge.py` decomposes execution into a typed `Plan`, checks quality invariants, offloads symbolic math, and executes a transparent recovery ladder if invariants fail.
+- **Prompt Engineering**: Priority slot truncation protects the sacred user question while budgeting reserved generation headroom in Chit's 256-byte context.
 - **Stop Sequences**: Inference terminates when the model generates boundaries like `\nUser:`, `\nChit:`, or `\nTask:`.
 
-### 📚 Knowledge Lifecycle
-`Teach (/knowledge)` $\rightarrow$ `knowledge.db` $\rightarrow$ `Train (/knowledge/train)` $\rightarrow$ `training.py` $\rightarrow$ `checkpoints/latest.pt` $\rightarrow$ `Runtime` (Served).
+### 📚 Knowledge & Candidate Lifecycle
+`Teach (/knowledge)` $\rightarrow$ `knowledge.db` $\rightarrow$ `Train (/train)` $\rightarrow$ Candidate Checkpoint $\rightarrow$ `Evaluate & Benchmark` $\rightarrow$ `Promote & Auto-Calibrate` $\rightarrow$ Active Champion (`checkpoints/latest.pt`).
 
 ## 8. Comprehensive Method Index
 
@@ -250,14 +287,21 @@ and project-fact files; it does not replace the shared train/eval files.
 
 | File | Method | Params | Description |
 | :--- | :--- | :--- | :--- |
-| **`api.py`** | `generate` | `r: GenerateRequest` | High-level text generation. |
-| | `chat` | `r: ChatRequest` | Conversational generation with session history. |
+| **`api.py`** | `generate` | `r: GenerateRequest` | High-level text generation with bridge routing. |
+| | `chat` | `r: ChatRequest` | Conversational generation with session history and calibration. |
 | | `start_training` | `r: TrainRequest` | Initiates a weight update job. |
 | | `add_knowledge` | `batch: KnowledgeBatch` | Adds data to the training queue. |
 | | `split_data` | `r: SplitRequest` | Organizes raw corpus into training/eval. |
 | | `system_metrics` | none | Real-time hardware telemetry (CPU, Memory, Disk). |
-| | `list_candidates` | none | Lists finished training candidates with evaluation and checkpoint timestamps. |
-| **`bridge.py`** | `__init__` | `runtime, max_memories, ...` | Initializes the API-to-Runtime bridge. |
+| | `list_candidates` | none | Lists finished training candidates with evaluation, benchmark, and timestamps. |
+| | `evaluate_candidate` | `job_id: str` | Evaluates candidate against Golden Gate safety rules. |
+| | `benchmark_candidate` | `job_id: str` | Runs 65-case bridge fidelity benchmark and calibration analysis. |
+| | `promote_candidate` | `job_id: str` | Promotes candidate to Champion and auto-fits isotonic calibration. |
+| **`bridge.py`** | `__init__` | `runtime, config, ...` | Initializes the Compound AI Bridge pipeline. |
+| | `process` | `context: Context` | Executes Router $\rightarrow$ ContextBuilder $\rightarrow$ Generator $\rightarrow$ Verifier $\rightarrow$ Responder ladder. |
+| **`tools/calculator.py`** | `evaluate_expression` | `expr: str` | Safe AST symbolic arithmetic evaluator (zero `eval`/`exec`). |
+| **`tools/calibrate_confidence.py`** | `fit_calibration` | `pairs: list` | Fits isotonic regression mapping over confidence/accuracy pairs. |
+| **`tools/benchmark_bridge.py`** | `run_benchmark` | `bridge, ...` | Runs 65-case bridge fidelity benchmark recording 7 key metrics. |
 | **`data.py`** | `random_batch` | `ds, batch_size, device` | Provides shuffled data for training. |
 | **`model.py`** | `forward` | `idx, targets` | The core Transformer forward pass. |
 | **`runtime.py`** | `remember` / `recall` | `*a, **k` | Interface for the model's long-term experience. |
@@ -276,6 +320,7 @@ and project-fact files; it does not replace the shared train/eval files.
 ### `tests/` (Verification Suite)
 | File | Focus | Key Test |
 | :--- | :--- | :--- |
+| **`test_bridge_compound.py`** | Compound AI Pipeline | `test_calculator_offload_binary_and_words`, `test_verifier_and_recovery_ladder` |
 | **`test_model.py`** | Tensor Logic | `test_fused_attention_matches_reference` |
 | **`test_sessions.py`** | History | `test_prompt_trims_oldest_turns_first` |
 | **`test_training_api.py`** | Lifecycle | `test_train_promotes_and_serves_new_model` |

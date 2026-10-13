@@ -83,3 +83,42 @@ The corpus/config checks check that held-out requests are not duplicated in trai
 examples cover the intended languages and Markdown structures. They do not claim that an untrained or
 existing checkpoint passes this behavioral review. Generated model-output scorecards require human
 review before being treated as behavioral evidence.
+
+---
+
+## 🔬 Bridge Quality & Fidelity Benchmarking (`benchmark_bridge.py`)
+
+System quality does not depend only on model weights. Even a well-trained model produces poor answers if the prompt pipeline overflows the context window, repeats tokens, or guesses at multi-digit arithmetic.
+
+$$\text{System Quality} = (\text{Model Capability} \times \text{Pipeline Fidelity}) - \text{Pipeline Damage}$$
+
+The bridge benchmarking suite evaluates how faithfully the entire system serves responses across **65 test cases** (the 50 frozen Golden Gate behavioral cases in `data/golden_set.json` plus 15 dedicated arithmetic, long-context, and web search probes).
+
+### The 7 Key Metrics (in Simple English)
+
+| Metric | What it means | Target |
+| :--- | :--- | :--- |
+| **🧮 Math Exact Match** (`arithmetic_exact_match`) | Percentage of arithmetic questions answered with 100% mathematical precision. The symbolic calculator offload handles this without neural guesswork. | **100.0%** |
+| **🎯 Confidence Calibration Error** (`expected_calibration_error` / ECE) | How honest the AI's self-assessed confidence score is across 10 probability bins. If the AI claims 90% confidence, it should be correct 90% of the time. Lower is better (0.0 is perfect honesty). | **$\le 0.15$** |
+| **🔁 Repetition Loops** (`loop_rate`) | Frequency of degenerate n-gram repetitions or stuttering. Lower is better. | **0.0%** |
+| **✂️ Incomplete Cutoffs** (`truncated_before_stop_rate`) | Percentage of answers that hit the token length cap without completing terminal punctuation (`.`, `!`, `?`). Working-memory budgeting prevents this. | **0.0%** |
+| **🔤 Decode Glitches** (`replacement_char_rate`) | Frequency of UTF-8 decoding glitches or replacement artifacts (`\ufffd`). Lower is better. | **0.0%** |
+| **🥫 Canned Replies** (`canned_reply_rate`) | Turns where the system silently substituted hardcoded fallback strings rather than genuine generation or honest clarification. | **0.0%** |
+| **⚡ Response Speed** (`p95_latency_ms`) | 95% of queries complete faster than this duration in milliseconds. | Monitor |
+
+### How to Run the Benchmark
+
+1. **Directly from the Studio UI**:
+   - In the Studio screen under Candidate Models, each job card features a dedicated **`[ 📊 Benchmark Bridge & Calibrate ]`** button.
+   - Clicking it triggers an on-demand benchmark (`POST /candidates/{job_id}/benchmark`), polling every 3 seconds until results appear with live color-coded quality badges.
+   - Running full candidate evaluation (`POST /candidates/{job_id}/evaluate`) also triggers this benchmark automatically in the background.
+
+2. **Via Command Line**:
+   ```bash
+   python -m pranav.chit.tools.benchmark_bridge \
+     --checkpoint checkpoints/jobs/<job-id>/latest.pt \
+     --output checkpoints/jobs/<job-id>/bridge_benchmark.json
+   ```
+
+3. **Zero-Orphan Automatic Promotion**:
+   When you click **"Promote to Live"** in the Studio UI (or call `POST /candidates/{job_id}/promote`), the server promotes the model to Champion and automatically fits isotonic confidence calibration curves into `data/calibration.json`. The new live model immediately serves well-calibrated confidence scores with zero manual steps.

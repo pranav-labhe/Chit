@@ -21,6 +21,10 @@ return `403`, unless `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` is set (local devel
 | `GET` | `/train` | Recent jobs, newest first |
 | `GET` | `/train/{id}` | Job status, progress and loss history |
 | `POST` | `/train/{id}/cancel` | Stop a queued or running job (`409` if it already finished) |
+| `GET` | `/candidates` | List finished candidate checkpoints, safety evaluations, and bridge benchmarks |
+| `POST` | `/candidates/{id}/evaluate` | Run Golden Gate evaluation and automatically benchmark bridge quality |
+| `POST` | `/candidates/{id}/benchmark` | Trigger on-demand Bridge fidelity benchmark & calibration analysis |
+| `POST` | `/candidates/{id}/promote` | Promote candidate to Champion and automatically re-fit confidence calibration |
 
 `GET /health` also reports `training_job`, the id of the active job, or `null`.
 
@@ -171,6 +175,25 @@ so it loads the newly installed champion. Keep the manifest and archive
 together for rollback. Restore a retained checkpoint with
 `python -m pranav.chit.tools.rollback_champion --to-sha256 <checkpoint-sha256>`;
 restart the service after rollback as well.
+
+## Bridge Quality & Confidence Calibration Lifecycle
+
+Chit uses a compound AI pipeline that decouples model capability from deterministic tools and calibration. To ensure that newly trained candidates never require orphan manual steps, candidate evaluation and promotion natively manage bridge fidelity:
+
+1. **Automatic Bridge Evaluation (`POST /candidates/{id}/evaluate`)**:
+   When evaluating a candidate, the server runs the behavioral Golden Gate test and automatically runs `pranav.chit.tools.benchmark_bridge` in the background. The output is saved to `checkpoints/jobs/<id>/bridge_benchmark.json` and reports:
+   - `arithmetic_exact_match`: Percentage of math probes solved accurately.
+   - `expected_calibration_error` (ECE): Monotonic calibration error between raw sequence confidence and empirical accuracy. Lower is better.
+   - `p95_latency_ms`: 95th percentile inference time.
+   - `truncated_before_stop_rate`: Turns cut off by memory budgets before completing terminal punctuation.
+   - `loop_rate`: Frequency of degenerative n-gram loops.
+   - `replacement_char_rate`: Occurrence of UTF-8 decode artifacts.
+
+2. **On-Demand Manual Benchmark (`POST /candidates/{id}/benchmark`)**:
+   Triggers or re-runs the bridge benchmark for a specific candidate at any time.
+
+3. **Automatic Champion Calibration on Promotion (`POST /candidates/{id}/promote`)**:
+   When promoting a candidate to Champion, the server validates all safety gates, hot-swaps the active model in memory, and automatically runs isotonic regression fitting on the candidate's `bridge_benchmark.json` to update `data/calibration.json`. The new live model immediately serves well-calibrated confidence scores without manual CLI commands.
 
 ## How it behaves
 

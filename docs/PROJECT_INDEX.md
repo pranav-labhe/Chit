@@ -63,13 +63,17 @@ When `think: true` is enabled, the Bridge automatically reserves additional toke
 
 Beyond moving data, the system performs several intelligent background tasks:
 
+- **Compound AI Bridge Architecture (`bridge.py`)**: Decomposes request processing into single-responsibility stages: `BridgeConfig` (ablation toggles), `Router` (typed `Plan`), `ContextBuilder` (working-memory budgeting), `Generator` (safe runtime execution), `Verifier` (generic invariant checks), and `Responder` (transparent recovery ladder: resample $\rightarrow$ extractive projection $\rightarrow$ honest abstain).
+- **Working-Memory Budgeting (`bridge.py`)**: For Chit's 256-byte context window, dynamically reserves token headroom ($\text{gen\_reserve} \ge 32$) to prevent sliding generation from evicting prompt tokens. Enforces slot priority truncation: Sacred User Input > User Facts > Web Evidence > Summary > History > Notebook Memories.
+- **Symbolic Calculator Offload (`tools/calculator.py`)**: Automatically detects pure arithmetic (e.g. `45 * 12`, `100 / 4`, `seven times eight`) and computes exact answers using AST evaluation with zero `eval`/`exec`, returning exact mathematical answers with `source: "tool"`.
+- **Isotonic Confidence Calibration (`tools/calibrate_confidence.py`)**: Uses Pair-Adjacent Violators Algorithm (PAVA) to fit isotonic regression curves over validation evaluations, mapping raw sequence probabilities to truthful confidence scores (`is_calibrated = True`, ECE $< 0.15$).
 - **Chain-of-Thought Thinking Engine (`bridge.py`)**: When `think=true` is requested, the Bridge injects the `Reasoning:` primer, allowing the model to generate scratchpad tokens before `Answer:`. The Bridge automatically decouples `metadata.thoughts` from user-facing text to give multi-step reasoning capabilities without polluting the conversational dialogue history.
 - **Fact Extraction (`facts.py`)**: It does *not* use AI to extract facts. It uses lightning-fast, deterministic Regular Expressions (Regex) to spot patterns like `name`, `location`, `preference`, `email`, `project`, and `goal` in user messages, rejecting common conversational false positives.
 - **Background Summarization (`summarization.py`)**: It runs a deduplicated extractive summarizer. When a chat session gets too long, it condenses the oldest messages into a short summary block so the AI doesn't have to re-read the whole conversation.
 - **Semantic Search (`embeddings.py` & `faiss_index.py`)**: When you save a memory, it is converted into a mathematical array (vector) using `SentenceTransformers`. When the user asks a question, the system finds the closest matching vectors using FAISS (a high-speed search library) or exact cosine similarity if FAISS isn't installed.
 - **Retrieval Thresholding & Information-Theoretic Query Coverage (`bridge.py` & `memory.py`)**: Enforces `min_relevance` thresholding (default `0.35` in Bridge) to filter out low-confidence semantic noise. Lexical matching uses normalized query coverage $\frac{|Q_{\text{terms}} \cap D_{\text{terms}}|}{|Q_{\text{terms}}|}$ with vocative attenuation ($0.25\times$) for self-referential identity addressing, completely preventing false memory recalls on greetings (e.g. `"Hello Chit"`). Automatically engages deterministic greedy decoding (`temperature=0.0`) when memories or facts are present.
 - **Resilient Autonomous Metasearch & Crawler (`search.py`)**: Multi-tier discovery spanning DuckDuckGo JSON, Wikipedia REST, Internet Archive, and external search engines (`CHIT_SEARCH_URL`). An SSRF-guarded deep crawler (`crawl_page`) extracts compact 60–80 character factual propositions that fit Chit's 256-byte context window without truncation.
-- **Native Neural Reasoning Over Premises (`bridge.py`)**: Feeds retrieved premises directly into Chit's Transformer (`Input: <Premise>. <Query>\nReasoning:`). A cognitive supervisor truth gate anchors the response to the premise if the small model encounters memorized attractor states.
+- **Native Neural Reasoning Over Premises (`bridge.py`)**: Feeds retrieved premises directly into Chit's Transformer (`Input: <Premise>. <Query>\nReasoning:`). If the small model drifts into memorized attractors, an extractive recovery ladder projects the factual premise with source citations.
 - **Generation Quality & Early Stopping (`runtime.py` & `model.py`)**: Implements token-level early stopping via boundary callback `stop_fn` to prevent wasted forward passes past stop boundaries. Employs prompt-scoped repetition penalties (`idx[b, prompt_len:]`) that penalize repeated generation tokens without penalizing prompt/memory tokens.
 
 ---
@@ -146,9 +150,12 @@ The Chit UI (`ui.py` & `app.js`) is the primary way to interact with the system.
 ### Orchestration & Prompting (The Bridge)
 | File | Purpose | Wiring | API / UI Exposure |
 |---|---|---|---|
-| `bridge.py` | Gathers memories, history, and user prompt. | Connects `api.py` to `memory/sessions`. | Powers `POST /chat`. |
+| `bridge.py` | Orchestrates Compound AI pipeline (Router, ContextBuilder, Generator, Verifier, Responder). | Connects `api.py` to `runtime` and tools. | Powers `POST /chat` and `POST /generate`. |
 | `formats.py` | Executes the prompt trimming hierarchy. | Called by `bridge.py`. | Internal only. |
 | `search.py` | Multi-tier metasearch and SSRF-guarded crawler. | Called by `bridge.py`. | Powers autonomous grounding. |
+| `tools/calculator.py` | Exact AST symbolic arithmetic offload. | Called by `bridge.py` Router. | Exact math without neural guessing. |
+| `tools/calibrate_confidence.py` | Isotonic probability calibration (PAVA). | Called by `api.py` on promotion. | `data/calibration.json`. |
+| `tools/benchmark_bridge.py` | 65-case bridge fidelity & calibration benchmark. | Called by `api.py` and CLI. | `POST /candidates/{id}/benchmark`. |
 | `inference.py` | Queue system protecting CPU from overload. | Called by `bridge.py` and `api.py`. | Protects generation. |
 | `runtime.py` | Wrapper bundling model, tokenizer, memory. | Booted in `api.py`. | Core server engine. |
 
@@ -190,12 +197,13 @@ The Chit UI (`ui.py` & `app.js`) is the primary way to interact with the system.
 stateDiagram-v2
     [*] --> Candidate: Training Completes
     Candidate --> GoldenSetEvaluation: tools/eval_runner.py
+    Candidate --> BridgeBenchmark: tools/benchmark_bridge.py
     
     GoldenSetEvaluation --> Rejected: Score < 85% or Fails Critical
     GoldenSetEvaluation --> Approved: Score >= 85% + 100% Critical + Auto-Rated
     
-    Approved --> Champion: tools/promote_candidate.py
-    Champion --> [*]: Serves API Traffic
+    Approved --> Champion: tools/promote_candidate.py (Auto-Calibrates data/calibration.json)
+    Champion --> [*]: Serves API Traffic with Calibrated Confidence
 ```
 **Safeguard:** The Champion is *never* automatically replaced unless you explicitly pass `force_promote: true` via the API. 
 
@@ -240,7 +248,7 @@ flowchart LR
 
 ## 11. Testing Philosophy & Safeguards
 
-The project contains 155 tests driven by `pytest`.
+The project contains 211 tests driven by `pytest` (including unit tests for tensor math, memory search, sessions, training lifecycle, API security, and compound bridge pipeline components).
 - **Mocks & Safety (`conftest.py`)**: Intercepts database paths and redirects them to in-memory databases (`:memory:`). Running tests will never overwrite your live `memory.db`.
 - **API Key Overrides**: Tests use a dummy key (`KEY = "test-ui-key"`).
 
@@ -272,22 +280,28 @@ The project contains 155 tests driven by `pytest`.
 - **Run tests**: `python -m pytest`
 - **Train model**: `python -m pranav.chit.tools.train --config configs/chit_strong.json`
 - **Golden Evaluation**: `python -m pranav.chit.tools.eval_runner --checkpoint checkpoints/latest.pt --eval-file data/eval.txt --golden-set data/golden_set.json --output data/eval_report.json`
+- **Bridge Benchmark**: `python -m pranav.chit.tools.benchmark_bridge --checkpoint checkpoints/latest.pt`
+- **Calibrate Confidence**: `python -m pranav.chit.tools.calibrate_confidence --input docs/benchmarks/bridge-refactor-final.json --output data/calibration.json`
 - **Auto-Rating**: `python -m pranav.chit.tools.auto_rate --eval-report data/eval_report.json --output data/ratings.json`
 - **Evaluate**: Use the 'Evaluate Model' button in the Studio UI (Calls `POST /candidates/{job_id}/evaluate`)
+- **Benchmark**: Use the 'Benchmark Bridge & Calibrate' button in the Studio UI (Calls `POST /candidates/{job_id}/benchmark`)
 - **Promote**: Use the 'Promote to Live' button in the Studio UI (Calls `POST /candidates/{job_id}/promote`)
 
 ## Model Candidates and Administration
 
-These routes allow you to review completed training runs and safely swap the live model in production. Sensitive administrative routes require the `require_training_access` dependency.
+These routes allow you to review completed training runs, evaluate safety, benchmark bridge quality, and safely swap the live model in production. Sensitive administrative routes require the `require_training_access` dependency.
 
 ### GET /candidates
-Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their candidate checkpoint modification timestamps (`checkpoint_timestamp`), and their Golden Gate evaluation scores. Requires `require_training_access` dependency.
+Returns a list of all finished candidate models (`state: "succeeded"` or `"success"`), their candidate checkpoint modification timestamps (`checkpoint_timestamp`), Golden Gate safety scores, and bridge benchmark reports. Requires `require_training_access` dependency.
 
 ### POST /candidates/{job_id}/evaluate
-Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts. Requires `require_training_access` dependency.
+Starts a background evaluation of a candidate model against the 50 Golden Gate behavioral prompts, and automatically triggers background bridge fidelity benchmarking. Requires `require_training_access` dependency.
+
+### POST /candidates/{job_id}/benchmark
+Triggers an on-demand bridge fidelity benchmark across 65 evaluation cases, computing arithmetic exact match, expected calibration error (ECE), repetition loop rate, cutoff rate, and P95 latency. Requires `require_training_access` dependency.
 
 ### POST /candidates/{job_id}/promote
-Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation. Requires `require_training_access` dependency.
+Promotes an evaluated candidate to be the live Champion, safely hot-swapping the active model. **Requirement:** The candidate must pass the Golden Gate evaluation. Automatically re-fits isotonic probability calibration (`data/calibration.json`) so the live AI serves truthful confidence scores immediately. Requires `require_training_access` dependency.
 
 ### POST /admin/rollback
 Instantly restores the previous live model (Champion) from the archive if a promoted candidate starts behaving poorly. Requires `require_training_access` dependency.

@@ -138,6 +138,28 @@ Knowledge is for structured data that should be "baked" into the model's weights
 
 ---
 
+## 🏆 Candidate Review, Benchmarking & Calibration (`/candidates`)
+
+When training completes, the new model is saved as a **candidate** under `checkpoints/jobs/<id>/`. It does not replace the active model until evaluated and promoted.
+
+### Candidate Lifecycle
+1. **List Candidates (`GET /candidates`)**:
+   Returns all completed training checkpoints along with their behavioral evaluations and bridge benchmark reports.
+2. **Evaluate & Benchmark (`POST /candidates/{id}/evaluate` & `POST /candidates/{id}/benchmark`)**:
+   - Tests the candidate against Golden Gate safety rules.
+   - Automatically benchmarks bridge fidelity across 65 evaluation cases (50 golden cases + 15 math, long-context, and web probes).
+   - Reports key quality metrics in simple English:
+     - **🧮 Math Exactness**: Percentage of arithmetic questions answered with 100% precision via symbolic math tools.
+     - **🎯 Calibration Error (ECE)**: How honest the model's self-assessed confidence scores are. Lower is better (0.0 means perfect truthfulness).
+     - **⚡ Speed (P95 Latency)**: 95% of queries finish faster than this duration.
+     - **✂️ Incomplete Answers**: Percentage of answers truncated by token limits before completing terminal punctuation.
+     - **🔁 Repetition Loops**: Frequency of repetitive word loops or stuttering.
+3. **Promote & Auto-Calibrate (`POST /candidates/{id}/promote`)**:
+   - Promotes the candidate to become the active live model (Champion).
+   - Automatically fits an isotonic probability calibration model (`data/calibration.json`) so the live AI immediately serves truthful, calibrated confidence scores without any manual CLI steps.
+
+---
+
 ## 🛠️ Technical Constraints
 
 ### Context Budgeting

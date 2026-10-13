@@ -38,6 +38,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import threading
 import time
 import uuid
@@ -1173,13 +1174,44 @@ async def list_candidates():
             mtime = ckpt_path.stat().st_mtime
             ckpt_timestamp = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
             
+        bridge_bench_path = p / "bridge_benchmark.json"
+        bridge_benchmark = None
+        if bridge_bench_path.is_file():
+            try:
+                bridge_benchmark = json.loads(bridge_bench_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
         candidates.append({
             "job_id": p.name,
             "checkpoint_timestamp": ckpt_timestamp,
             "job_manifest": job_data,
-            "evaluation": eval_data
+            "evaluation": eval_data,
+            "bridge_benchmark": bridge_benchmark,
         })
     return {"candidates": candidates}
+
+def _run_bridge_benchmark(job_id: str):
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        log.error(f"Cannot benchmark {job_id}: checkpoint missing")
+        return
+    bench_path = Path(JOBS_DIR) / job_id / "bridge_benchmark.json"
+    bench_path.write_text(json.dumps({"status": "running"}), encoding="utf-8")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pranav.chit.tools.benchmark_bridge", "--checkpoint", str(ckpt_path), "--output", str(bench_path)],
+            check=True,
+            capture_output=True
+        )
+        if bench_path.exists():
+            data = json.loads(bench_path.read_text(encoding="utf-8"))
+            data["status"] = "completed"
+            bench_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception as e:
+        log.exception(f"Bridge benchmark failed for {job_id}")
+        err_msg = e.stderr.decode("utf-8", errors="ignore") if getattr(e, "stderr", None) else str(e)
+        bench_path.write_text(json.dumps({"status": "failed", "error": err_msg}), encoding="utf-8")
 
 def _run_eval_background(job_id: str):
     ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
@@ -1208,6 +1240,9 @@ def _run_eval_background(job_id: str):
                 check=True,
                 capture_output=True
             )
+            
+        # Run bridge fidelity benchmark automatically alongside Golden Gate evaluation
+        _run_bridge_benchmark(job_id)
     except subprocess.CalledProcessError as e:
         log.error(f"Evaluation failed for {job_id}: {e.stderr.decode('utf-8', errors='ignore')}")
     except Exception as e:
@@ -1226,6 +1261,25 @@ async def evaluate_candidate(job_id: str, background_tasks: BackgroundTasks):
         
     background_tasks.add_task(_run_eval_background, job_id)
     return {"status": "evaluating", "job_id": job_id}
+
+@app.post("/candidates/{job_id}/benchmark", dependencies=[Depends(require_training_access)])
+async def benchmark_candidate_route(job_id: str, background_tasks: BackgroundTasks):
+    """Trigger the Bridge benchmark and quality analysis for a candidate in the background."""
+    ckpt_path = Path(JOBS_DIR) / job_id / "latest.pt"
+    if not ckpt_path.is_file():
+        raise HTTPException(status_code=404, detail="Candidate checkpoint not found")
+        
+    bench_path = Path(JOBS_DIR) / job_id / "bridge_benchmark.json"
+    if bench_path.is_file():
+        try:
+            data = json.loads(bench_path.read_text(encoding="utf-8"))
+            if data.get("status") == "running":
+                return {"status": "running", "job_id": job_id}
+        except Exception:
+            pass
+            
+    background_tasks.add_task(_run_bridge_benchmark, job_id)
+    return {"status": "benchmarking", "job_id": job_id}
 
 @app.post("/candidates/{job_id}/promote", dependencies=[Depends(require_training_access)])
 async def promote_candidate_route(job_id: str):
@@ -1255,7 +1309,18 @@ async def promote_candidate_route(job_id: str):
         log.exception("Promotion error")
         raise HTTPException(status_code=500, detail=str(e))
         
-    # Hot-swap the runtime using existing safe reload logic
+    # Automatically update calibration mapping for the promoted champion
+    bench_path = Path(JOBS_DIR) / job_id / "bridge_benchmark.json"
+    if bench_path.is_file():
+        try:
+            from pranav.chit.tools.calibrate_confidence import train_calibration_from_eval
+            cal_file = Path("data/calibration.json")
+            train_calibration_from_eval(bench_path, cal_file)
+            log.info(f"Updated data/calibration.json from promoted candidate {job_id}")
+        except Exception as e:
+            log.warning(f"Could not calibrate promoted candidate {job_id}: {e}")
+
+    # Hot-swap the runtime using existing safe reload logic (reads newly updated calibration table)
     _load_served_model()
     return {"status": "promoted", "job_id": job_id}
 

@@ -22,6 +22,7 @@ If you are one, the shorter technical reference is in `API.md`.
    - [6.5 Training](#65-training)
    - [6.6 Knowledge](#66-knowledge)
    - [6.7 Training text files](#67-training-text-files)
+   - [6.8 Candidate review, benchmarking, and promotion](#68-candidate-review-benchmarking-and-promotion)
 7. [When something goes wrong](#7-when-something-goes-wrong)
 8. [Step-by-step recipes](#8-step-by-step-recipes)
 9. [Tips for better answers](#9-tips-for-better-answers)
@@ -514,19 +515,27 @@ Response:
 | --- | --- |
 | `text` | The model's reply. |
 | `session_id` | The conversation this was saved to. `null` when you used `task: "continue"` (nothing is saved). |
-| `confidence` | Mathematical confidence score from 0.0 (pure guess) to 1.0 (certain), calculated from token probabilities. |
+| `confidence` | Confidence score from 0.0 (pure guess) to 1.0 (certain). When calibrated, reflects true accuracy. `null` for exact tool answers. |
+| `is_calibrated` | `true` if the confidence score was adjusted by isotonic calibration (`data/calibration.json`) to reflect real accuracy. |
+| `source` | Where the answer came from: `"neural"` (model), `"tool"` (exact symbolic calculator), `"extractive"` (verified premise), or `"abstain"` (honest clarification request). |
 | `is_incomplete` | `true` if generation hit the token ceiling mid-sentence without terminal punctuation (`.`, `!`, `?`, `"`, `'`, `\n`). |
 | `is_uncertain` | `true` if confidence is below 0.40, showing Chit is uncertain on this topic. |
 | `web_grounded` | `true` if the answer was grounded using web search. |
 | `sources` | The web search snippets used to ground the answer. |
 | `metadata.task` | The task that was used. |
+| `metadata.plan` | The pipeline plan: intent, strategy, and decoding settings chosen by the Router. |
+| `metadata.source` | The answer source (`neural`, `tool`, `extractive`, `abstain`). |
 | `metadata.memory_ids` | The IDs of memory notes that were shown to the model for this reply. Empty means none matched. |
 | `metadata.confidence` | The rounded sequence confidence score. |
+| `metadata.is_calibrated` | Whether confidence calibration was applied. |
 | `metadata.is_incomplete` | Whether generation stopped abruptly mid-sentence. |
 | `metadata.is_uncertain` | Whether model confidence is low. |
 | `metadata.needs_retrieval` | `true` when confidence is low or information void is detected, triggering web retrieval. |
 | `metadata.web_grounded` | Whether web search was triggered and used. |
 | `metadata.sources` | The web snippets injected into the prompt. |
+| `metadata.tokens_prompt` | Tokens used by the input prompt. |
+| `metadata.tokens_reserved` | Tokens reserved for the model to generate its reply without cutoff. |
+| `metadata.tokens_history_dropped` | Older conversational tokens trimmed to prevent context overflow. |
 
 **Common problems**
 
@@ -1214,6 +1223,76 @@ When it looks right, send the same body with `"dry_run": false` and `"overwrite"
 | `409` | The files already exist and `overwrite` is `false`, **or** a training job is running. | Set `overwrite` to `true`, or wait for the job. |
 | `422` | The name has a slash or odd characters, the file is not plain text, there are fewer than 2 different lines, or a resulting file would not be longer than `block_size`. **Nothing is written.** | Fix the name, or add more text. |
 | `500` | The server could not write the files. | The folder may be read-only. Ask the server owner. |
+
+---
+
+## 6.8 Candidate review, benchmarking, and promotion
+
+When a training job finishes successfully, the new model is saved as a **Candidate** under `checkpoints/jobs/<id>/`. It does **not** replace the active live model (Champion) right away. This protects you: a candidate must prove that it is safe and accurate before you put it into production.
+
+### `GET /candidates`
+**What it does.** Lists all finished training runs waiting for review, along with their safety test scores and bridge quality benchmarks.
+**Key needed:** yes (training).
+**When to use it.** Whenever you finish training and want to see how your new models performed.
+
+**What you send.** Nothing.
+
+**What you get back**
+```json
+{
+  "candidates": [
+    {
+      "job_id": "1adc741f15164a2e9f0d8c7c883c1103",
+      "config_name": "chit_strong",
+      "checkpoint": "checkpoints/jobs/1adc741f15164a2e9f0d8c7c883c1103/latest.pt",
+      "checkpoint_timestamp": "2026-10-13T18:00:00+00:00",
+      "is_champion": false,
+      "evaluation": {
+        "status": "completed",
+        "passed": true,
+        "score": 0.92,
+        "critical_passed": true
+      },
+      "bridge_benchmark": {
+        "arithmetic_exact_match": 1.0,
+        "expected_calibration_error": 0.08,
+        "loop_rate": 0.0,
+        "truncated_before_stop_rate": 0.0,
+        "replacement_char_rate": 0.0,
+        "canned_reply_rate": 0.0,
+        "p95_latency_ms": 42.5
+      }
+    }
+  ]
+}
+```
+
+### `POST /candidates/{job_id}/evaluate`
+**What it does.** Runs the **Golden Gate safety test** (50 essential questions in `data/golden_set.json`) and automatically benchmarks bridge quality in the background.
+**Key needed:** yes (training).
+**When to use it.** Right after training finishes, before deciding to promote. In the Studio UI, this is the **"Evaluate Model"** button.
+
+### `POST /candidates/{job_id}/benchmark`
+**What it does.** Runs an on-demand **Bridge Quality & Fidelity Benchmark** across 65 evaluation cases (the 50 Golden Gate cases plus 15 math, long-context, and web search probes).
+**Key needed:** yes (training).
+**When to use it.** Whenever you want to test how faithfully the prompt bridge serves this candidate model. In the Studio UI, this is the **"[ 📊 Benchmark Bridge & Calibrate ]"** button.
+
+### The 7 Bridge Quality Badges (What they mean in simple words)
+- **🧮 Math Exactness (`arithmetic_exact_match`)**: Percentage of arithmetic questions answered with 100% precision. The built-in symbolic calculator handles this so the model never has to guess at numbers.
+- **🎯 Calibration Error (`expected_calibration_error` or ECE)**: How honest the model's confidence scores are. If the model says 80% confidence, it should be right 80% of the time. Lower is better (0.0 is perfect truthfulness).
+- **🔁 Repetition Loops (`loop_rate`)**: How often the model repeats words in a loop or stutters. Lower is better (0.0% means no repeating loops).
+- **✂️ Incomplete Answers (`truncated_before_stop_rate`)**: How often an answer gets cut off abruptly before completing a sentence. Working-memory budgeting prevents this.
+- **🔤 Decode Glitches (`replacement_char_rate`)**: How often garbled text characters (`\ufffd`) appear. Lower is better.
+- **🥫 Canned Replies (`canned_reply_rate`)**: How often fake hardcoded fallback sentences are returned. Lower is better.
+- **⚡ Speed (`p95_latency_ms`)**: 95% of queries finish faster than this duration in milliseconds.
+
+### `POST /candidates/{job_id}/promote`
+**What it does.** Promotes an approved candidate to become the live model (Champion) serving all user requests (`checkpoints/latest.pt`).
+**Key needed:** yes (training).
+**When to use it.** When the candidate has passed its evaluation and you want to use it for live chat and generation. In the Studio UI, this is the **"Promote to Live"** button.
+
+**Automatic Confidence Calibration:**
+When you promote a candidate, the server automatically fits a probability calibration model (`data/calibration.json`) using the candidate's benchmark data. The new live model immediately serves honest, calibrated confidence scores without any extra manual steps!
 
 ---
 
