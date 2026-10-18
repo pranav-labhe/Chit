@@ -864,5 +864,24 @@ button:disabled { cursor: wait; opacity: .65; }
     display: none;
 }
 
+.task-badge, .source-badge {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 600;
+    margin-left: 6px;
+    align-self: center;
+    cursor: help;
+}
 
+.task-badge {
+    background: #182738;
+    color: #93c5fd;
+    border: 1px solid #2b4766;
+}
 
+.source-badge {
+    background: #222638;
+    color: #c4b5fd;
+    border: 1px solid #3c4264;
+}

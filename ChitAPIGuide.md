@@ -358,12 +358,13 @@ review held-out replies before promoting the checkpoint.
 | --- | --- | --- | --- | --- |
 | `prompt` | **Yes** | — | 1 to 2000 characters | Your request in the default assistant mode, or a raw text prefix when `mode` is `continue`. Markdown headings, lists, tables, quotes, and code fences are kept in the request. |
 | `mode` | No | `assistant` | `assistant` or `continue` | Assistant mode formats the request like `/chat` and adds matching memory. Continue mode sends the prompt directly. |
+| `task` | No | `chat` | `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, or `continue` | Which trained skill header (`Task: <name>`) to use. When left at `chat`, the Router automatically chooses the best matching header (`reasoning`, `behavior`, `grammar`, `knowledge`, or `chat`). |
 | `tokens` | No | 100 | 1 to 500 | The most new letters Chit may write. (A "token" is about one letter.) 60 to 120 is enough for a sentence. |
 | `temperature` | No | 0.7 | 0 to 2 | How adventurous Chit is. **0** = always the safest choice, so you get the same answer every time. Higher = more random and more mistakes. |
 | `top_k` | No | 50 | 1 to 256 | Chit picks each letter from its top few guesses. This sets how many. It does nothing when `temperature` is 0. |
 | `stop` | No | assistant turn markers | up to 8 pieces of text | Optional custom stop text. `mode: "continue"` applies only the stop strings you provide. |
 | `search` | No | `false` | `true` or `false` | Enable web retrieval grounding before answering. Not allowed with `mode: "continue"`. |
-| `think` | No | `false` | `true` or `false` | Enable intermediate chain-of-thought scratchpad reasoning. Not allowed with `mode: "continue"`. |
+| `think` | No | `false` | `true` or `false` | Enable intermediate chain-of-thought scratchpad reasoning (`Task: reasoning`). Not allowed with `mode: "continue"`. |
 
 **Best settings for steady answers:** `"temperature": 0`. Assistant mode uses chat-turn stop markers by default.
 
@@ -427,30 +428,30 @@ conversation history, then **saves** the exchange in a conversation (a "session"
 | Field | Required | Default | Allowed | What it means in simple words |
 | --- | --- | --- | --- | --- |
 | `message` | **Yes** | — | 1 to 2000 letters | What the user says. |
-| `task` | No | `chat` | up to 50 letters | The task label used in the request prompt. `continue` = send the message straight to the model as a raw text prefix. |
+| `task` | No | `chat` | `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, or `continue` | The trained skill label (`Task: <name>`) used in the prompt. When left at `chat`, the Router automatically picks the best matching skill header (`reasoning`, `behavior`, `grammar`, `knowledge`, or `chat`). `continue` = send the message straight to the model as a raw text prefix. |
 | `temperature` | No | server's own (0.7) | 0 to 2 | Same as in `/generate`. Use 0 for steady answers. |
 | `tokens` | No | server's default (256) | 1 to 500 | Maximum new bytes to generate. |
 | `session_id` | No | none | the 32-character ID of a conversation | To continue an old conversation, send its ID. **Leave it out to start a new one**: the server makes one and returns its ID. Not allowed with `task: "continue"`. |
-| `think` | No | `false` | `true` or `false` | Enable intermediate chain-of-thought scratchpad reasoning. |
+| `think` | No | `false` | `true` or `false` | Enable intermediate chain-of-thought scratchpad reasoning (`Task: reasoning`). |
 | `search` | No | `false` | `true` or `false` | Force live web search grounding before answering. Not allowed with `task: "continue"`. |
 
-**How the chat message is built.** In `chat` mode the model is shown this, filled in:
+**How the chat message is built.** In standard assistant mode the model is shown this, filled in:
 ```
-Task: chat
+Task: <effective_task>
 Known memory:
 - (up to 5 notes from Memory or web search snippets that match your message)
 (the last 8 messages of this conversation)
 User: (your message)
 Chit:
 ```
-Then Chit writes what comes after `Chit:`. If the whole thing is too long for the model's `block_size`, the oldest
+Then Chit writes what comes after `Chit:`. (When `think: true`, it uses `Task: reasoning`, includes `Known memory:` and `User-stated facts` if present, and prompts with `Input: (your message)\nReasoning:`.) If the whole thing is too long for the model's `block_size`, the oldest
 messages are dropped first, then the least matching notes. If the current request still does not fit, its end is
 truncated for generation. Every message is saved in full. Markdown structure is preserved unless it falls beyond
 the context limit.
 
-**Autonomous Web Search & Multi-Tier Crawler.** If Chit is asked about an unknown topic where internal confidence is low ($C < 0.40$) and no local memory matches, Chit will autonomously search the web using its multi-tier discovery engine (DuckDuckGo JSON, Wikipedia REST, Internet Archive, or configured external search), extract an unblocked factual proposition using an SSRF-guarded deep crawler, feed the premise directly into its neural reasoning prompt, and produce a grounded response. You can also explicitly trigger this by passing `"search": true`.
+**Autonomous Web Search & Multi-Tier Crawler.** If Chit is asked about an unknown topic where internal confidence is low ($C < 0.40$) and no local memory matches, Chit will autonomously search the web using its multi-tier discovery engine (DuckDuckGo JSON, Wikipedia REST, Internet Archive, or configured external search), extract an unblocked factual proposition using an SSRF-guarded deep crawler, feed the premise directly into its grounded `Task: reasoning` prompt, and produce a grounded response. You can also explicitly trigger this by passing `"search": true`.
 
-**Important.** The model works best when training examples use this same request style (`Task:`, `User:`, and
+**Important.** The model works best when training examples use this same request style (`Task: <name>`, `User:`, and
 `Chit:` lines). `task: "continue"` remains available for raw text continuation and does not create a session.
 
 **Example 1: start a conversation**

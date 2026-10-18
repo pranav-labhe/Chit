@@ -22,7 +22,7 @@ see [TRAINING_API.md](TRAINING_API.md)).
 | --- | --- | --- |
 | `text` | `text` | the text itself |
 | `qa` | `question`, `answer` | `User: <question>\nChit: <answer>` (the same format `/chat` prompts with) |
-| `reasoning` | `input`, `reasoning`, `answer` | `Input: …\nReasoning: …\nAnswer: …` |
+| `reasoning` | `input`, `reasoning`, `answer` | `Task: reasoning\nInput: …\nReasoning: …\nAnswer: …` |
 
 Every item may also carry `tags` (letters, digits, `_ . : / -`), `source` (for
 audit) and `remember`. With `"remember": true` the item is also written to

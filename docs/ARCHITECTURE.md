@@ -27,30 +27,26 @@ Chit (चित्) is a compact neural brain designed for fast, context-aware t
 ## 2. Technical Specifications
 
 ### 🧠 Model Architecture (`model.py`)
-- **Type**: Byte-level decoder-only Transformer.
-- **Default Config**:
+- **Type**: Byte-level decoder-only Transformer (`vocab_size = 256`).
+- **Default Config** (Champion `6l_256` preset: `block_size: 256`, `n_layer: 6`, `n_head: 4`, `n_embd: 256`; small preset: `block_size: 128`, `n_layer: 4`, `n_head: 4`, `n_embd: 128`):
     - `vocab_size`: 256 (1:1 mapping to UTF-8 bytes).
-    - `block_size`: 128 tokens.
-    - `n_layer`: 4 blocks.
-    - `n_head`: 4 heads.
-    - `n_embd`: 128 dimensions.
-- **Tensor Flow**:
+- **Tensor Flow & Autoregressive KV-Cache (`use_cache = True`)**:
     - **Input**: `idx` tensor of shape `(batch, t)`.
-    - **Embedding**: Always uses `token_embedding`; absolute mode adds `position_embedding`, while RoPE rotates query/key pairs inside attention.
+    - **Embedding**: Always uses `token_embedding`; absolute mode slices `position_embedding[start_pos : start_pos + t]`, while RoPE slices `cos, sin` to `[start_pos : start_pos + t]` and rotates query/key pairs inside attention.
     - **Blocks**: Each block contains:
-        - **Causal Self-Attention**: Projects input to $Q, K, V$ via one linear layer (`3 * n_embd`). Uses `F.scaled_dot_product_attention` with a causal mask. Shape: `(batch, heads, t, head_dim)`.
+        - **Causal Self-Attention (`CausalSelfAttention`)**: Projects input to $Q, K, V$ via one linear layer (`3 * n_embd`). Concatenates cached `past_kv = (past_k, past_v)` along the sequence dimension when `use_cache=True`. Uses `F.scaled_dot_product_attention` with `is_causal = (past_kv is None and t > 1)`. Shape: `(batch, heads, t, head_dim)`.
         - **MLP**: A two-layer network (`n_embd` $\rightarrow$ `4 * n_embd` $\rightarrow$ `n_embd`) with `GELU` activation.
-- **Attention**: Uses `F.scaled_dot_product_attention` (Fused kernel) with a causal mask for efficient generation.
 - **Weight Tying**: The `lm_head` shares weights with the `token_embedding` to reduce parameter count and improve regularization.
-- **Position Encoding**: Absolute embeddings remain the default for legacy compatibility; configurations may opt into RoPE.
+- **Position Encoding**: Absolute embeddings remain the default for legacy compatibility; configurations may opt into RoPE. KV-cache introduces zero new parameters and maintains 100% checkpoint compatibility.
 
 ### 🔡 Tokenization (`tokenizer.py`)
 - **Default**: Every UTF-8 byte is exactly one token. New checkpoints may carry a serialized byte-level BPE tokenizer and its SHA-256 fingerprint.
 - **Robustness**: Uses `surrogatepass` during encoding to handle lone surrogates from malformed input, and `replace` during decoding to ensure stability.
 
-### ⚙️ Training Loop (`training.py`)
+### ⚙️ Training Loop & Record-Aligned Answer-Focused Sampling (`training.py`, `data.py`)
 - **Optimizer**: `AdamW` with weight decay.
-- **Loss Function**: `F.cross_entropy` computed over the flattened logits and targets.
+- **Record-Aligned Window Sampling (`TextDataset.record_starts`)**: Scans corpus byte buffers for `"Task: "` record boundaries. During `random_batch()`, 70% of batch items start at a random `"Task: "` boundary and 30% start at uniform random byte offsets for continuation robustness.
+- **Answer-Only Loss Masking (`answer_loss_only = True`)**: For each sampled window, locates the first `"\nChit:"` or `"\nReasoning:"` marker and sets target bytes `y = -100` prior to the answer/reasoning content (`F.cross_entropy(..., ignore_index=-100)`), focusing gradient updates on response quality while keeping full-window supervision for `Task: prose` and continuation windows.
 - **Weight Init**: Uses normal distribution ($\mu=0, \sigma=0.02$) for all linear and embedding layers.
 - **Learning Rate**: Implements linear warmup followed by either a constant rate or a cosine decay schedule.
 - **Safeguards**: Includes `clip_grad_norm_` to prevent gradient explosions and checks for `NaN/Inf` loss (raises `FloatingPointError`).
@@ -92,7 +88,7 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 ### 📏 System Constraints
 | Constraint | Value | Source | Description |
 | :--- | :--- | :--- | :--- |
-| `block_size` | 128 | `model.py` | Max sequence length the model can process. |
+| `block_size` | 128 / 256 / 512 | `model.py` | Max sequence length the model can process (Champion `6l_256` uses 256). |
 | `max_turns` | 200 | `sessions.py` | Max conversation history kept per session (oldest dropped). |
 | `history_turns` | 8 | `api.py` | Number of most recent messages sent as context. |
 | `max_train_steps` | 100,000 | `api.py` | Upper bound for any single training run. |
@@ -108,16 +104,16 @@ SQLite is the canonical store for memory records; legacy `memory.json` is import
 | Module | Role | Key Components | Logic Flow |
 | :--- | :--- | :--- | :--- |
 | **`api.py`** | **Gateway** | FastAPI Routes | Handles HTTP requests $\rightarrow$ Auth $\rightarrow$ Bridge/Store $\rightarrow$ JSON Response (`ChatResponse`). |
-| **`bridge.py`** | **Orchestrator** | `Bridge`, `Router`, `ContextBuilder`, `Generator`, `Verifier`, `Responder` | Compound AI pipeline connecting API requests to `Runtime`. Manages planning, working-memory budgeting, symbolic math offload, invariant verification, and calibrated confidence. |
+| **`bridge.py`** | **Orchestrator** | `Bridge`, `Router`, `ContextBuilder`, `Generator`, `Verifier`, `Responder` | Compound AI pipeline connecting API requests to `Runtime`. Manages 7-task routing, working-memory budgeting, symbolic math offload, Best-of-3 invariant verification, and calibrated confidence. |
 | **`search.py`** | **Web Retrieval** | `search_web`, `crawl_page`, `budget_snippet` | Resilient multi-tier metasearch (DDG JSON, Wikipedia REST, Archive.org, external) and autonomous SSRF-guarded crawler with compact proposition extraction. |
 | **`inference.py`** | **Scheduler** | `InferenceManager` | Bounds FIFO admission and serializes model execution on the device worker. |
 | **`runtime.py`** | **Execution** | `ChitRuntime` | The interface for `generate` and `recall`. Bridges the Gap between Model and Memory. |
-| **`model.py`** | **Brain** | `ChitModel` | Transformer-based architecture. Handles tensor math, token log-probabilities, and finish reasons. |
+| **`model.py`** | **Brain** | `ChitModel` | Transformer-based architecture with KV-cache (`use_cache=True`), token log-probabilities, and finish reasons. |
 | **`memory.py`** | **Experience** | `SQLiteMemoryStore` | SQLite source of truth, FTS5 keyword retrieval and optional FAISS HNSW hybrid search. |
 | **`sessions.py`** | **Context** | `SessionStore` | SQLite transcript, fact and summary coverage/status; transactional retention. |
 | **`knowledge.py`** | **Learning** | `KnowledgeStore` | SQLite-based queue for training data. Manages the "teach" $\rightarrow$ "train" pipeline. |
 | **`training.py`** | **Evolution** | Training Loop | Implements the gradient descent process to update model weights. |
-| **`data.py`** | **Fuel** | `TextDataset` | Handles byte or BPE tokenization and configurable training windows. |
+| **`data.py`** | **Fuel** | `TextDataset` | Handles byte or BPE tokenization, record-aligned `"Task: "` window sampling (70%/30%), and `-100` answer-only loss masking. |
 | **`tokenizer.py`** | **Translator** | `ByteTokenizer`, `BpeTokenizer` | Converts text to byte IDs or versioned BPE IDs and back. |
 | **`ui.py`** | **Interface** | Admin Console | A single-page proxy UI to interact with the API without exposing keys. |
 
@@ -126,29 +122,24 @@ Small language models (like Chit's 4.87M parameter byte Transformer) have tight 
 $$\text{System Quality} = (\text{Model Capability} \times \text{Pipeline Fidelity}) - \text{Pipeline Damage}$$
 
 The Bridge breaks down request handling into single-responsibility components:
-1. **`BridgeConfig`**: Dataclass controlling all pipeline features (`enable_calculator`, `enable_generic_verifier`, `enable_calibration`, `reserve_generation_budget`, `open_chat_top_k`, etc.). Everything can be turned on or off for benchmarking and ablations.
-2. **`Router`**: Maps user context and configuration to an explicit typed `Plan`:
-   - `intent`: `"continue"`, `"casual"`, `"math"`, `"lookup"`, `"think"`, or `"chat"`.
-   - `strategy`: `"tool"`, `"recall"`, `"search"`, `"think"`, or `"direct"`.
-   - `decoding`: Deterministic greedy ($T=0.0$, $\text{top\_k}=1$) for facts/memory, or bounded sampling ($T > 0$, $\text{top\_k}=20$) for open conversation.
-   - `reasons`: Human-readable audit trail stored in `decision.metadata["plan"]`.
-3. **`ContextBuilder` (Working-Memory Budgeting)**:
+1. **`BridgeConfig`**: Dataclass controlling all pipeline features (`enable_calculator=True`, `enable_generic_verifier=True`, `enable_calibration=True`, `best_of_n=3`, `reserve_generation_budget=True`, `open_chat_top_k=20`, etc.). Everything can be turned on or off for benchmarking and ablations.
+2. **`Router` & Unified 7-Task Selection (`VALID_TASKS`)**:
+   - Canonical task vocabulary: `("chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue")`.
+   - When `c.task == "chat"` (default), `Router.select_effective_task()` selects the most faithful `effective_task` header: `reasoning` (if `think=True`), `behavior` (missing info/conflict/policy queries), `grammar` (grammar/tense/rewrite requests), `knowledge` (when memories/facts/search are present or query asks about Chit/Atmini architecture), or `chat`. Explicit non-default tasks are preserved verbatim.
+   - Maps context to an explicit typed `Plan` (`intent`, `strategy`, `decoding`, `effective_task`, `reasons`).
+3. **`ContextBuilder` (Working-Memory Budgeting & Grounded Reasoning)**:
    - In Chit's 256-byte context window, sliding text generation pushes out prompt tokens, destroying causal attention.
-   - The builder calculates a reserved generation budget:
+   - Calculates a reserved generation budget:
      $$\text{gen\_reserve} = \min(\text{max\_new\_tokens}, \max(32, \min(96, \lfloor\text{block\_size} \times 0.4\rfloor)))$$
-   - Capping prompt size at $\text{max\_prompt} = \text{block\_size} - \text{gen\_reserve}$.
-   - Truncates context according to strict priorities (User question is sacred; followed by facts, web evidence, summary, history, and finally SQLite notebook memories).
-   - Tracks token counts: `tokens_prompt`, `tokens_reserved`, and `tokens_history_dropped`.
+   - Caps prompt size at $\text{max\_prompt} = \text{block\_size} - \text{gen\_reserve}$, truncating context by strict priority (Sacred User Input > User Facts > Web Evidence > Summary > History > Notebook Memories).
+   - `build_reasoning_prompt()` constructs grounded `Task: reasoning` prompts with budgeted `Known memory:` and `User-stated facts` above `Input: ...\nReasoning:`.
 4. **`Generator`**: Interfaces cleanly with `ChitRuntime`, extracting generated text, raw log-probabilities, and finish reasons without swallowing unexpected system errors.
-5. **`Verifier`**: Checks candidate responses against generic invariants:
-   - `is_empty`: Blank or whitespace only.
-   - `is_repetitive`: Stuttering or repeated n-gram loops ($> 3$ repetitions).
-   - `has_replacement_char`: UTF-8 decode error artifacts (`\ufffd`).
-   - `is_truncated`: Cut off by length cap without ending punctuation (`.`, `!`, `?`, `"`, `\n`).
-   - `is_disjoint_from_evidence`: Zero content-token overlap with provided evidence on grounded turns.
+5. **`Verifier` & Conditional Best-of-3 Candidate Selection**:
+   - Checks candidate responses against generic invariants: `is_empty`, `is_repetitive`, `has_replacement_char`, `is_truncated`, and `is_disjoint_from_evidence`.
+   - When the primary greedy generation passes verification and confidence checks (`primary_passed == True`), it is returned immediately with zero extra latency. When `not primary_passed` and `best_of_n > 1`, the Bridge samples up to `best_of_n - 1` (2) additional candidates at `temperature=0.35, top_k=10` and picks the highest-scoring valid candidate ranked by calibrated confidence, completeness, and content-token overlap.
 6. **`Responder` (Transparent Recovery Ladder)**:
-   - If verification fails:
-     - **Step 1 (Resample):** Tries one gentle resample with perturbed temperature ($T=0.2$).
+   - If all candidates fail verification:
+     - **Step 1 (Resample):** Samples at perturbed temperature.
      - **Step 2 (Extractive Projection):** If verified web or memory premise exists, projects the primary factual sentence with source citation (`source: "extractive"`).
      - **Step 3 (Honest Abstain):** If ungrounded, returns an honest clarification request (`source: "abstain"`), never a fake canned string.
    - **Full Transparency**: Always preserves `metadata["raw_text"]` with the model's original unaltered output.
@@ -163,8 +154,8 @@ Small language models struggle with exact multi-digit arithmetic.
 ### 🎯 Calibrated Confidence & Probability Mapping (`tools/calibrate_confidence.py`)
 - **Raw Sequence Probability**: The geometric mean of raw token probabilities:
   $$C_{\text{raw}} = \exp\left( \frac{1}{N} \sum_{t=1}^{N} \log P(x_t \mid x_{<t}) \right)$$
-- **Isotonic Probability Calibration**: Fits an isotonic regression curve over evaluated validation pairs `(raw_confidence, was_correct)`. The mapping is serialized to `data/calibration.json`.
-- **Runtime Score**: When `data/calibration.json` exists, the Bridge maps raw confidence to calibrated confidence (`is_calibrated = True`), so confidence scores truthfully reflect real-world accuracy (Expected Calibration Error $< 0.15$).
+- **Isotonic Probability Calibration**: Fits an isotonic regression curve over evaluated validation pairs `(raw_confidence, was_correct)`, preserving high-confidence upper anchors (`1.0`), and serializes the mapping to `data/calibration.json`.
+- **Runtime Safeguard**: `Bridge._load_calibration()` applies `data/calibration.json` only when its top anchor is non-degenerate (`mapping[-1]["calibrated"] >= uncertainty_threshold`) and a real checkpoint runtime (or explicit `calibration_file`) is active, preventing flat curves from forcing `is_uncertain = True` on every turn.
 
 ### 🌐 Autonomous Internet Search & Resilient Crawler
 - **Multi-Tier Metasearch Cascade (`search.py`)**:
@@ -178,7 +169,7 @@ Small language models struggle with exact multi-digit arithmetic.
   - DOM cleaning via `html.parser` and factual proposition ranker budgeting evidence into a clean 60–80 character core factual proposition to strictly prevent context overflow in Chit's 256-byte context window.
   - Polymorphic `SearchResult(str)` carrying `.url`, `.title`, `.domain`, and `.snippet`.
 - **Native Neural Reasoning Over Sensory Premises (`bridge.py`)**:
-  - Aligns input distribution with Chit's native trained schema: `Input: [User Query Q]\nReasoning:`, while conditioning retrieved web premises into native memory context (`Known memory:\n- [Source]: {snippet}`) to prevent positional context overflow and attention dispersion within Chit's 256-byte context window.
+  - Aligns input distribution with Chit's native trained schema: `Task: reasoning\nKnown memory:\n- [Source]: {snippet}\nInput: [User Query Q]\nReasoning:`, conditioning retrieved web premises into native memory context to prevent positional context overflow and attention dispersion within Chit's 256-byte context window.
   - Chit's attention heads attend to context and generate chain-of-thought scratchpad tokens and answers natively.
 - **Direct Search Mode**: Passing `search: true` in `Context` / `ChatRequest` (or clicking `🌐 Search Web` in UI) bypasses Pass 1 and searches immediately.
 

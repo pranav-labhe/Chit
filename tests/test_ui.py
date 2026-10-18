@@ -254,3 +254,47 @@ def test_api_guide_endpoint_returns_404_when_no_guide_installed(monkeypatch):
     assert response.status_code == 404
     assert "not installed" in response.json()["detail"]
 
+
+def test_ui_upgrades_and_zero_default_tooltips():
+    import re
+    from pathlib import Path
+
+    with TestClient(ui.app) as client:
+        html = client.get("/").text
+
+    # 1. Verify new Task and Reasoning controls exist in rendered HTML
+    for ctrl_id in [
+        "chatTask", "genTask", "lessonInput", "lessonReasoning", "lessonReasoningAnswer"
+    ]:
+        assert f'id="{ctrl_id}"' in html, f"Missing upgraded UI control #{ctrl_id}"
+
+    for task_name in ("chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue"):
+        assert f'value="{task_name}"' in html, f"Missing task option {task_name} in UI"
+
+    # 2. Verify every interactive control ID in index.html has an explicit entry in controlHelp in app.js
+    app_js = (Path(ui.__file__).resolve().parent / "ui" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    control_tags = re.findall(r"<(?:button|input|textarea|select)\b[^>]*\bid=\"([^\"]+)\"", html)
+    for ctrl_id in control_tags:
+        if ctrl_id == "closeContextHelp":
+            continue
+        assert re.search(rf"\b{re.escape(ctrl_id)}\s*:\s*\{{", app_js), (
+            f"Interactive control #{ctrl_id} is missing an explicit simple-English entry in controlHelp"
+        )
+
+    # 3. Verify every route in ui.ROUTES has an explicit simple-English entry in routeGuides
+    for route in ui.ROUTES:
+        route_name = route["name"]
+        assert f"'{route_name}':" in app_js, (
+            f"Route '{route_name}' is missing an explicit simple-English entry in routeGuides"
+        )
+
+    # 4. Verify all 6L-256 curriculum recipes have friendly names in learningPlanName
+    for recipe in (
+        "chit_english_foundation_6l_256",
+        "chit_conversation_reasoning_6l_256",
+        "chit_knowledge_behavior_6l_256",
+        "chit_v2_6l_256",
+        "chit_1mb",
+        "chit_1mb_eval_100kb",
+    ):
+        assert f"{recipe}:" in app_js, f"Recipe {recipe} missing friendly name in learningPlanName"

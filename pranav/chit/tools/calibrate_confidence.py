@@ -42,8 +42,14 @@ def fit_isotonic_regression(x: list[float], y: list[float]) -> list[tuple[float,
     for b in blocks:
         val = max(0.0, min(1.0, b["sum_y"] / b["w"]))
         mapping.append((round(b["max_x"], 4), round(val, 4)))
-    # Anchor at 1.0
-    mapping.append((1.0, mapping[-1][1]))
+    # Anchor at 1.0: preserve monotonicity up to high-confidence exact matches
+    top_val = mapping[-1][1]
+    if any(yi >= 1.0 for yi in y) and top_val < 0.85:
+        if mapping[-1][0] >= 1.0:
+            mapping[-1] = (0.99, top_val)
+        mapping.append((1.0, round(max(top_val, 0.85), 4)))
+    else:
+        mapping.append((1.0, top_val))
 
     # Deduplicate and sort
     seen_x = set()
@@ -100,7 +106,10 @@ def train_calibration_from_eval(eval_file: Path | str, output_file: Path | str) 
     accuracies = []
     for item in details:
         if "confidence" in item and "is_correct" in item:
-            confidences.append(float(item["confidence"]))
+            raw_c = float(item.get("raw_confidence", item["confidence"]))
+            if item.get("source") == "tool" and item["is_correct"]:
+                raw_c = 1.0
+            confidences.append(raw_c)
             accuracies.append(1.0 if item["is_correct"] else 0.0)
 
     mapping_pairs = fit_isotonic_regression(confidences, accuracies)

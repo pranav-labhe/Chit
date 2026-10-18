@@ -63,17 +63,19 @@ When `think: true` is enabled, the Bridge automatically reserves additional toke
 
 Beyond moving data, the system performs several intelligent background tasks:
 
-- **Compound AI Bridge Architecture (`bridge.py`)**: Decomposes request processing into single-responsibility stages: `BridgeConfig` (ablation toggles), `Router` (typed `Plan`), `ContextBuilder` (working-memory budgeting), `Generator` (safe runtime execution), `Verifier` (generic invariant checks), and `Responder` (transparent recovery ladder: resample $\rightarrow$ extractive projection $\rightarrow$ honest abstain).
+- **Compound AI Bridge Architecture & Unified 7-Task Router (`bridge.py`, `formats.py`)**: Decomposes request processing into single-responsibility stages: `BridgeConfig` (ablation toggles with `enable_generic_verifier=True`, `enable_calibration=True`, `best_of_n=3`), `Router` (typed `Plan` and `select_effective_task` mapping default `task="chat"` across the 7 canonical tasks: `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, `continue`), `ContextBuilder` (working-memory budgeting and grounded `Task: reasoning` prompts), `Generator` (safe runtime execution), `Verifier` (generic invariant checks + conditional Best-of-3 candidate selection when `not primary_passed`), and `Responder` (transparent recovery ladder: resample $\rightarrow$ extractive projection $\rightarrow$ honest abstain).
+- **Autoregressive KV-Cache (`model.py`)**: `CausalSelfAttention`, `Block`, `ChitModel.forward()`, and `ChitModel.generate()` support `past_kv` and `use_cache=True` by default, caching key/value tensors after prompt prefill and slicing positional/RoPE embeddings to current positions with 100% checkpoint compatibility.
+- **Record-Aligned Window Sampling & Answer-Only Loss Masking (`data.py`)**: `TextDataset` indexes `"Task: "` record boundaries (`record_starts`), sampling 70% record-aligned windows and 30% uniform random windows in `random_batch()`, and masks prompt bytes before `Chit:` or `Reasoning:` with `-100` (`answer_loss_only=True`) so cross-entropy loss focuses on answer and reasoning tokens.
 - **Working-Memory Budgeting (`bridge.py`)**: For Chit's 256-byte context window, dynamically reserves token headroom ($\text{gen\_reserve} \ge 32$) to prevent sliding generation from evicting prompt tokens. Enforces slot priority truncation: Sacred User Input > User Facts > Web Evidence > Summary > History > Notebook Memories.
 - **Symbolic Calculator Offload (`tools/calculator.py`)**: Automatically detects pure arithmetic (e.g. `45 * 12`, `100 / 4`, `seven times eight`) and computes exact answers using AST evaluation with zero `eval`/`exec`, returning exact mathematical answers with `source: "tool"`.
-- **Isotonic Confidence Calibration (`tools/calibrate_confidence.py`)**: Uses Pair-Adjacent Violators Algorithm (PAVA) to fit isotonic regression curves over validation evaluations, mapping raw sequence probabilities to truthful confidence scores (`is_calibrated = True`, ECE $< 0.15$).
-- **Chain-of-Thought Thinking Engine (`bridge.py`)**: When `think=true` is requested, the Bridge injects the `Reasoning:` primer, allowing the model to generate scratchpad tokens before `Answer:`. The Bridge automatically decouples `metadata.thoughts` from user-facing text to give multi-step reasoning capabilities without polluting the conversational dialogue history.
+- **Isotonic Confidence Calibration & Degenerate Curve Safeguard (`tools/calibrate_confidence.py`, `bridge.py`)**: Uses Pair-Adjacent Violators Algorithm (PAVA) with upper-anchor preservation to fit isotonic regression curves over validation evaluations (`data/calibration.json`), while `Bridge._load_calibration()` rejects degenerate curves whose top anchor falls below `uncertainty_threshold`.
+- **Chain-of-Thought Thinking Engine (`bridge.py`)**: When `think=true` is requested, the Bridge builds a grounded `Task: reasoning` prompt (including budgeted `Known memory:` and `User-stated facts` above `Input: ...\nReasoning:`), allowing the model to generate scratchpad tokens before `Answer:`. The Bridge decouples `metadata.thoughts` from user-facing text without polluting dialogue history, and preserves `Task: knowledge` / `Task: behavior` / `Task: grammar` if fallback generation is needed.
 - **Fact Extraction (`facts.py`)**: It does *not* use AI to extract facts. It uses lightning-fast, deterministic Regular Expressions (Regex) to spot patterns like `name`, `location`, `preference`, `email`, `project`, and `goal` in user messages, rejecting common conversational false positives.
 - **Background Summarization (`summarization.py`)**: It runs a deduplicated extractive summarizer. When a chat session gets too long, it condenses the oldest messages into a short summary block so the AI doesn't have to re-read the whole conversation.
 - **Semantic Search (`embeddings.py` & `faiss_index.py`)**: When you save a memory, it is converted into a mathematical array (vector) using `SentenceTransformers`. When the user asks a question, the system finds the closest matching vectors using FAISS (a high-speed search library) or exact cosine similarity if FAISS isn't installed.
 - **Retrieval Thresholding & Information-Theoretic Query Coverage (`bridge.py` & `memory.py`)**: Enforces `min_relevance` thresholding (default `0.35` in Bridge) to filter out low-confidence semantic noise. Lexical matching uses normalized query coverage $\frac{|Q_{\text{terms}} \cap D_{\text{terms}}|}{|Q_{\text{terms}}|}$ with vocative attenuation ($0.25\times$) for self-referential identity addressing, completely preventing false memory recalls on greetings (e.g. `"Hello Chit"`). Automatically engages deterministic greedy decoding (`temperature=0.0`) when memories or facts are present.
 - **Resilient Autonomous Metasearch & Crawler (`search.py`)**: Multi-tier discovery spanning DuckDuckGo JSON, Wikipedia REST, Internet Archive, and external search engines (`CHIT_SEARCH_URL`). An SSRF-guarded deep crawler (`crawl_page`) extracts compact 60–80 character factual propositions that fit Chit's 256-byte context window without truncation.
-- **Native Neural Reasoning Over Premises (`bridge.py`)**: Feeds retrieved premises directly into Chit's Transformer (`Input: <Premise>. <Query>\nReasoning:`). If the small model drifts into memorized attractors, an extractive recovery ladder projects the factual premise with source citations.
+- **Native Neural Reasoning Over Premises (`bridge.py`)**: Feeds retrieved premises directly into Chit's Transformer (`Task: reasoning\nKnown memory:\n- [Web] ...\nInput: <Query>\nReasoning:`). If the small model drifts into memorized attractors, an extractive recovery ladder projects the factual premise with source citations.
 - **Generation Quality & Early Stopping (`runtime.py` & `model.py`)**: Implements token-level early stopping via boundary callback `stop_fn` to prevent wasted forward passes past stop boundaries. Employs prompt-scoped repetition penalties (`idx[b, prompt_len:]`) that penalize repeated generation tokens without penalizing prompt/memory tokens.
 
 ---
@@ -211,17 +213,18 @@ stateDiagram-v2
 
 ## 9. Datasets (`.txt`) and Configs (`.json`)
 
-### Core Datasets
-- **Small**: `data/train.txt` (45 KB) - fast CPU sanity tests.
-- **Large**: `data/train_1mb.txt` and `data/english_foundation/*.txt` - grammar, logic, conversation.
-- **Reasoning**: `data/reasoning.jsonl` (253 KB) - parsed dynamically by `reasoning.py` into step-by-step logic.
-*(Note: `scripts/generate_english_foundation_from_data2.py` automatically expands foundation files up to 1 MB).*
+### Core Datasets (Unified `Task:` Headers via `scripts/upgrade_corpus_tasks.py`)
+- **Small**: `data/train.txt` (118 blocks: `chat`, `prose`, `grammar`, `behavior`) - fast CPU sanity tests.
+- **English Foundation (`data/english_foundation/`)**: `structural.txt` (`Task: grammar`, 7,691 blocks), `conversation.txt` (`Task: chat`, 4,189 blocks), `lexical_prose.txt` (`Task: prose`, 5,492 blocks), `project_facts.txt` (`Task: knowledge`, 10 blocks).
+- **Conversation & Reasoning (`data/conversation_reasoning/`)**: `conversation.txt` (`Task: chat`, 3,073 blocks including prompt-side typo/noise greeting & identity variants with clean replies) and `reasoning.txt` / `data/reasoning.jsonl` (`Task: reasoning`, 1,196 blocks, 236 grounded with `Known memory:` / `[Web]` / `User-stated facts:`).
+- **Knowledge & Behavior (`data/knowledge_behavior/`)**: `knowledge.txt` (`Task: knowledge`, 1,245 blocks, 171 grounded) and `behavior.txt` (`Task: behavior`, 1,327 blocks, 20 grounded).
+- **Unified Held-Out Evaluation (`data/eval_combined.txt`)**: 574 held-out records across all 6 task families (`chat`: 240, `knowledge`: 129, `reasoning`: 91, `behavior`: 73, `grammar`: 35, `prose`: 6) with zero exact-block leakage against training files.
 
 ### Config Tiers (`configs/*.json`)
 1. **Bootstrap**: `chit_cpu_learning.json`, `chit_tiny.json` (64-128 tokens).
 2. **Experiments**: `chit_byte_experiment.json`, `chit_rope_512_rescue.json` (Architecture tests).
 3. **Foundation**: `chit_english_foundation.json` (512 context, multi-source mixing).
-4. **Deep**: `chit_v2_6l_256.json` (6-layer, 256-dim, up to 8 data sources).
+4. **Champion 6L-256 Stages**: `chit_english_foundation_6l_256.json`, `chit_conversation_reasoning_6l_256.json`, `chit_knowledge_behavior_6l_256.json`, and `chit_v2_6l_256.json` (6-layer, 256-dim, 256-byte context, byte-level `vocab_size: 256`).
 
 ---
 
@@ -248,7 +251,7 @@ flowchart LR
 
 ## 11. Testing Philosophy & Safeguards
 
-The project contains 211 tests driven by `pytest` (including unit tests for tensor math, memory search, sessions, training lifecycle, API security, and compound bridge pipeline components).
+The project contains 218 tests driven by `pytest` (including unit tests for tensor math & KV-cache equivalence, record-aligned sampling & `-100` answer-only loss masking, memory search, sessions, training lifecycle, API security, and compound bridge pipeline components).
 - **Mocks & Safety (`conftest.py`)**: Intercepts database paths and redirects them to in-memory databases (`:memory:`). Running tests will never overwrite your live `memory.db`.
 - **API Key Overrides**: Tests use a dummy key (`KEY = "test-ui-key"`).
 

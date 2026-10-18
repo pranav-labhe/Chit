@@ -243,12 +243,18 @@ def get_jobs() -> TrainingJobManager:
 # --------------------------------------------------------------------------- inference & memory
 
 
+TaskType = Literal["chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue"]
+
+
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1, max_length=2000)
     mode: Literal["assistant", "continue"] = Field(
         default="assistant",
         description="assistant formats the request with memory; continue preserves raw text continuation")
+    task: TaskType = Field(
+        default="chat",
+        description="Target task header when mode is 'assistant' ('chat', 'knowledge', 'behavior', 'grammar', 'reasoning', 'prose', 'continue')")
     tokens: int = Field(default=100, ge=1, le=500)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="0 = greedy")
     top_k: int = Field(default=50, ge=1, le=256)
@@ -260,7 +266,9 @@ class GenerateRequest(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=2000)
-    task: str = Field(default="chat", max_length=50, description='"chat" formats a request; "continue" performs raw text continuation')
+    task: TaskType = Field(
+        default="chat",
+        description='"chat", "knowledge", "behavior", "grammar", "reasoning", "prose", or "continue"')
     temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="default: the Bridge's own (0.7)")
     tokens: int | None = Field(default=None, ge=1, le=500,
                                description="maximum new tokens; byte-tokenizer models use one token per UTF-8 byte")
@@ -391,7 +399,7 @@ async def generate(r: GenerateRequest):
             return {"text": text}
         else:
             decision = await _state["inference"].run(lambda: bridge.process(
-                Context(user_input=r.prompt, task="chat", search=r.search, think=r.think), r.temperature,
+                Context(user_input=r.prompt, task=r.task, search=r.search, think=r.think), r.temperature,
                 max_new_tokens=r.tokens, top_k=r.top_k, stop=r.stop or None, think=r.think))
             return {
                 "text": decision.text,

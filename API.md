@@ -235,17 +235,18 @@ the model memorized its training text.
 | --- | --- | --- | --- | --- | --- |
 | `prompt` | string | yes | — | 1–2000 characters | The user's request in assistant mode, or a raw text prefix in continue mode. |
 | `mode` | string | no | `"assistant"` | `assistant` or `continue` | `assistant` formats the prompt as a request and includes relevant memory; `continue` sends it directly as a text prefix. |
+| `task` | string | no | `"chat"` | `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, or `continue` | Canonical task header for assistant mode (`Task: <name>`). When `"chat"` (default), the Router automatically selects the most faithful task header (`reasoning`, `behavior`, `grammar`, `knowledge`, or `chat`). |
 | `tokens` | integer | no | 100 | 1–500 | Maximum new model tokens. For the byte tokenizer, each token is one UTF-8 byte. |
 | `temperature` | number | no | 0.7 | 0–2 | Randomness. `0` always picks the most likely byte (same answer each time). Higher is more random. |
 | `top_k` | integer | no | 50 | 1–256 | At each step, choose only among the `top_k` most likely bytes. Has no effect when `temperature` is 0. |
 | `stop` | array of strings | no | none | up to 8 strings | Custom stop strings. In assistant mode, omitted or empty uses chat-turn markers; in continue mode, omitted or empty means no explicit stop. |
 | `search` | boolean | no | `false` | true or false | Enable autonomous web retrieval grounding before generating. Not allowed with `mode: "continue"`. |
-| `think` | boolean | no | `false` | true or false | Enable intermediate chain-of-thought scratchpad reasoning. Not allowed with `mode: "continue"`. |
+| `think` | boolean | no | `false` | true or false | Enable intermediate chain-of-thought scratchpad reasoning (`Task: reasoning`). Not allowed with `mode: "continue"`. |
 
 **Behavior**
 
 - The returned `text` contains **only the generated response**, not your prompt.
-- In the default `assistant` mode, the prompt is formatted as a `User:` request and relevant
+- In the default `assistant` mode, the prompt is formatted with its `Task: <name>` header and `User:` request, and relevant
   memories are included. Chat-turn markers are used as stops unless custom `stop` strings are given.
   Assistant mode returns rich metadata including `confidence`, `web_grounded`, `sources`, `is_uncertain`,
   `is_incomplete`, and `metadata`.
@@ -310,17 +311,17 @@ and recent session messages, then stores the exchange. **Access:** key.
 | Field | Type | Required | Default | Limits | Purpose |
 | --- | --- | --- | --- | --- | --- |
 | `message` | string | yes | — | 1–2000 characters | The user's message. |
-| `task` | string | no | `"chat"` | up to 50 characters | `chat` uses the template. `continue` sends `message` straight to the model as the start of a sentence (like `/generate`, stopping at the end of the line). Any other value is written into the template as the task name. |
+| `task` | string | no | `"chat"` | `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, or `continue` | Canonical task header (`Task: <name>`). When `"chat"` (default), the Router automatically selects the most faithful task header (`reasoning` if `think: true`, `behavior`, `grammar`, `knowledge`, or `chat`). `continue` sends `message` straight to the model as a raw prefix. |
 | `temperature` | number or null | no | `null` | 0–2 | Randomness. `null` uses the server default, 0.7. |
 | `tokens` | integer or null | no | `null` | 1–500 | Maximum new model tokens; for the byte tokenizer, each token is one UTF-8 byte. |
 | `session_id` | string or null | no | `null` | 32 lowercase hex characters | Continue this conversation. Omit it to start a new one; the new id is returned. Not allowed with `task: "continue"`. |
-| `think` | boolean | no | `false` | true or false | Enable chain-of-thought intermediate reasoning before answering. Not allowed with `task: "continue"`. |
+| `think` | boolean | no | `false` | true or false | Enable chain-of-thought intermediate reasoning (`Task: reasoning`) before answering. Not allowed with `task: "continue"`. |
 | `search` | boolean | no | `false` | true or false | Explicitly query autonomous web search for real-time grounding before answering. Not allowed with `task: "continue"`. |
 
-**Behavior.** With `task: "chat"` the prompt is built as:
+**Behavior.** With `task` in assistant mode (`chat`, `knowledge`, `behavior`, `grammar`, `prose`), the prompt is built as:
 
 ```
-Task: chat
+Task: <effective_task>
 Known memory:
 - <up to 5 memories found by searching your message or retrieved from web>
 <last 8 messages of the session, as "User: ..." and "Chit: ...">
@@ -328,13 +329,25 @@ User: <message>
 Chit:
 ```
 
+When `think: true` (or `task: "reasoning"`), the prompt is built as:
+
+```
+Task: reasoning
+Known memory:
+- <budgeted memories or web snippets, if present>
+User-stated facts (latest correction wins):
+- <session facts, if present>
+Input: <message>
+Reasoning:
+```
+
 Markdown in `message` (headings, lists, tables, quotes and code fences) stays as text in the request.
 The prompt is shortened to fit the model's `block_size`: the oldest messages go first, then the
 lowest-ranked memories, then the end of an overlong new request is truncated; session messages are
 still stored in full. The reply stops at a chat-turn marker or the configured token limit (256 bytes
-by default). The message and reply are saved to the session in full.
+by default). When the primary greedy generation fails verification or confidence checks, the Bridge runs conditional Best-of-3 candidate sampling (`temperature=0.35, top_k=10`) to select the highest-scoring valid response. The message and reply are saved to the session in full.
 
-**Autonomous Web Grounding & Neural Reasoning.** When asked about unknown entities or facts where Chit's confidence is low (`is_uncertain: true`, $C < 0.40$) and local memory has no match, Chit autonomously triggers a multi-tier search (DuckDuckGo JSON, Wikipedia REST, Internet Archive, or configured external search), uses its SSRF-guarded crawler to extract a compact 60–80 character factual proposition, conditions its Transformer on the premise (`Input: <Premise>. <Query>\nReasoning:`), and natively generates a grounded answer. Alternatively, setting `"search": true` in the request forces web search grounding immediately. Returned sources are populated in `sources` while `memory_ids` remains strictly reserved for genuine SQLite notebook memories. Lexical memory retrieval employs normalized query coverage with vocative attenuation so conversational pleasantries and greetings never match false memories.
+**Autonomous Web Grounding & Neural Reasoning.** When asked about unknown entities or facts where Chit's confidence is low (`is_uncertain: true`, $C < 0.40$) and local memory has no match, Chit autonomously triggers a multi-tier search (DuckDuckGo JSON, Wikipedia REST, Internet Archive, or configured external search), uses its SSRF-guarded crawler to extract a compact 60–80 character factual proposition, conditions its Transformer on the premise (`Task: reasoning\nKnown memory:\n- [Web] ...\nInput: <Query>\nReasoning:`), and natively generates a grounded answer. Alternatively, setting `"search": true` in the request forces web search grounding immediately. Returned sources are populated in `sources` while `memory_ids` remains strictly reserved for genuine SQLite notebook memories. Lexical memory retrieval employs normalized query coverage with vocative attenuation so conversational pleasantries and greetings never match false memories.
 
 **Which endpoint to use.** Use `/chat` for a conversation that should use session history and recalled
 memory. Use `/generate` for a single request or raw continuation. The model still needs suitable

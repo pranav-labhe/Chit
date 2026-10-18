@@ -25,15 +25,11 @@
   },
   "data": {
     "train_file": "data/train_1mb.txt",
-    "eval_file": "data/knowledge_behavior/eval.txt",
-    "sources": [    
+    "eval_file": "data/eval_combined.txt",
+    "sources": [
       {
         "path": "data/train_1mb.txt",
-        "weight": 0.10
-      },
-      {
-        "path": "data/prompts_1mb.txt",
-        "weight": 0.10
+        "weight": 0.08
       },
       {
         "path": "data/english_foundation/structural.txt",
@@ -41,23 +37,31 @@
       },
       {
         "path": "data/english_foundation/lexical_prose.txt",
-        "weight": 0.10
+        "weight": 0.07
       },
       {
         "path": "data/english_foundation/conversation.txt",
-        "weight": 0.15
+        "weight": 0.12
+      },
+      {
+        "path": "data/english_foundation/project_facts.txt",
+        "weight": 0.05
       },
       {
         "path": "data/conversation_reasoning/conversation.txt",
-        "weight": 0.15
+        "weight": 0.14
+      },
+      {
+        "path": "data/conversation_reasoning/reasoning.txt",
+        "weight": 0.10
       },
       {
         "path": "data/knowledge_behavior/knowledge.txt",
-        "weight": 0.25
+        "weight": 0.17
       },
       {
         "path": "data/knowledge_behavior/behavior.txt",
-        "weight": 0.25
+        "weight": 0.17
       }
     ]
   }

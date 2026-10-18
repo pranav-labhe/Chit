@@ -45,7 +45,7 @@ def test_bridge_reasoning_scaffold_with_answer():
     assert decision.text == "Final."
     assert decision.metadata["thoughts"] == "Deduction step."
     assert decision.metadata["thought_tokens"] == len(rt.tokenizer.encode("Deduction step."))
-    assert rt.history[0]["prompt"] == "Input: 8 - 3\nReasoning:"
+    assert rt.history[0]["prompt"] == "Task: reasoning\nInput: 8 - 3\nReasoning:"
     assert rt.history[0]["stop"] == ["\nInput:", "\nUser:", "\nTask:"]
 
 
@@ -57,7 +57,7 @@ def test_bridge_reasoning_fallback_without_answer():
     assert decision.text == "Standard chat reply."
     assert "thoughts" not in decision.metadata
     assert len(rt.history) == 2
-    assert rt.history[0]["prompt"] == "Input: Casual hello\nReasoning:"
+    assert rt.history[0]["prompt"] == "Task: reasoning\nInput: Casual hello\nReasoning:"
     assert rt.history[1]["prompt"].endswith("User: Casual hello\nChit:")
 
 
@@ -75,7 +75,11 @@ def test_bridge_search_and_thinking_pipeline_unified(monkeypatch):
     assert decision.metadata["web_grounded"] is True
     assert decision.metadata["sources"] == fake_snippets
     assert decision.metadata["memory_ids"] == []
-    assert rt.history[0]["prompt"] == "Input: How many moons does Mars have?\nReasoning:"
+    assert rt.history[0]["prompt"] == (
+        "Task: reasoning\n"
+        "Known memory:\n- [Web] Mars has two moons, Phobos and Deimos.\n"
+        "Input: How many moons does Mars have?\nReasoning:"
+    )
 
 
 def test_bridge_pure_greeting_with_memory_store(tmp_path):

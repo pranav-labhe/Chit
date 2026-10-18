@@ -42,7 +42,7 @@ def test_thinking_attaches_thoughts_and_preserves_clean_session(served):
         # Verify prompt had reasoning primer and proper stop sequences
         prompt, stop = prompts[0]
         assert prompt.endswith("\nReasoning:")
-        assert prompt.startswith("Input: ")
+        assert prompt.startswith("Task: reasoning\nInput: ")
         assert "\nChit:" not in stop
         assert "\nUser:" in stop
         assert "\nTask:" in stop
@@ -115,6 +115,6 @@ def test_bridge_process_unit_reasoning():
     assert decision.metadata["thoughts"] == "Step 1: Compute."
     assert decision.metadata["thought_tokens"] == len(runtime.tokenizer.encode("Step 1: Compute."))
     assert recorded["prompt"].endswith("\nReasoning:")
-    assert recorded["prompt"].startswith("Input: ")
+    assert recorded["prompt"].startswith("Task: reasoning\nInput: ")
     assert recorded["stop"] == ["\nInput:", "\nUser:", "\nTask:"]
 

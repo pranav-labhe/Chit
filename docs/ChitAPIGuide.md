@@ -24,11 +24,11 @@ When you send a message to `/chat`, Chit performs the following steps:
 
 ### Best Practices for Chat
 - **Maintain Session IDs:** Always capture the `session_id` from the first response and send it back in subsequent requests. This is how Chit "remembers" the current conversation.
-- **Task Switching:** Use the `task` parameter to change how Chit behaves. Use `"chat"` for general dialogue and `"continue"` for raw text completion.
+- **Task Switching (`VALID_TASKS`):** Use the `task` parameter (`"chat"`, `"knowledge"`, `"behavior"`, `"grammar"`, `"reasoning"`, `"prose"`, or `"continue"`) to control the `Task: <name>` prompt header. When left at `"chat"` (default), the Router automatically selects the most faithful task header (`reasoning` when `think: true`, `behavior` for ambiguity/conflicts, `grammar` for sentence rewrites, `knowledge` when memories/web snippets are present, or `chat` for general dialogue). Use `"continue"` for raw text completion.
 - **Handling Overload:** Because Chit uses a bounded inference queue, you may receive a `429 Too Many Requests` error during peak load. Implement a simple **exponential backoff** (wait 1s, then 2s, then 4s) in your client.
 
-### Deep Thinking & Chain-of-Thought
-Chit supports native test-time compute via Chain-of-Thought (CoT). Passing `"think": true` activates Chit's reasoning attention heads, generating an intermediate deduction scratchpad before the final answer.
+### Deep Thinking & Chain-of-Thought (`Task: reasoning`)
+Chit supports native test-time compute via Chain-of-Thought (CoT). Passing `"think": true` activates Chit's `Task: reasoning` scaffold (including any budgeted `Known memory:` and `User-stated facts` above `Input: ...\nReasoning:`), generating an intermediate deduction scratchpad before `Answer:`.
 
 **Request Payload (`POST /chat`):**
 ```json
@@ -85,8 +85,8 @@ Chit features a built-in, zero-dependency autonomous web retrieval engine:
 The `POST /generate` endpoint supports both single-shot assistant answers and raw text continuation.
 
 ### Assistant Mode (`mode: "assistant"`, default)
-Assistant mode formats the request as an assistant turn (`User: ... \n Chit:`), recalls relevant long-term memories, and returns rich inference metadata.
-- **Web Search & Thinking**: Just like `/chat`, `/generate` supports `"search": true` for live web retrieval grounding and `"think": true` for chain-of-thought deduction.
+Assistant mode formats the request as an assistant turn (`Task: <name>\nUser: ...\nChit:`), recalls relevant long-term memories, and returns rich inference metadata.
+- **Task & Web Search & Thinking**: Just like `/chat`, `/generate` accepts `"task"` (`"chat"`, `"knowledge"`, `"behavior"`, `"grammar"`, `"reasoning"`, `"prose"`, `"continue"`), `"search": true` for live web retrieval grounding, and `"think": true` for chain-of-thought deduction.
 - **Rich Response Payload**:
   ```json
   {

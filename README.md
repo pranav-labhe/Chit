@@ -6,11 +6,12 @@ problem solving, storing experience, teaching knowledge, and training.
 
 > **Read this first — what Chit is and is not.** Chit is Atmini's from-scratch cognitive core.
 > It uses a **Compound AI System** where neural model capability is augmented by a faithful Bridge pipeline:
-> - **Modular Pipeline**: An explicit Intent Router, working-memory budgeter (reserving space in Chit's 256-byte context), and an invariant verifier with a transparent recovery ladder.
+> - **Unified 7-Task Protocol & Router**: Every training example and runtime prompt uses a single `Task: <name>` header (`chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, `continue`). When `task: "chat"` is passed, the Router automatically selects the most faithful task header (`reasoning`, `behavior`, `grammar`, `knowledge`, or `chat`).
+> - **Modular Pipeline & Best-of-3 Verification**: Working-memory budgeter (reserving $\ge 32$ tokens in Chit's 256-byte context), KV-cached autoregressive generation, and an invariant verifier with conditional Best-of-3 candidate selection and a transparent recovery ladder.
 > - **Exact Tools**: Symbolic math (e.g. arithmetic queries) is offloaded to a safe, deterministic AST calculator with zero `eval`/`exec`, eliminating neural math guessing.
-> - **Calibrated Confidence**: Self-assessed token probabilities are calibrated through isotonic regression (`data/calibration.json`) so confidence scores reflect real-world accuracy.
+> - **Calibrated Confidence**: Self-assessed token probabilities are calibrated through isotonic regression (`data/calibration.json`) with degenerate-curve safeguards so confidence scores reflect real-world accuracy.
 > - **Memory & Autonomous Metasearch**: Hybrid SQLite/Vector memory store with normalized query coverage and vocative filtering, paired with an SSRF-guarded crawler and metasearch cascade for autonomous web grounding.
-> - **Zero-Orphan Promotion**: Newly trained candidates are evaluated against safety gates, benchmarked across 65 probe cases in the Studio UI, and auto-calibrated upon promotion.
+> - **Answer-Focused Byte Training & Zero-Orphan Promotion**: Record-aligned window sampling (70% `Task:` starts / 30% uniform) with answer-only `-100` prompt loss masking, combined multi-task evaluation (`data/eval_combined.txt`), 65-case Studio UI bridge benchmarking, and auto-calibration on promotion.
 
 > 📘 **Definitive Documentation:** For a complete architectural breakdown, data flow maps, database schemas, and safe-editing guides, please see the [**PROJECT_INDEX.md**](docs/PROJECT_INDEX.md) in the root of this repository.
 
@@ -75,7 +76,7 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 
 | I want to… | Use | Notes |
 | --- | --- | --- |
-| Ask Chit to understand, answer, or help solve something | `POST /generate` or `POST /chat` | Both format requests for Chit's response; `/chat` adds session history, memory, chain-of-thought, and autonomous web retrieval. |
+| Ask Chit to understand, answer, or help solve something | `POST /generate` or `POST /chat` | Both format requests with `Task: <name>` (`chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, `continue`); `/chat` adds session history, memory, chain-of-thought, and autonomous web retrieval. |
 | Ground answers in live internet facts | `POST /chat` with `search: true` | Autonomously triggers Self-RAG or forces live DuckDuckGo web snippet retrieval. |
 | Continue text literally | `POST /generate` with `mode: "continue"` | Sends the prompt directly to the model without the assistant wrapper. |
 | Give Chit a fact **right now**, without retraining | `POST /memory` | Stored outside the model; recalled by assistant-mode `/generate` and `/chat`. Never changes the weights. |
@@ -96,8 +97,8 @@ python -m pranav.chit.tools.generate --prompt "I am" --tokens 40 --temperature 0
 
 **`/generate` or `/chat`?**
 Use `/generate` for a single request or raw text continuation. Use `/chat` when the exchange needs
-conversation history and memory. Both assistant modes use the same `Task: chat` / `User:` / `Chit:`
-format and benefit from training examples written in that format.
+conversation history and memory. Both assistant modes use the unified `Task: <name>` / `User:` / `Chit:`
+(or `Task: reasoning` / `Input:` / `Reasoning:` / `Answer:`) format and benefit from training examples written in that format.
 
 ---
 
@@ -189,8 +190,8 @@ python -m pranav.chit.ui
 | GET | `/model` | Loaded model details |
 | GET | `/data` | Check the train/eval files on the server: size, hash, overlap, `ready_to_train` |
 | POST | `/data/split` | Split a corpus file from the data folder into train and eval (`overwrite`, `dry_run`) |
-| POST | `/generate` | Respond to a request; `mode: "continue"` opts into raw continuation. Supports `prompt`, `tokens`, `temperature`, `top_k`, `stop` |
-| POST | `/chat` | Chat template + recalled memory: `message`, `task`, `session_id`, `think` (native Chain-of-Thought reasoning) |
+| POST | `/generate` | Respond to a request (`task` in `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, `continue`); `mode: "continue"` opts into raw continuation. Supports `prompt`, `tokens`, `temperature`, `top_k`, `stop`, `search`, `think` |
+| POST | `/chat` | Chat template + recalled memory: `message`, `task` (`chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, `continue`), `session_id`, `think`, `search` |
 | POST | `/memory` | Store a fact (`content`, optional `tags`, `importance`) |
 | GET | `/memory/search?q=…` | Search memory |
 | DELETE | `/memory/{id}` | Delete a memory (the `id` is the UUID returned when you added it) |
@@ -318,7 +319,8 @@ Setting a variable: `export NAME=value` (Linux/macOS/Git Bash), `$env:NAME = "va
 
 | Path | What it is |
 | --- | --- |
-| `data/train.txt`, `data/eval.txt` | Training and held-out evaluation examples |
+| `data/train.txt`, `data/eval.txt`, `data/eval_combined.txt` | Training and held-out multi-task evaluation examples |
+| `data/conversation_reasoning/`, `data/knowledge_behavior/`, `data/english_foundation/` | Task-tagged curriculum training streams (`Task: chat`, `reasoning`, `knowledge`, `behavior`, `grammar`, `prose`) |
 | `data/prompts.txt`, `data/CORPUS.md` | Open-ended review prompts and corpus provenance/use notes |
 | `data/memory.db` | Canonical external memory store (SQLite) |
 | `data/memory.json`, `data/memory_seed.json` | Legacy import/recovery source and initial facts |

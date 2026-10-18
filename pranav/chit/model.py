@@ -27,24 +27,45 @@ class CausalSelfAttention(nn.Module):
         self.proj = nn.Linear(n_embd, n_embd)
         self.resid_drop = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        kv_cache: dict[str, torch.Tensor] | None = None,
+        past_length: int = 0,
+    ) -> torch.Tensor:
         b, t, c = x.shape
         q, k, v = self.qkv(x).split(c, dim=2)
         # (b, t, c) -> (b, heads, t, head_dim)
         q, k, v = (z.view(b, t, self.n_head, c // self.n_head).transpose(1, 2) for z in (q, k, v))
         if self.position_encoding == "rope":
-            q, k = self._apply_rope(q), self._apply_rope(k)
-        # Fused kernel (Flash / memory-efficient attention where available), causal mask built in.
-        y = F.scaled_dot_product_attention(
-            q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=True)
+            q = self._apply_rope(q, past_length=past_length)
+            k = self._apply_rope(k, past_length=past_length)
+        if kv_cache is not None:
+            if "k" in kv_cache and "v" in kv_cache:
+                k = torch.cat((kv_cache["k"], k), dim=2)
+                v = torch.cat((kv_cache["v"], v), dim=2)
+            kv_cache["k"] = k
+            kv_cache["v"] = v
+        # Fused kernel (Flash / memory-efficient attention where available).
+        if past_length == 0:
+            y = F.scaled_dot_product_attention(
+                q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=(t > 1))
+        elif t == 1:
+            y = F.scaled_dot_product_attention(
+                q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=False)
+        else:
+            attn_mask = torch.ones(t, past_length + t, dtype=torch.bool, device=x.device).tril(diagonal=past_length)
+            y = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=False)
         y = y.transpose(1, 2).contiguous().view(b, t, c)
         return self.resid_drop(self.proj(y))
 
-    def _apply_rope(self, x: torch.Tensor) -> torch.Tensor:
+    def _apply_rope(self, x: torch.Tensor, past_length: int = 0) -> torch.Tensor:
         _, _, length, head_dim = x.shape
         inv_freq = 1.0 / (self.rope_theta ** (
             torch.arange(0, head_dim, 2, device=x.device, dtype=torch.float32) / head_dim))
-        angles = torch.outer(torch.arange(length, device=x.device, dtype=torch.float32), inv_freq)
+        positions = torch.arange(past_length, past_length + length, device=x.device, dtype=torch.float32)
+        angles = torch.outer(positions, inv_freq)
         cos = angles.cos().to(dtype=x.dtype)[None, None, :, :]
         sin = angles.sin().to(dtype=x.dtype)[None, None, :, :]
         paired = x.reshape(*x.shape[:-1], head_dim // 2, 2)
@@ -67,8 +88,13 @@ class Block(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x))
+    def forward(
+        self,
+        x: torch.Tensor,
+        kv_cache: dict[str, torch.Tensor] | None = None,
+        past_length: int = 0,
+    ) -> torch.Tensor:
+        x = x + self.attn(self.ln1(x), kv_cache=kv_cache, past_length=past_length)
         return x + self.mlp(self.ln2(x))
 
 
@@ -110,21 +136,32 @@ class ChitModel(nn.Module):
     def num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters())
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None):
+    def forward(
+        self,
+        idx: torch.Tensor,
+        targets: torch.Tensor | None = None,
+        kv_caches: list[dict[str, torch.Tensor]] | None = None,
+        past_length: int = 0,
+    ):
         b, t = idx.shape
-        if t > self.block_size:
-            raise ValueError(f"sequence length {t} exceeds block_size {self.block_size}")
-        pos = torch.arange(t, device=idx.device)
+        if past_length + t > self.block_size:
+            raise ValueError(f"sequence length {past_length + t} exceeds block_size {self.block_size}")
+        pos = torch.arange(past_length, past_length + t, device=idx.device)
         x = self.token_embedding(idx)
         if self.position_encoding == "absolute":
             x = x + self.position_embedding(pos)[None, :, :]
         x = self.drop(x)
-        for block in self.blocks:
-            x = block(x)
+        for i, block in enumerate(self.blocks):
+            layer_cache = kv_caches[i] if kv_caches is not None else None
+            x = block(x, kv_cache=layer_cache, past_length=past_length)
         logits = self.lm_head(self.ln_f(x))
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+            flat_targets = targets.reshape(-1)
+            if (flat_targets != -100).any():
+                loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), flat_targets, ignore_index=-100)
+            else:
+                loss = logits.sum() * 0.0
         return logits, loss
 
     @torch.no_grad()
@@ -133,7 +170,8 @@ class ChitModel(nn.Module):
                  stop_fn: Callable[[torch.Tensor], bool] | None = None,
                  repetition_penalty: float = 1.0,
                  prompt_len: int | None = None,
-                 return_details: bool = False) -> torch.Tensor | tuple[torch.Tensor, float, str]:
+                 return_details: bool = False,
+                 use_cache: bool = True) -> torch.Tensor | tuple[torch.Tensor, float, str]:
         """Sample ``max_new_tokens`` tokens after ``idx`` (shape ``(b, t)``, t >= 1).
 
         ``temperature <= 0`` means greedy decoding. The module's train/eval mode is
@@ -147,9 +185,20 @@ class ChitModel(nn.Module):
         self.eval()
         finish_reason = "length"
         total_log_probs: list[torch.Tensor] = []
+        kv_caches: list[dict[str, torch.Tensor]] | None = None
+        past_length = 0
         try:
             for _ in range(max_new_tokens):
-                logits, _ = self(idx[:, -self.block_size:])
+                if not use_cache:
+                    logits, _ = self(idx[:, -self.block_size:])
+                elif kv_caches is None or past_length >= self.block_size:
+                    window = idx[:, -self.block_size:]
+                    kv_caches = [{} for _ in range(len(self.blocks))]
+                    logits, _ = self(window, kv_caches=kv_caches, past_length=0)
+                    past_length = window.size(1)
+                else:
+                    logits, _ = self(idx[:, -1:], kv_caches=kv_caches, past_length=past_length)
+                    past_length += 1
                 logits = logits[:, -1, :]
                 raw_log_probs = F.log_softmax(logits, dim=-1)
                 sampling_logits = logits

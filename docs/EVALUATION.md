@@ -1,8 +1,6 @@
 # चित् behavior evaluation
 
-`data/eval.txt` is held out by the assistant preset. It contains request/target pairs in the same
-`Task: chat` format used by the assistant paths. Do not copy these pairs into `data/train.txt`.
-The file also retains the original held-out prose as seed evaluation material.
+`data/eval.txt` and `data/eval_combined.txt` are held out by the assistant and multi-stage training presets. `data/eval_combined.txt` combines 574 held-out evaluation records across all 6 task families (`Task: chat`: 240, `Task: knowledge`: 129, `Task: reasoning`: 91, `Task: behavior`: 73, `Task: grammar`: 35, `Task: prose`: 6) with zero exact-block overlap against any training file. Do not copy these pairs into `data/train.txt` or stage training files.
 
 ## Review criteria
 

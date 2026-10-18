@@ -86,12 +86,12 @@ Training presets may optionally use source-aware streams in `data.sources`:
 }
 ```
 
-Weights are relative and normalized. Each batch row chooses a source, then a random token window
-within that source; this prevents source proportions from being determined only by concatenated file
+Weights are relative and normalized. Each batch row chooses a source, then samples a token window
+within that source (70% aligned to `"Task: "` record boundaries via `record_starts`, 30% uniform random byte offsets) and applies `-100` answer-only cross-entropy loss masking prior to `Chit:` or `Reasoning:`; this prevents source proportions from being determined only by concatenated file
 length and prevents a window from crossing file boundaries. The legacy `data.train_file` path remains
 active when `sources` is omitted. Candidate checkpoint metadata records configured weights and sampled
 window counts. The local `chit_english_foundation` preset demonstrates the feature and uses the
-existing held-out `data/eval.txt` without overwriting corpus files.
+existing held-out `data/eval.txt` without overwriting corpus files, while stage presets (`chit_conversation_reasoning_6l_256`, `chit_knowledge_behavior_6l_256`) evaluate against the combined multi-task `data/eval_combined.txt` (574 held-out blocks).
 
 For candidate response generation and review of the English capability suite, see [EVALUATION.md](EVALUATION.md).
 

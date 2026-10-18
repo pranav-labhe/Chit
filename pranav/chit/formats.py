@@ -7,19 +7,25 @@ so what the model learns in training is what it is asked at inference.
 from __future__ import annotations
 
 USER, ASSISTANT = "User:", "Chit:"
+VALID_TASKS = ("chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue")
 
 
-def render_qa(question: str, answer: str) -> str:
-    return f"{USER} {question.strip()}\n{ASSISTANT} {answer.strip()}\n"
+def render_qa(question: str, answer: str, task: str = "") -> str:
+    header = f"Task: {task.strip()}\n" if task.strip() else ""
+    return f"{header}{USER} {question.strip()}\n{ASSISTANT} {answer.strip()}\n"
 
 
-def render_reasoning(input: str, reasoning: str, answer: str) -> str:
-    return f"Input: {input.strip()}\nReasoning: {reasoning.strip()}\nAnswer: {answer.strip()}\n"
+def render_reasoning(input: str, reasoning: str, answer: str, memory_block: str = "",
+                     include_task_header: bool = True) -> str:
+    header = "Task: reasoning\n" if include_task_header else ""
+    mem = f"{memory_block.strip()}\n" if memory_block.strip() else ""
+    return f"{header}{mem}Input: {input.strip()}\nReasoning: {reasoning.strip()}\nAnswer: {answer.strip()}\n"
 
 
 def render_text(text: str) -> str:
     text = text.strip()
     return text + "\n"
+
 
 
 def render_chat_prompt(user_input: str, memories: list[str], task: str = "chat",

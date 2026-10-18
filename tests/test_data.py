@@ -52,3 +52,25 @@ def test_bpe_dataset_keeps_token_ids_above_byte_range():
     assert dataset.data.max().item() > 255
     x, y = random_batch(dataset, 2, "cpu", block_size=4)
     assert x.shape == y.shape == (2, 4)
+
+
+def test_record_starts_and_answer_only_loss_masking():
+    text = (
+        "Task: chat\nUser: Hello!\nChit: Hi there, how can I help?\n\n"
+        "Task: reasoning\nInput: 2 + 2\nReasoning: Add two and two.\nAnswer: 4\n\n"
+        "Task: prose\nSunlight warmed the quiet garden path.\n"
+    )
+    dataset = TextDataset.from_text(text, ByteTokenizer(), block_size=64)
+    assert len(dataset.record_starts) >= 3
+    assert int(dataset.record_starts[0].item()) == 0
+
+    x, y = random_batch(
+        dataset,
+        batch_size=8,
+        device="cpu",
+        generator=torch.Generator().manual_seed(7),
+        block_size=64,
+    )
+    assert (y == -100).any(), "Prompt header tokens before Chit:/Reasoning: should be masked with -100"
+    assert (y != -100).any(), "Completion tokens after Chit:/Reasoning: must remain unmasked"
+

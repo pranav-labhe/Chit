@@ -7,13 +7,75 @@ import torch
 from torch.utils.data import Dataset
 
 
+def _find_record_starts(raw_bytes: bytes | bytearray) -> torch.Tensor:
+    starts: list[int] = []
+    if raw_bytes.startswith(b"Task: "):
+        starts.append(0)
+    pos = 0
+    while True:
+        idx = raw_bytes.find(b"\nTask: ", pos)
+        if idx == -1:
+            break
+        starts.append(idx + 1)
+        pos = idx + 7
+    return torch.tensor(starts, dtype=torch.long)
+
+
+def _sample_starts(
+    ds: "TextDataset",
+    count: int,
+    width: int,
+    generator: torch.Generator | None = None,
+) -> torch.Tensor:
+    max_start = len(ds.data) - width
+    if ds.record_starts.numel() > 0:
+        valid_records = ds.record_starts[ds.record_starts < max_start]
+        if valid_records.numel() > 0:
+            n_aligned = int(round(count * 0.7))
+            if count == 1:
+                draw = torch.rand((1,), generator=generator).item()
+                n_aligned = 1 if draw < 0.7 else 0
+            n_rand = count - n_aligned
+            parts = []
+            if n_aligned > 0:
+                rec_idx = torch.randint(0, valid_records.numel(), (n_aligned, 1), generator=generator)
+                parts.append(valid_records[rec_idx])
+            if n_rand > 0:
+                parts.append(torch.randint(0, max_start, (n_rand, 1), generator=generator))
+            return torch.cat(parts, dim=0)
+    return torch.randint(0, max_start, (count, 1), generator=generator)
+
+
+def _apply_answer_loss_mask(chunk: torch.Tensor, y: torch.Tensor, is_byte: bool) -> None:
+    """Mask prompt tokens with -100 so cross-entropy loss focuses on answer/reasoning bytes."""
+    if not is_byte:
+        return
+    width = y.size(1)
+    min_remaining = 16 if width >= 128 else 1
+    chunk_cpu = chunk.tolist()
+    for r, row_tokens in enumerate(chunk_cpu):
+        raw_row = bytes(row_tokens)
+        mask_end = 0
+        chit_idx = raw_row.find(b"\nChit: ")
+        reas_idx = raw_row.find(b"\nReasoning: ")
+        if chit_idx != -1 and (reas_idx == -1 or chit_idx < reas_idx):
+            mask_end = chit_idx + len(b"\nChit: ") - 1
+        elif reas_idx != -1:
+            mask_end = reas_idx + len(b"\nReasoning: ") - 1
+        elif raw_row.startswith(b"Task: prose\n"):
+            mask_end = len(b"Task: prose\n") - 1
+        if 0 < mask_end <= width - min_remaining:
+            y[r, :mask_end] = -100
+
+
 class TextDataset(Dataset):
     """All windows of ``block_size + 1`` tokens over one text, for next-token prediction."""
 
     def __init__(self, source: str | Path | None, tokenizer, block_size: int, *, text: str | None = None):
         if (source is None) == (text is None):
             raise ValueError("pass exactly one of a file path or text=")
-        if tokenizer.name == "byte-utf8" and text is None:
+        self.is_byte = getattr(tokenizer, "name", "") == "byte-utf8"
+        if self.is_byte and text is None:
             # ByteTokenizer's ids are exactly the normalized UTF-8 bytes. Keep
             # them packed as uint8 instead of materializing a Python int per
             # byte and then an int64 tensor (roughly 8x the corpus size). Read
@@ -24,6 +86,7 @@ class TextDataset(Dataset):
                 while chunk := f.read(1 << 20):
                     raw.extend(chunk.encode("utf-8"))
             token_data = torch.frombuffer(raw, dtype=torch.uint8)
+            self.record_starts = _find_record_starts(raw)
         else:
             if text is None:
                 text = Path(source).read_text(encoding="utf-8")
@@ -31,6 +94,7 @@ class TextDataset(Dataset):
             if len(ids) <= block_size:
                 raise ValueError(f"dataset has {len(ids)} tokens; it must be larger than block_size ({block_size})")
             token_data = torch.tensor(ids, dtype=torch.int32)
+            self.record_starts = _find_record_starts(text.encode("utf-8")) if self.is_byte else torch.empty(0, dtype=torch.long)
         if len(token_data) <= block_size:
             raise ValueError(f"dataset has {len(token_data)} tokens; it must be larger than block_size ({block_size})")
         self.data = token_data
@@ -50,23 +114,25 @@ class TextDataset(Dataset):
 
 def random_batch(ds: TextDataset, batch_size: int, device, generator: torch.Generator | None = None,
                  block_size: int | None = None):
-    """Sample ``batch_size`` random windows as ``(x, y)`` tensors on ``device``."""
+    """Sample ``batch_size`` windows as ``(x, y)`` tensors on ``device``."""
     width = ds.block_size if block_size is None else block_size
     if width < 1 or width > ds.block_size:
         raise ValueError("batch block_size must be between 1 and dataset.block_size")
-    starts = torch.randint(0, len(ds.data) - width, (batch_size, 1), generator=generator)
+    starts = _sample_starts(ds, batch_size, width, generator=generator)
     idx = starts + torch.arange(width + 1)  # (batch, block+1), gathered in one op
     chunk = ds.data[idx]
     # Embedding indices must be integer tensors. Convert only the sampled batch;
     # the complete corpus stays packed in one byte per token in host memory.
-    return (chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True),
-            chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True))
+    x = chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True)
+    y = chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True)
+    _apply_answer_loss_mask(chunk, y, getattr(ds, "is_byte", False))
+    return x, y
 
 
 def random_mixed_batch(datasets: list[TextDataset], weights: list[float], batch_size: int, device,
                        generator: torch.Generator | None = None, block_size: int | None = None,
                        source_counts: list[int] | None = None):
-    """Sample each row from a weighted corpus source, then draw a random window there.
+    """Sample each row from a weighted corpus source, then draw a window there.
 
     Source choice is per sequence, rather than per byte in a concatenated file. This
     prevents a large corpus from silently monopolizing training and avoids windows
@@ -95,9 +161,12 @@ def random_mixed_batch(datasets: list[TextDataset], weights: list[float], batch_
         rows = torch.nonzero(choices == source_id, as_tuple=False).flatten()
         if not rows.numel():
             continue
-        starts = torch.randint(0, len(dataset.data) - width, (rows.numel(), 1), generator=generator)
+        starts = _sample_starts(dataset, rows.numel(), width, generator=generator)
         indices = starts + torch.arange(width + 1)
         chunk = dataset.data[indices]
-        x[rows.to(device)] = chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True)
-        y[rows.to(device)] = chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True)
+        row_x = chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True)
+        row_y = chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True)
+        _apply_answer_loss_mask(chunk, row_y, getattr(dataset, "is_byte", False))
+        x[rows.to(device)] = row_x
+        y[rows.to(device)] = row_y
     return x, y

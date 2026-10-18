@@ -76,10 +76,17 @@ Evaluated across the 65-case benchmark suite (50 golden set items from `data/gol
   - Original output always retained in `metadata["raw_text"]`.
 
 ### Stage 6: Calibrated Confidence & Statistically Grounded Self-RAG
-- Implemented `pranav/chit/tools/calibrate_confidence.py` using Pool Adjacent Violators Algorithm (PAVA) Isotonic Regression (pure standard library).
+- Implemented `pranav/chit/tools/calibrate_confidence.py` using Pool Adjacent Violators Algorithm (PAVA) Isotonic Regression (pure standard library) with upper-anchor preservation (`1.0`).
 - Serializes mapping to `data/calibration.json`.
-- Maps overconfident raw probabilities (0.80 - 1.00) down to true empirical expected accuracy (0.1385), slashing Expected Calibration Error from 0.9738 down to 0.2264 (-76.7%).
+- `Bridge._load_calibration()` enforces a non-degenerate range safeguard (`mapping[-1]["calibrated"] >= uncertainty_threshold`), preventing flat curves from triggering `is_uncertain = True` on every turn.
 - Deterministic/extractive turns report `confidence = None`.
+
+### Stage 7: Unified 7-Task Routing, Grounded `Task: reasoning`, Conditional Best-of-3 & KV-Cache
+- **Unified `VALID_TASKS`**: `("chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue")` across `formats.py`, `api.py`, `ui.py`, `bridge.py`, and all `data/` corpus files.
+- **Router Auto-Selection (`Router.select_effective_task`)**: When `c.task == "chat"`, automatically routes to `reasoning` (if `think=True`), `behavior`, `grammar`, `knowledge` (if memories/facts/search/architecture query), or `chat` (including on Think-mode fallback).
+- **Grounded `Task: reasoning` (`ContextBuilder.build_reasoning_prompt`)**: Prepends `Task: reasoning\n` and budgeted `Known memory:` / `User-stated facts` above `Input: ...\nReasoning:`.
+- **Conditional Best-of-3 Candidate Selection (`best_of_n = 3`)**: Gated behind `not primary_passed` so clean greedy responses incur zero extra latency, while looping/garbled/uncertain responses sample up to `best_of_n - 1` (2) candidates at `temperature=0.35, top_k=10`.
+- **Autoregressive KV-Cache (`use_cache = True`)**: Added `past_kv` caching across `CausalSelfAttention`, `Block`, `ChitModel.forward()`, and `ChitModel.generate()`.
 
 ---
 
@@ -96,6 +103,6 @@ Evaluated across the 65-case benchmark suite (50 golden set items from `data/gol
 ---
 
 ## 5. Invariants & Repository Health
-- **Frozen Weights**: Checkpoint weights in `checkpoints/latest.pt` untouched.
+- **Frozen Weights**: Checkpoint weights in `checkpoints/latest.pt` untouched (100% compatible with KV-cache).
 - **Zero External Dependencies**: Implemented entirely using Python 3 standard library and existing project dependencies.
-- **Test Suite**: 209/209 tests passing (`pytest tests/`) in ~108s.
+- **Test Suite**: 218/218 tests passing (`pytest tests/`).

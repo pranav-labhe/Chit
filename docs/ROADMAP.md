@@ -23,12 +23,12 @@ real-world actions without an explicit capability and permission path.
 
 ## Current repository state
 
-- The inference path operates as a Compound AI System: an explicit Intent Router creates a typed Plan, a ContextBuilder budgets working memory in Chit's 256-byte context, a Generator runs inference, a Verifier tests output invariants, and a Responder handles recovery.
+- The inference path operates as a Compound AI System: an explicit Intent Router selects the most faithful `Task: <name>` header (`chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, `continue`) and creates a typed Plan, a ContextBuilder budgets working memory in Chit's 256-byte context (including grounded `Task: reasoning`), a KV-cached Generator runs inference, a Verifier tests output invariants with conditional Best-of-3 candidate selection, and a Responder handles recovery.
 - Exact symbolic arithmetic is offloaded to a safe AST-based calculator tool (`source: "tool"`), eliminating neural guesswork for math queries.
-- Self-assessed confidence is calibrated through isotonic regression (`data/calibration.json`), providing trustworthy probability scores.
+- Self-assessed confidence is calibrated through isotonic regression (`data/calibration.json`) with degenerate-curve rejection safeguards, providing trustworthy probability scores.
 - Memory search features SQLite FTS5 lexical matching with information-theoretic query coverage and vocative attenuation, alongside optional vector semantic embeddings.
-- The assistant curriculum contains request/response examples, including Markdown and practical problem-solving. `data/prompts.txt` supplies open-ended review prompts; `data/eval.txt` is held out.
-- The byte-level training corpus is stored compactly in host memory, fitting easily within CPU and RAM limits.
+- All training files in `data/` use unified `Task: <name>` headers (`scripts/upgrade_corpus_tasks.py`) with duplicates capped at $\le 2$ and 407 grounded memory/web/fact examples across `knowledge.txt` and `reasoning.txt`. `data/eval.txt` and `data/eval_combined.txt` (574 multi-task blocks) are held out with zero exact-block overlap.
+- The byte-level training corpus is stored compactly in host memory, indexes `"Task: "` record boundaries (70% record-start / 30% uniform windows), and applies `-100` answer-only cross-entropy loss masking prior to `Chit:` / `Reasoning:`.
 - Candidate evaluation in the Studio UI validates behavioral safety against the Golden Gate and benchmarks bridge fidelity across 65 probes, automatically re-calibrating the Champion upon promotion.
 
 Keep model weights, reviewed corpus, API-taught knowledge, runtime memory, session history, and the

@@ -11,7 +11,7 @@
     <div class="shell">
         <header class="top">
             <div class="brand">
-                <div class="mark" id="neuralOrb">चित् </div>
+                <div class="mark" id="neuralOrb" title="Chit status indicator: Green when ready, blue when thinking, and gold while learning in the background.">चित् </div>
                 <div>
                     <h1>चित्त · Chit Console</h1>
                     <p>Browser console for the Chit API</p>
@@ -19,11 +19,11 @@
             </div>
             <div style="display: flex; gap: 12px; align-items: center;">
                 <div id="sysMetrics" style="display:flex; gap:10px; font-size:12px; opacity:0.9;">
-                    <div style="background:var(--bg-panel); padding:4px 8px; border-radius:4px; border:1px solid var(--border);">CPU <span id="sysCpu" style="font-weight:bold; margin-left:4px;">--%</span></div>
-                    <div style="background:var(--bg-panel); padding:4px 8px; border-radius:4px; border:1px solid var(--border);">Mem <span id="sysMem" style="font-weight:bold; margin-left:4px;">--%</span></div>
-                    <div style="background:var(--bg-panel); padding:4px 8px; border-radius:4px; border:1px solid var(--border);">Disk <span id="sysDisk" style="font-weight:bold; margin-left:4px;">--%</span></div>
+                    <div style="background:var(--bg-panel); padding:4px 8px; border-radius:4px; border:1px solid var(--border);" title="Processor (CPU) usage on the Chit server right now. Green is light load, orange is busy, and red is heavy load.">CPU <span id="sysCpu" style="font-weight:bold; margin-left:4px;">--%</span></div>
+                    <div style="background:var(--bg-panel); padding:4px 8px; border-radius:4px; border:1px solid var(--border);" title="System memory (RAM) currently used on the Chit server.">Mem <span id="sysMem" style="font-weight:bold; margin-left:4px;">--%</span></div>
+                    <div style="background:var(--bg-panel); padding:4px 8px; border-radius:4px; border:1px solid var(--border);" title="Storage disk space currently used on the Chit server.">Disk <span id="sysDisk" style="font-weight:bold; margin-left:4px;">--%</span></div>
                 </div>
-                <div class="badge" id="connection">Checking server…</div>
+                <div class="badge" id="connection" title="Shows whether this browser is connected and signed in to the Chit server.">Checking server…</div>
             </div>
         </header>
 
@@ -51,14 +51,26 @@
                         <label for="chatInput">Your message</label>
                             <textarea id="chatInput" placeholder="What would you like to work through?"></textarea>
                         </div>
+                        <div class="field" style="margin: 8px 0;">
+                            <label for="chatTask">Conversation skill (Task mode)</label>
+                            <select id="chatTask">
+                                <option value="chat" selected>Auto / Everyday Chat (Chit picks the best skill automatically)</option>
+                                <option value="knowledge">Knowledge &amp; Facts (use saved memories, web facts, or project facts)</option>
+                                <option value="behavior">Honesty &amp; Boundaries (handle missing info, conflicts, or safety rules)</option>
+                                <option value="grammar">Grammar &amp; Writing (fix sentences, verb tenses, or rewrite text)</option>
+                                <option value="reasoning">Step-by-Step Reasoning (solve math, logic, or multi-step problems)</option>
+                                <option value="prose">Prose &amp; Reading (explain paragraphs and word meanings in context)</option>
+                                <option value="continue">Continue Raw Text (extend your text directly without chat formatting)</option>
+                            </select>
+                        </div>
                         <div class="actions">
                             <button class="primary" id="sendChat">Send message</button>
-                            <label class="think-toggle" title="Enable Chit's Chain-of-Thought thinking process">
+                            <label class="think-toggle" title="Ask Chit to work through the problem step by step before giving its final answer.">
                                 <input type="checkbox" id="thinkToggle">
                                 <span class="think-slider"></span>
                                 <span class="think-label">💭 Think</span>
                             </label>
-                            <label class="think-toggle search-toggle" title="Search the web for live facts before answering">
+                            <label class="think-toggle search-toggle" title="Let Chit search the web for fresh facts before answering your message.">
                                 <input type="checkbox" id="searchToggle">
                                 <span class="think-slider search-slider"></span>
                                 <span class="think-label search-label">🌐 Web</span>
@@ -97,9 +109,20 @@
                                 </select>
                             </div>
                             <div class="field">
-                                <label for="genTokens">Response length</label>
-                                <select id="genTokens"><option value="80">Concise</option><option value="160" selected>Detailed</option><option value="320">More detail</option><option value="500">As much as possible</option></select>
+                                <label for="genTask">Assistant skill (Task header)</label>
+                                <select id="genTask">
+                                    <option value="chat" selected>Auto / Everyday Chat (Chit picks the best skill)</option>
+                                    <option value="knowledge">Knowledge &amp; Facts (factual Q&amp;A and evidence)</option>
+                                    <option value="behavior">Honesty &amp; Boundaries (missing info or conflicts)</option>
+                                    <option value="grammar">Grammar &amp; Writing (fix or rewrite sentences)</option>
+                                    <option value="reasoning">Step-by-Step Reasoning (work through steps first)</option>
+                                    <option value="prose">Prose &amp; Reading (paragraphs and reading comprehension)</option>
+                                </select>
                             </div>
+                        </div>
+                        <div class="field">
+                            <label for="genTokens">Response length</label>
+                            <select id="genTokens"><option value="80">Concise</option><option value="160" selected>Detailed</option><option value="320">More detail</option><option value="500">As much as possible</option></select>
                         </div>
                         <details class="guided-panel"><summary>Advanced response settings</summary><div class="grid"><div class="field">
                                 <label for="genTemp">Creativity</label>
@@ -127,7 +150,7 @@
 
                 <section class="view hidden" id="view-conversations"><div class="card"><h2>Your conversations<button type="button" class="secondary page-help" id="helpConversationsPage" style="padding: 2px 8px; font-size: 11px; margin-left: 10px;">Page Guide</button></h2><p class="sub">Reopen a past conversation or remove one you no longer need. Chit keeps each conversation’s context separate.</p><div class="actions"><button class="secondary" id="refreshSessions">Refresh conversations</button><span class="status" id="sessionStatus"></span></div><div id="sessionList" class="memory-grid"><p class="status">Sign in to load conversations.</p></div></div></section>
 
-                <section class="view hidden" id="view-teach"><div class="card"><h2>Teach Chit something<button type="button" class="secondary page-help" id="helpTeachPage" style="padding: 2px 8px; font-size: 11px; margin-left: 10px;">Page Guide</button></h2><p class="sub">Save a fact for future learning. Memory helps Chit recall something now; a lesson becomes training material when you choose to train.</p><div class="grid"><div class="field"><label for="lessonKind">How would you like to teach it?</label><select id="lessonKind"><option value="text">A fact or short passage</option><option value="qa">A question and its answer</option></select></div><div class="field"><label for="lessonSource">Where did this come from? (optional)</label><input id="lessonSource" maxlength="200" placeholder="Personal note, book, website…"></div></div><div class="field" id="lessonTextField"><label for="lessonText">What should Chit learn?</label><textarea id="lessonText" maxlength="20000" placeholder="Write one clear fact or a short passage"></textarea></div><div id="lessonQaFields" class="hidden"><div class="field"><label for="lessonQuestion">Question</label><textarea id="lessonQuestion" maxlength="2000" placeholder="What question should Chit be able to answer?"></textarea></div><div class="field"><label for="lessonAnswer">Answer</label><textarea id="lessonAnswer" maxlength="5000" placeholder="Write the answer in clear language"></textarea></div></div><label class="check-row"><input type="checkbox" id="rememberLesson"> Also save this as a memory so Chit can use it right away</label><div class="actions"><button class="primary" id="saveLesson">Save lesson</button><span id="lessonStatus" class="status" aria-live="polite"></span></div></div><div class="card"><h2>Saved lessons</h2><p class="sub">Pending lessons are ready to be included in training. Training changes the model and can take time.</p><div class="actions"><button class="secondary" id="refreshKnowledge">Refresh lessons</button><label>Show <select id="knowledgeFilter"><option value="pending">Ready to learn</option><option value="trained">Already learned</option><option value="all">All lessons</option></select></label><span id="knowledgeStatus" class="status"></span></div><div id="knowledgeList" class="memory-grid"></div></div></section>
+                <section class="view hidden" id="view-teach"><div class="card"><h2>Teach Chit something<button type="button" class="secondary page-help" id="helpTeachPage" style="padding: 2px 8px; font-size: 11px; margin-left: 10px;">Page Guide</button></h2><p class="sub">Save a fact for future learning. Memory helps Chit recall something now; a lesson becomes training material when you choose to train.</p><div class="grid"><div class="field"><label for="lessonKind">How would you like to teach it?</label><select id="lessonKind"><option value="text">A fact or short passage</option><option value="qa">A question and its answer</option><option value="reasoning">A step-by-step reasoning example</option></select></div><div class="field"><label for="lessonSource">Where did this come from? (optional)</label><input id="lessonSource" maxlength="200" placeholder="Personal note, book, website…"></div></div><div class="field" id="lessonTextField"><label for="lessonText">What should Chit learn?</label><textarea id="lessonText" maxlength="20000" placeholder="Write one clear fact or a short passage"></textarea></div><div id="lessonQaFields" class="hidden"><div class="field"><label for="lessonQuestion">Question</label><textarea id="lessonQuestion" maxlength="2000" placeholder="What question should Chit be able to answer?"></textarea></div><div class="field"><label for="lessonAnswer">Answer</label><textarea id="lessonAnswer" maxlength="5000" placeholder="Write the answer in clear language"></textarea></div></div><div id="lessonReasoningFields" class="hidden"><div class="field"><label for="lessonInput">Problem or question</label><textarea id="lessonInput" maxlength="2000" placeholder="Write the problem or question Chit should work through"></textarea></div><div class="field"><label for="lessonReasoning">Step-by-step thinking</label><textarea id="lessonReasoning" maxlength="5000" placeholder="Write the clear steps that lead to the answer"></textarea></div><div class="field"><label for="lessonReasoningAnswer">Final answer</label><textarea id="lessonReasoningAnswer" maxlength="5000" placeholder="Write the final conclusion or answer"></textarea></div></div><label class="check-row"><input type="checkbox" id="rememberLesson"> Also save this as a memory so Chit can use it right away</label><div class="actions"><button class="primary" id="saveLesson">Save lesson</button><span id="lessonStatus" class="status" aria-live="polite"></span></div></div><div class="card"><h2>Saved lessons</h2><p class="sub">Pending lessons are ready to be included in training. Training changes the model and can take time.</p><div class="actions"><button class="secondary" id="refreshKnowledge">Refresh lessons</button><label for="knowledgeFilter">Show <select id="knowledgeFilter"><option value="pending">Ready to learn</option><option value="trained">Already learned</option><option value="all">All lessons</option></select></label><span id="knowledgeStatus" class="status"></span></div><div id="knowledgeList" class="memory-grid"></div></div></section>
 
                 <section class="view hidden" id="view-data"><div class="card"><h2>Training library<button type="button" class="secondary page-help" id="helpDataPage" style="padding: 2px 8px; font-size: 11px; margin-left: 10px;">Page Guide</button></h2><p class="sub">See what training material is available for a learning recipe, and preview how a text file would be divided before making changes.</p><div class="grid"><div class="field"><label for="dataConfig">Learning recipe</label><select id="dataConfig"></select></div><div class="field"><label for="dataSource">Text file to inspect</label><input id="dataSource" maxlength="100" placeholder="For example: lessons.txt"></div></div><label class="check-row"><input type="checkbox" id="overwriteSplit"> Replace existing training files (a backup is kept)</label><div class="actions"><button class="primary" id="inspectData">Inspect training material</button><button class="secondary" id="previewSplit">Preview a file split</button><button class="danger" id="applySplit">Create train and review files</button><span id="dataStatus" class="status"></span></div><pre id="dataResult" class="result">Choose a recipe to see its training material.</pre><p class="notice">Files are read from the server’s configured data folder. Creating a split changes the training files for the selected recipe.</p></div><div class="card"><h2>Chit’s current state</h2><p class="sub">A simple view of the model and services available to this browser.</p><button class="secondary" id="refreshModel">Refresh status</button>
 <button class="secondary" id="reloadModelBtn" style="margin-left:8px;">Restart Live AI</button>
@@ -302,7 +325,7 @@
                 <input type="password" id="apiKey" autocomplete="current-password" required>
             </div>
             <div class="actions">
-                <button class="primary" type="submit">Continue</button>
+                <button class="primary" type="submit" id="apiKeySubmit">Continue</button>
                 <span class="status" id="loginStatus"></span>
             </div>
             <p class="footer">Use this page over HTTPS when accessing it outside your own computer.</p>

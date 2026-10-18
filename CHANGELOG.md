@@ -3,6 +3,33 @@
 ## Latest Changes
 
 ### Added
+- **Unified `Task:` Vocabulary & Router Auto-Selection (`pranav/chit/formats.py`, `api.py`, `ui.py`, `bridge.py`)**:
+  - Locked in 7 canonical tasks across runtime, API, and training corpus: `VALID_TASKS = ("chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue")`.
+  - Updated `render_reasoning()` to emit `Task: reasoning\n[Known memory / Facts]\nInput: ...\nReasoning: ...\nAnswer: ...`.
+  - Validated `task` against `VALID_TASKS` in `ChatRequest` and added `task` (default `"chat"`) to `GenerateRequest` (`POST /generate`).
+  - Implemented `Router.select_effective_task()` in `bridge.py`: when `c.task == "chat"` (default), automatically selects `reasoning` (if `think=True`), `behavior` (missing info/conflict/policy queries), `grammar` (grammar/tense/rewrite requests), `knowledge` (when memories/facts/search are present or query asks about Chit/Atmini architecture), or `chat`. Explicit non-default tasks are preserved verbatim.
+  - Fixed Think-mode fallback `prompt_task` to re-run `select_effective_task(..., is_thinking=False)` so fallback generation preserves `Task: knowledge` / `Task: behavior` / `Task: grammar` when memories or web snippets are present.
+- **In-Place Training Corpus Overhaul & Combined Evaluation Set (`scripts/upgrade_corpus_tasks.py`, `data/`)**:
+  - Upgraded all source training files in-place without merging files and while preserving exact original block counts:
+    - `data/conversation_reasoning/conversation.txt`: 3,073 blocks (`Task: chat`, max dup $\le 2$, including prompt-side typo/noise greeting & identity variants with clean replies).
+    - `data/conversation_reasoning/reasoning.txt` & `data/reasoning.jsonl`: 1,196 blocks (`Task: reasoning`, max dup $\le 2$, 236 grounded blocks with `Known memory:` / `[Web]` / `User-stated facts:`).
+    - `data/knowledge_behavior/knowledge.txt`: 1,245 blocks (`Task: knowledge`, max dup $\le 2$, 171 grounded blocks — 407 grounded blocks combined across `knowledge.txt` + `reasoning.txt`).
+    - `data/knowledge_behavior/behavior.txt`: 1,327 blocks (`Task: behavior`, max dup $\le 2$, 20 grounded blocks).
+    - `data/english_foundation/structural.txt`: 7,691 blocks (`Task: grammar`, max dup $= 1$).
+    - `data/english_foundation/project_facts.txt`: 10 blocks (`Task: knowledge`, max dup $= 1$).
+    - `data/english_foundation/conversation.txt`: 4,189 blocks (`Task: chat`, max dup $= 1$).
+    - `data/english_foundation/lexical_prose.txt`: 5,492 blocks (`Task: prose`, max dup $= 1$).
+    - `data/train.txt` (118 blocks) & `data/train_1mb.txt` (1,813 blocks): tagged every block with its matching `Task:` header (`chat`, `knowledge`, `behavior`, `grammar`, `prose`), max dup $= 1$.
+  - Built `data/eval_combined.txt` (574 held-out blocks across `chat`: 240, `knowledge`: 129, `reasoning`: 91, `behavior`: 73, `grammar`: 35, `prose`: 6) with zero exact-block leakage against all training files, and pointed `configs/chit_conversation_reasoning_6l_256.json` and `configs/chit_knowledge_behavior_6l_256.json` `eval_file` to `data/eval_combined.txt`.
+- **Grounded `Task: reasoning`, Best-of-3 Candidate Selection & Calibration Safeguard (`pranav/chit/bridge.py`, `calibrate_confidence.py`)**:
+  - Updated `ContextBuilder.build_reasoning_prompt()` to format `Task: reasoning` with budgeted `Known memory:` and `User-stated facts` above `Input: ...\nReasoning:`.
+  - Enabled `enable_generic_verifier: bool = True`, `enable_calibration: bool = True`, and `best_of_n: int = 3` by default in `BridgeConfig`.
+  - Implemented Best-of-3 candidate selection in `Bridge.process()`: when the primary greedy candidate fails verification or confidence checks (`not primary_passed`), samples up to `best_of_n - 1` (2) additional candidates at `temperature=0.35, top_k=10` and ranks valid candidates by calibrated confidence, completeness, and content-word overlap. Clean primary responses bypass extra generations for zero latency overhead.
+  - Added degenerate calibration curve rejection in `Bridge._load_calibration()` (`mapping[-1]["calibrated"] >= uncertainty_threshold`) and upper-anchor preservation in `calibrate_confidence.py`.
+- **Autoregressive KV-Cache, Record-Aligned Window Sampling & Answer-Only Loss Masking (`pranav/chit/model.py`, `data.py`)**:
+  - Added KV-cache (`past_kv`, `use_cache: bool = True`) to `CausalSelfAttention`, `Block`, `ChitModel.forward()`, and `ChitModel.generate()`, caching key/value tensors after prompt prefill and slicing rotary/positional embeddings to current sequence positions while keeping 100% checkpoint compatibility.
+  - Upgraded `TextDataset` (`pranav/chit/data.py`) to index `"Task: "` record boundaries (`record_starts`), sampling 70% record-aligned windows and 30% uniform random windows in `random_batch()`.
+  - Implemented answer-only cross-entropy loss masking (`answer_loss_only: bool = True`), setting `y = -100` on prompt header/context bytes before `Chit:` or `Reasoning:` when an answer marker is present in the window (with full-window supervision for `Task: prose` and continuation windows).
 - **Compound AI Bridge Re-Architecture (`pranav/chit/bridge.py`)**:
   - Decomposed the monolithic Bridge into single-responsibility components: `BridgeConfig` (ablatable configuration flags), `Router` (typed `Plan`), `ContextBuilder` (working-memory budgeting reserving $\ge 32$ tokens in 256-byte context), `Generator` (safe runtime execution), `Verifier` (generic quality invariants), and `Responder` (transparent recovery ladder preserving `raw_text`).
   - Added slot priority truncation: Sacred User Input > User Facts > Web Evidence > Summary > History > Notebook Memories.

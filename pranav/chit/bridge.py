@@ -150,12 +150,56 @@ def _is_casual_or_conversational(text: str, facts: list[dict] | None = None) -> 
     return False
 
 
+def _is_behavior_query(text: str) -> bool:
+    """Detect prompts asking about missing info, conflicts, ambiguity, or safety/honesty boundaries."""
+    clean = text.strip().lower()
+    behavior_markers = (
+        "do not have the evidence", "missing information", "not been given",
+        "do not know my", "without your city", "have not checked any source",
+        "source citation", "cannot verify", "two stored memories", "disagree",
+        "earlier note says", "newer message says", "no earlier context",
+        "what 'it' means", "what ‘it’ means", "what 'it' refers to", "what ‘it’ refers to",
+        "clarify this request", "ask one question", "ask me the single",
+        "ask exactly one question", "do not decide for me", "do not want advice yet",
+        "private account password", "store a password", "reveal private information",
+        "ignore the user", "delete the project files", "even though i have not finished",
+        "guarantee this study plan", "gets hot while charging",
+    )
+    return any(marker in clean for marker in behavior_markers)
+
+
+def _is_grammar_query(text: str) -> bool:
+    """Detect prompts asking for grammar correction, verb tense, sentence completion, or rewriting."""
+    clean = text.strip().lower()
+    grammar_markers = (
+        "grammar", "grammatical", "verb tense", "past tense", "present tense",
+        "future tense", "rewrite this sentence", "correct this sentence",
+        "fix the grammar", "fix this sentence", "complete the sentence",
+        "fill in the blank", "subject-verb agreement", "plural of", "singular of",
+        "active voice", "passive voice", "punctuation",
+    )
+    return any(marker in clean for marker in grammar_markers)
+
+
+def _is_architecture_query(text: str) -> bool:
+    """Detect prompts asking about Chit or Atmini architecture, memory, sessions, or checkpoints."""
+    clean = text.strip().lower()
+    arch_markers = (
+        "what is chit", "who is chit", "within atmini", "same thing as chit",
+        "external memory", "model weights", "neural weights", "conversation session",
+        "knowledge queue", "ordinary memory", "checkpoint", "tokenizer",
+        "byte-utf8", "block_size", "golden gate", "atmini",
+    )
+    return any(marker in clean for marker in arch_markers)
+
+
 @dataclass
 class BridgeConfig:
     """Configuration toggles and hyperparameters for the Bridge compound pipeline."""
     enable_calculator: bool = True
-    enable_generic_verifier: bool = False
-    enable_calibration: bool = False
+    enable_generic_verifier: bool = True
+    enable_calibration: bool = True
+    best_of_n: int = 3
     legacy_attractor_shim: bool = True
     reserve_generation_budget: bool = True
     default_temperature: float = 0.7
@@ -174,6 +218,7 @@ class Plan:
     strategy: str    # "tool" | "recall" | "search" | "think" | "direct"
     decoding: dict   # {"temperature": float, "top_k": int, "max_new_tokens": int, "stop": list[str]}
     reasons: list[str] = field(default_factory=list)
+    effective_task: str = "chat"
 
 
 @dataclass
@@ -201,6 +246,25 @@ class ChitDecision:
 class Router:
     """Pure policy component mapping (Context, BridgeConfig) -> Plan."""
 
+    def select_effective_task(
+        self,
+        c: Context,
+        *,
+        is_thinking: bool = False,
+        has_memories_or_facts: bool = False,
+    ) -> str:
+        if c.task != "chat":
+            return c.task
+        if is_thinking:
+            return "reasoning"
+        if _is_behavior_query(c.user_input):
+            return "behavior"
+        if _is_grammar_query(c.user_input):
+            return "grammar"
+        if has_memories_or_facts or c.search or _is_architecture_query(c.user_input):
+            return "knowledge"
+        return "chat"
+
     def route(
         self,
         c: Context,
@@ -217,6 +281,9 @@ class Router:
         t = config.default_temperature if temperature is None else temperature
         n_tokens = config.max_new_tokens if max_new_tokens is None else max_new_tokens
         is_thinking = (c.think if think is None else think) or c.task == "reasoning"
+        eff_task = self.select_effective_task(
+            c, is_thinking=is_thinking, has_memories_or_facts=has_memories_or_facts
+        )
 
         # 1. Plain text continuation
         if c.task == "continue":
@@ -231,6 +298,7 @@ class Router:
                     "stop": stop if stop is not None else ["\n"],
                 },
                 reasons=["Raw text continuation without chat wrapper"],
+                effective_task="continue",
             )
 
         # 2. Symbolic math offloading (when not explicitly asking for neural chain-of-thought)
@@ -242,6 +310,7 @@ class Router:
                     strategy="tool",
                     decoding={"temperature": 0.0, "top_k": 1, "max_new_tokens": n_tokens, "stop": []},
                     reasons=["Exact arithmetic detected; offloaded to symbolic calculator tool"],
+                    effective_task=eff_task,
                 )
 
         # 3. Explicit web search request
@@ -256,6 +325,7 @@ class Router:
                     "stop": stop if stop is not None else Bridge.STOP,
                 },
                 reasons=["Explicit user web search requested; deterministic grounded decoding"],
+                effective_task=eff_task,
             )
 
         # 4. Native reasoning / thinking scaffold
@@ -274,6 +344,7 @@ class Router:
                     "stop": stop if stop is not None else ["\nInput:", "\nUser:", "\nTask:"],
                 },
                 reasons=["Multi-step reasoning scratchpad requested"],
+                effective_task="reasoning",
             )
 
         # 5. Memory- or fact-conditioned retrieval turn
@@ -288,6 +359,7 @@ class Router:
                     "stop": stop if stop is not None else Bridge.STOP,
                 },
                 reasons=["Conditioned on notebook memories or active facts; deterministic decoding"],
+                effective_task=eff_task,
             )
 
         # 6. Casual conversation turn
@@ -303,6 +375,7 @@ class Router:
                     "stop": stop if stop is not None else Bridge.STOP,
                 },
                 reasons=["Short conversational or personal turn"],
+                effective_task=eff_task,
             )
 
         # 7. Standard chat turn
@@ -317,6 +390,7 @@ class Router:
                 "stop": stop if stop is not None else Bridge.STOP,
             },
             reasons=["Standard conversational exchange"],
+            effective_task=eff_task,
         )
 
 
@@ -327,15 +401,12 @@ class ContextBuilder:
         if not block_size:
             return None, 0
         if not config.reserve_generation_budget or block_size < 256:
-            max_prompt = (block_size - 16) if (is_thinking and block_size > 32) else block_size
-            return max_prompt, 0
+            return block_size, 0
 
         # Stage 3 Working-memory reservation for 256-byte context models
         reserve_target = max(32, min(96, int(block_size * 0.4)))
         gen_reserve = min(max_new_tokens, reserve_target)
         max_prompt = max(16, block_size - gen_reserve)
-        if is_thinking and max_prompt > 32:
-            max_prompt = max(16, max_prompt - 16)
         return max_prompt, gen_reserve
 
     def build_prompt(
@@ -345,15 +416,17 @@ class ContextBuilder:
         sources: list[str],
         tokenizer: Any,
         max_prompt_tokens: int | None,
+        effective_task: str | None = None,
     ) -> tuple[str, dict[str, int]]:
         web_prompt_mems = [f"[Web] {s}" for s in sources]
         all_prompt_mems = [m.get("content", "") for m in memories] + web_prompt_mems
         initial_history_len = len(c.history)
+        task_label = effective_task or c.task
 
         prompt = render_chat_prompt(
             c.user_input,
             all_prompt_mems,
-            task=c.task,
+            task=task_label,
             history=c.history,
             max_tokens=max_prompt_tokens,
             tokenizer=tokenizer,
@@ -365,7 +438,7 @@ class ContextBuilder:
         # Approximate history dropped if prompt truncated
         tokens_history_dropped = 0
         if max_prompt_tokens and initial_history_len > 0:
-            untruncated = render_chat_prompt(c.user_input, all_prompt_mems, task=c.task, history=c.history, facts=c.facts, summary=c.summary)
+            untruncated = render_chat_prompt(c.user_input, all_prompt_mems, task=task_label, history=c.history, facts=c.facts, summary=c.summary)
             untruncated_len = len(tokenizer.encode(untruncated)) if tokenizer and hasattr(tokenizer, "encode") else len(untruncated.encode("utf-8"))
             if untruncated_len > tokens_prompt:
                 tokens_history_dropped = untruncated_len - tokens_prompt
@@ -375,6 +448,43 @@ class ContextBuilder:
             "tokens_history_dropped": tokens_history_dropped,
         }
         return prompt, slot_usage
+
+    def build_reasoning_prompt(
+        self,
+        c: Context,
+        memories: list[dict],
+        sources: list[str],
+        tokenizer: Any,
+        max_prompt_tokens: int | None,
+    ) -> str:
+        web_prompt_mems = [f"[Web] {s}" for s in sources if str(s).strip()]
+        mems = [m.get("content", "").strip() for m in memories if m.get("content", "").strip()] + web_prompt_mems
+        session_facts = [f for f in (c.facts or []) if f.get("key") and f.get("value")]
+        user_input = c.user_input.strip()
+
+        def build() -> str:
+            mem_block = ("Known memory:\n" + "\n".join(f"- {m}" for m in mems) + "\n") if mems else ""
+            fact_block = (
+                "User-stated facts (latest correction wins):\n"
+                + "\n".join(f"- {f['key']}: {f['value']}" for f in session_facts)
+                + "\n"
+            ) if session_facts else ""
+            return f"Task: reasoning\n{mem_block}{fact_block}Input: {user_input}\nReasoning:"
+
+        prompt = build()
+        if max_prompt_tokens is not None and max_prompt_tokens >= 32:
+            count = (
+                (lambda value: len(tokenizer.encode(value)))
+                if (tokenizer and hasattr(tokenizer, "encode"))
+                else (lambda value: len(value.encode("utf-8")))
+            )
+            while count(prompt) > max_prompt_tokens and mems:
+                mems.pop()
+                prompt = build()
+            while count(prompt) > max_prompt_tokens and session_facts:
+                session_facts.pop(0)
+                prompt = build()
+        return prompt
 
 
 class Generator:
@@ -515,13 +625,24 @@ class Bridge:
     def _load_calibration(self) -> None:
         if not self.config.enable_calibration:
             return
+        if not (hasattr(self.runtime, "checkpoint_meta") or self.config.calibration_file != "data/calibration.json"):
+            return
         cal_path = Path(self.config.calibration_file)
         if cal_path.exists():
             try:
                 data = json.loads(cal_path.read_text(encoding="utf-8"))
-                self._calibration_mapping = data.get("mapping", [])
+                mapping = data.get("mapping", [])
+                if mapping and float(mapping[-1].get("calibrated", 0.0)) >= self.config.uncertainty_threshold:
+                    self._calibration_mapping = mapping
             except Exception:
                 self._calibration_mapping = None
+
+    def _score_candidate(self, text: str, raw_conf: float, query: str, premise: str) -> tuple[float, float]:
+        cal_c = calibrate(raw_conf, self._calibration_mapping) if self._calibration_mapping else raw_conf
+        out_tokens = _extract_content_tokens(text)
+        ctx_tokens = _extract_content_tokens(query) | _extract_content_tokens(premise)
+        overlap = (len(out_tokens & ctx_tokens) / len(ctx_tokens)) if ctx_tokens else 0.0
+        return cal_c + 0.15 * overlap, cal_c
 
     def _generate_with_details(
         self,
@@ -589,11 +710,12 @@ class Bridge:
             text, conf, finish_reason = self.generator.generate(self.runtime, c.user_input, plan.decoding)
             trimmed = text.rstrip(" \t")
             is_incomplete = (finish_reason == "length") and bool(trimmed) and not trimmed.endswith(self.TERMINAL_PUNCTUATION)
-            is_uncertain = conf < self.config.uncertainty_threshold
+            cal_conf = calibrate(conf, self._calibration_mapping) if self._calibration_mapping else conf
+            is_uncertain = cal_conf < self.config.uncertainty_threshold
             metadata = {
                 "task": c.task,
                 "memory_ids": [],
-                "confidence": round(conf, 3),
+                "confidence": round(cal_conf, 3),
                 "is_incomplete": is_incomplete,
                 "is_uncertain": is_uncertain,
                 "needs_retrieval": is_uncertain,
@@ -602,10 +724,12 @@ class Bridge:
                 "raw_text": text,
                 "source": "neural",
             }
-            return ChitDecision(text, confidence=round(conf, 3), metadata=metadata)
+            return ChitDecision(text, confidence=round(cal_conf, 3), metadata=metadata)
 
         # Context budget & snippet sizing
-        context_block = (getattr(self.runtime, "model_config", None) or {}).get("block_size")
+        model_cfg = getattr(self.runtime, "model_config", None) or {}
+        context_block = model_cfg.get("block_size")
+        n_layer = model_cfg.get("n_layer", 6)
         max_prompt_tokens, gen_reserve = self.context_builder.compute_budget(
             context_block, n_tokens, self.config, is_thinking
         )
@@ -629,17 +753,28 @@ class Bridge:
                 retrieved_premise = " ".join(str(s).strip() for s in snippets if str(s).strip())
                 plan.decoding["temperature"] = 0.0
                 plan.decoding["top_k"] = 1
+                if c.task == "chat" and not is_thinking:
+                    plan.effective_task = "knowledge"
 
         # Prompt assembly & token usage tracking
+        prompt_task = (
+            self.router.select_effective_task(
+                c, is_thinking=False, has_memories_or_facts=bool(memories or c.facts or web_grounded)
+            )
+            if (is_thinking and c.task == "chat")
+            else plan.effective_task
+        )
         prompt, slot_usage = self.context_builder.build_prompt(
-            c, memories, sources, self.runtime.tokenizer, max_prompt_tokens
+            c, memories, sources, self.runtime.tokenizer, max_prompt_tokens, effective_task=prompt_task
         )
 
         grounding_fallback = False
 
         # Native Reasoning Scaffold
         if is_thinking:
-            reasoning_prompt = f"Input: {c.user_input.strip()}\nReasoning:"
+            reasoning_prompt = self.context_builder.build_reasoning_prompt(
+                c, memories, sources, self.runtime.tokenizer, max_prompt_tokens
+            )
             budgeted_p = budget_snippet(retrieved_premise, max_chars=max_snippet_chars) if retrieved_premise else ""
             stop_seqs = plan.decoding.get("stop") or ["\nInput:", "\nUser:", "\nTask:"]
 
@@ -661,6 +796,38 @@ class Bridge:
                 is_valid, violations = self.verifier.verify(
                     answer, c.user_input, budgeted_p, finish_reason, self.config
                 )
+                init_score, init_cal_conf = self._score_candidate(answer, conf, c.user_input, budgeted_p)
+
+                # Best-of-N Candidate Selection for reasoning
+                if (
+                    (not is_valid or init_cal_conf < self.config.uncertainty_threshold)
+                    and self.config.best_of_n > 1
+                    and self.config.enable_generic_verifier
+                    and not _is_short_conversational_turn(c.user_input)
+                    and (not is_valid or n_layer > 1)
+                ):
+                    valid_candidates = []
+                    if is_valid:
+                        valid_candidates.append((init_score, thoughts, answer, conf, finish_reason))
+                    for _ in range(self.config.best_of_n - 1):
+                        cand_raw, cand_conf, cand_finish = self.generator.generate(
+                            self.runtime,
+                            reasoning_prompt,
+                            {**plan.decoding, "temperature": 0.35, "top_k": 10, "stop": stop_seqs},
+                        )
+                        cand_raw = cand_raw.strip()
+                        if "Answer:" in cand_raw:
+                            c_parts = cand_raw.split("Answer:", 1)
+                            c_thoughts, c_ans = c_parts[0].strip(), c_parts[1].strip()
+                            c_valid, _ = self.verifier.verify(
+                                c_ans, c.user_input, budgeted_p, cand_finish, self.config
+                            )
+                            if c_valid:
+                                c_score, _ = self._score_candidate(c_ans, cand_conf, c.user_input, budgeted_p)
+                                valid_candidates.append((c_score, c_thoughts, c_ans, cand_conf, cand_finish))
+                    if valid_candidates:
+                        best = max(valid_candidates, key=lambda item: item[0])
+                        thoughts, answer, conf, finish_reason, is_valid = best[1], best[2], best[3], best[4], True
 
                 if not is_valid:
                     if web_grounded and budgeted_p:
@@ -689,17 +856,17 @@ class Bridge:
                             conf = 0.90
                         source = "abstain"
 
-                trimmed_ans = answer.rstrip(" \t")
-                is_incomplete = (finish_reason == "length") and bool(trimmed_ans) and not trimmed_ans.endswith(self.TERMINAL_PUNCTUATION)
-                is_uncertain = conf < self.config.uncertainty_threshold
-                needs_retrieval = is_uncertain or (c.task == "chat" and conf < 0.35)
-
-                # Confidence Calibration
+                # Confidence Calibration (computed before uncertainty & retrieval gates)
                 cal_conf = conf
                 is_calibrated = False
                 if self._calibration_mapping and source == "neural":
                     cal_conf = calibrate(conf, self._calibration_mapping)
                     is_calibrated = True
+
+                trimmed_ans = answer.rstrip(" \t")
+                is_incomplete = (finish_reason == "length") and bool(trimmed_ans) and not trimmed_ans.endswith(self.TERMINAL_PUNCTUATION)
+                is_uncertain = cal_conf < self.config.uncertainty_threshold
+                needs_retrieval = is_uncertain or (c.task == "chat" and cal_conf < 0.35)
 
                 reported_conf = None if source in ("tool", "extractive") else (round(cal_conf, 3) if is_calibrated else round(conf, 3))
 
@@ -748,6 +915,55 @@ class Bridge:
         is_valid, violations = self.verifier.verify(
             final_text, c.user_input, retrieved_premise, finish_reason, self.config
         )
+        init_score, init_cal_conf = self._score_candidate(final_text, conf, c.user_input, retrieved_premise)
+
+        # Recovery Ladder Step 1: Best-of-N Candidate Selection with perturbed decoding (T=0.35, top_k=10)
+        will_self_rag = (
+            is_valid
+            and init_cal_conf < self.config.uncertainty_threshold
+            and not web_grounded
+            and not memories
+            and not c.facts
+            and c.task == "chat"
+            and not is_thinking
+            and not _is_casual_or_conversational(c.user_input, c.facts)
+        )
+        trimmed_primary = final_text.rstrip(" \t")
+        is_incomplete_primary = (
+            finish_reason == "length"
+            and bool(trimmed_primary)
+            and not trimmed_primary.endswith(self.TERMINAL_PUNCTUATION)
+        )
+        primary_passed = (
+            is_valid
+            and not is_incomplete_primary
+            and (init_cal_conf >= self.config.uncertainty_threshold or will_self_rag)
+        )
+        is_full_model = n_layer > 1 and (not context_block or context_block >= 256)
+        if (
+            not primary_passed
+            and not _is_short_conversational_turn(c.user_input)
+            and self.config.enable_generic_verifier
+            and self.config.best_of_n > 1
+            and is_full_model
+        ):
+            valid_candidates = []
+            if is_valid:
+                valid_candidates.append((init_score, final_text, conf, finish_reason))
+            for _ in range(self.config.best_of_n - 1):
+                resampled_text, res_conf, res_finish = self.generator.generate(
+                    self.runtime, prompt, {**plan.decoding, "temperature": 0.35, "top_k": 10}
+                )
+                res_clean = resampled_text.strip()
+                res_valid, _ = self.verifier.verify(
+                    res_clean, c.user_input, retrieved_premise, res_finish, self.config
+                )
+                if res_valid:
+                    cand_score, _ = self._score_candidate(res_clean, res_conf, c.user_input, retrieved_premise)
+                    valid_candidates.append((cand_score, res_clean, res_conf, res_finish))
+            if valid_candidates:
+                best = max(valid_candidates, key=lambda item: item[0])
+                final_text, conf, finish_reason, is_valid = best[1], best[2], best[3], True
 
         if not is_valid:
             # Short conversational recovery directly for greetings/pleasantries
@@ -755,39 +971,29 @@ class Bridge:
                 final_text = "Hello! How can I help you today?"
                 conf = 0.95
                 source = "abstain"
+            # Recovery Ladder Step 2: Extractive Projection
+            elif web_grounded and retrieved_premise:
+                final_text = budget_snippet(retrieved_premise, max_chars=max_snippet_chars)
+                conf = 0.95
+                grounding_fallback = True
+                source = "extractive"
+            # Recovery Ladder Step 3: Honest Abstain
             else:
-                # Recovery Ladder Step 1: Resample with perturbed decoding (T=0.2)
-                if self.config.enable_generic_verifier and not web_grounded and plan.decoding.get("temperature", 0.0) > 0.0:
-                    resampled_text, res_conf, res_finish = self.generator.generate(
-                        self.runtime, prompt, {**plan.decoding, "temperature": 0.2, "top_k": 5}
-                    )
-                    res_clean = resampled_text.strip()
-                    res_valid, _ = self.verifier.verify(
-                        res_clean, c.user_input, retrieved_premise, res_finish, self.config
-                    )
-                    if res_valid:
-                        final_text = res_clean
-                        conf = res_conf
-                        finish_reason = res_finish
-                        is_valid = True
+                final_text = "I am here to help. What would you like to explore or work through?"
+                conf = 0.90
+                source = "abstain"
 
-                if not is_valid:
-                    # Recovery Ladder Step 2: Extractive Projection
-                    if web_grounded and retrieved_premise:
-                        final_text = budget_snippet(retrieved_premise, max_chars=max_snippet_chars)
-                        conf = 0.95
-                        grounding_fallback = True
-                        source = "extractive"
-                    # Recovery Ladder Step 3: Honest Abstain
-                    else:
-                        final_text = "I am here to help. What would you like to explore or work through?"
-                        conf = 0.90
-                        source = "abstain"
+        # Confidence Calibration (computed before uncertainty & retrieval gates)
+        cal_conf = conf
+        is_calibrated = False
+        if self._calibration_mapping and source == "neural":
+            cal_conf = calibrate(conf, self._calibration_mapping)
+            is_calibrated = True
 
         trimmed_text = final_text.rstrip(" \t")
         is_incomplete = (finish_reason == "length") and bool(trimmed_text) and not trimmed_text.endswith(self.TERMINAL_PUNCTUATION)
-        is_uncertain = conf < self.config.uncertainty_threshold
-        needs_retrieval = is_uncertain or (c.task == "chat" and conf < 0.35)
+        is_uncertain = cal_conf < self.config.uncertainty_threshold
+        needs_retrieval = is_uncertain or (c.task == "chat" and cal_conf < 0.35)
 
         # Autonomous Two-Pass Self-RAG
         if (needs_retrieval and not memories and not c.facts and c.task == "chat"
@@ -800,7 +1006,7 @@ class Bridge:
                 retrieved_p = budget_snippet(" ".join(str(s) for s in snippets), max_chars=max_snippet_chars)
                 grounded_prompt, g_slots = self.context_builder.build_prompt(
                     c, memories=[], sources=grounded_sources, tokenizer=self.runtime.tokenizer,
-                    max_prompt_tokens=max_prompt_tokens
+                    max_prompt_tokens=max_prompt_tokens, effective_task="knowledge"
                 )
                 g_text, g_conf, g_finish = self.generator.generate(
                     self.runtime, grounded_prompt,
@@ -819,16 +1025,16 @@ class Bridge:
                     grounding_fallback = True
                     g_source = "extractive"
 
-                g_trimmed = g_final.rstrip(" \t")
-                g_incomplete = (g_finish == "length") and bool(g_trimmed) and not g_trimmed.endswith(self.TERMINAL_PUNCTUATION)
-                g_is_uncertain = g_conf < self.config.uncertainty_threshold
-                g_needs_retrieval = g_is_uncertain or (c.task == "chat" and g_conf < 0.35)
-
                 g_cal_conf = g_conf
                 g_is_calibrated = False
                 if self._calibration_mapping and g_source == "neural":
                     g_cal_conf = calibrate(g_conf, self._calibration_mapping)
                     g_is_calibrated = True
+
+                g_trimmed = g_final.rstrip(" \t")
+                g_incomplete = (g_finish == "length") and bool(g_trimmed) and not g_trimmed.endswith(self.TERMINAL_PUNCTUATION)
+                g_is_uncertain = g_cal_conf < self.config.uncertainty_threshold
+                g_needs_retrieval = g_is_uncertain or (c.task == "chat" and g_cal_conf < 0.35)
 
                 reported_g_conf = None if g_source == "extractive" else (round(g_cal_conf, 3) if g_is_calibrated else round(g_conf, 3))
 
@@ -857,13 +1063,6 @@ class Bridge:
                 if grounding_fallback:
                     g_metadata["grounding_fallback"] = True
                 return ChitDecision(g_final, confidence=g_metadata["confidence"], metadata=g_metadata)
-
-        # Confidence Calibration
-        cal_conf = conf
-        is_calibrated = False
-        if self._calibration_mapping and source == "neural":
-            cal_conf = calibrate(conf, self._calibration_mapping)
-            is_calibrated = True
 
         reported_conf = None if source == "extractive" else (round(cal_conf, 3) if is_calibrated else round(conf, 3))
 

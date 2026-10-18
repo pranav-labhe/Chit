@@ -123,3 +123,31 @@ def test_generate_repetition_penalty_does_not_penalize_prompt_tokens():
     assert torch.equal(t1_std, t1_pen)
 
 
+@pytest.mark.parametrize("pos_enc", ["absolute", "rope"])
+def test_kv_cache_matches_uncached_greedy_generation(pos_enc):
+    torch.manual_seed(7)
+    m = ChitModel(**CFG, position_encoding=pos_enc).eval()
+    x = torch.tensor([[10, 20, 30, 40]])
+    cached_ids, cached_conf, cached_fin = m.generate(
+        x, 20, temperature=0, use_cache=True, return_details=True
+    )
+    uncached_ids, uncached_conf, uncached_fin = m.generate(
+        x, 20, temperature=0, use_cache=False, return_details=True
+    )
+    assert torch.equal(cached_ids, uncached_ids)
+    assert abs(cached_conf - uncached_conf) < 1e-5
+    assert cached_fin == uncached_fin
+
+
+def test_forward_ignores_masked_targets():
+    torch.manual_seed(11)
+    m = ChitModel(**CFG).eval()
+    x = torch.randint(0, 256, (1, 8))
+    targets = x.clone()
+    targets[:, :5] = -100
+    logits, loss = m(x, targets)
+    expected = F.cross_entropy(logits[:, 5:, :].reshape(-1, 256), x[:, 5:].reshape(-1))
+    assert torch.allclose(loss, expected, atol=1e-6)
+
+
+

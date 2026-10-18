@@ -1,162 +1,170 @@
 const $=s=>document.querySelector(s); let chatId=null, authenticated=false;
 const controlHelp={
   helpChatPage: {
-    what: 'Provides an interactive chat console to converse with Chit. Chit automatically preserves conversation history across turns and recalls relevant memories from SQLite during inference.',
-    example: 'API Mapping: Sending a message calls POST /chat with JSON payload {"message": "Hello Chit", "session_id": "hex_session_id", "temperature": 0.0}. Chit looks up past turns via sessions.py and relevant facts via memory.py before generating a response.',
-    best: 'Keep each conversation focused on a single topic or task. Use "New conversation" when changing subjects so older, unrelated conversational turns do not pollute the context window.',
-    recommended: 'Start with direct, complete questions. Use Shift+Enter for multiline inputs.',
-    risk: 'Chatting only uses existing neural weights and notebook memories; it does not permanently train the model. Very long sessions will eventually drop older turns once the token limit is reached.'
+    what: 'Lets you have a back-and-forth conversation with Chit. Chit remembers earlier messages in the chat, checks your saved memories, and automatically picks the best skill (chat, knowledge, grammar, behavior, or reasoning) for each turn.',
+    example: 'Type a question and press Send. You can also turn on "Think" for step-by-step problem solving, "Web" for live internet search, or choose a specific skill in "Conversation skill".',
+    best: 'Keep one topic per conversation. Click "New conversation" when switching subjects so old messages do not confuse the next answer.',
+    recommended: 'Leave Conversation skill on "Auto / Everyday Chat" so Chit automatically chooses the right skill for your message.',
+    risk: 'Chatting uses Chit\'s current brain and memories, but does not permanently retrain the AI. Very long chats drop the oldest messages when the context window fills up.'
   },
   helpConversationsPage: {
-    what: 'View, reopen, or remove past chat sessions. Chit manages isolated conversations in sessions.db, tracking full turn history, extracted facts, and automatic progressive summaries.',
-    example: 'API Mapping: Listing sessions calls GET /sessions?limit=50&offset=0. Reopening a conversation calls GET /sessions/{session_id}?limit=100 to fetch message history. Deleting a conversation calls DELETE /sessions/{session_id}.',
-    best: 'Revisit earlier conversations when you need to resume a specific line of thinking. Use session summaries to quickly find previous discussions.',
-    recommended: 'Delete old or test conversations that are no longer needed to keep your conversation list organized.',
-    risk: 'Deleting a conversation is permanent and cannot be undone. All turns, extracted user facts, and summaries in that session will be wiped from sessions.db.'
+    what: 'Shows your saved chat sessions so you can reopen an earlier conversation or delete ones you no longer need.',
+    example: 'Click "Continue conversation" on any card to load its full message history back into the Chat screen.',
+    best: 'Reopen a past conversation when you want to pick up where you left off with the same facts and summary.',
+    recommended: 'Delete old test chats from time to time to keep your list tidy.',
+    risk: 'Deleting a conversation permanently removes its messages, remembered session facts, and summary.'
   },
   helpGenPage: {
-    what: 'Provides raw, direct inference from the Transformer neural network for one-shot answers or open-ended text completion without chat formatting or session history.',
-    example: 'API Mapping: Clicking Generate calls POST /generate with JSON payload {"prompt": "...", "mode": "assistant" (default) or "continue", "tokens": 160, "temperature": 0.4, "top_k": 50}. UI "Response length" maps to "tokens", "Creativity" maps to "temperature", and "Response variety" maps to "top_k".',
-    best: 'Use "Answer my request" (assistant mode) for one-off tasks and answers. Use "Continue my text" (continue mode) when you want the model to directly continue writing from a given text prefix.',
-    recommended: 'Keep Temperature at 0.0 for deterministic factual responses, or set to 0.4-0.7 for creative writing. Start with Concise or Detailed response length.',
-    risk: 'Because there is no session history or memory lookup, Chit only sees the exact text in the prompt box. Long prompts may leave less room for generated tokens within the model context window.'
+    what: 'Gets a single, one-time answer or continues raw text directly without saving a chat session or past conversation history.',
+    example: 'Write a prompt, pick how Chit should respond ("Answer my request" or "Continue my text"), choose an Assistant skill, and click Generate.',
+    best: 'Use "Answer my request" for one-off questions, grammar fixes, or reasoning tasks. Use "Continue my text" when you want Chit to finish an incomplete sentence or paragraph.',
+    recommended: 'Keep Creativity (temperature) low (0.0 to 0.4) for steady, accurate answers, and start with "Detailed" response length.',
+    risk: 'Generate does not keep a conversation history, so include all needed details in your prompt.'
   },
   helpBrainPage: {
-    what: 'Explore, search, and manage Chit\'s long-term memory store (memory.db) and monitor the knowledge learning pipeline. Memories are recalled at inference time to personalize responses.',
-    example: 'API Mapping: Searching memories calls GET /memory/search?q=query&limit=50. Adding a memory calls POST /memory with JSON payload {"content": "...", "memory_type": "experience"|"fact", "importance": 0.5, "tags": []}. Deleting calls DELETE /memory/{memory_id}. Pipeline stage counts query GET /knowledge/stats.',
-    best: 'Store persistent user preferences, project guidelines, and facts that Chit should recall in every chat session without needing to retrain neural weights.',
-    recommended: 'Write concise, clear facts and set importance to 0.5 or 0.8 for key information.',
-    risk: 'Deleting a memory permanently removes it from FTS5 and vector search indexes. Memories provide inference context only and do not alter the neural weights.'
+    what: 'Lets you search, add, and delete facts in Chit\'s long-term memory, and shows how many saved lessons are waiting to be trained.',
+    example: 'Save a fact like "I prefer short answers in simple English" so Chit can use it immediately in future chats.',
+    best: 'Use Memories for personal preferences and facts you want Chit to recall right away without waiting for a training run.',
+    recommended: 'Write one clear, true sentence per memory and mark key facts as "Important" or "Very important".',
+    risk: 'Deleting a memory removes it immediately from recall. Do not store passwords or private secrets in memories.'
   },
   helpTeachPage: {
-    what: 'Queue structured facts and Q&A lessons for future training runs in knowledge.db. Lessons remain pending until you train a new candidate model in Studio.',
-    example: 'API Mapping: Saving a lesson calls POST /knowledge with JSON payload {"items": [{"kind": "text"|"qa", "question": "...", "answer": "...", "text": "...", "source": "..."}]}. Checking "Also save as memory" triggers both POST /knowledge/items and POST /memory simultaneously.',
-    best: 'Use Q&A pairs for specific questions Chit should answer accurately. Use text passages for general background knowledge and definitions.',
-    recommended: 'Check "Also save as memory" if you want Chit to recall the fact immediately in chat without waiting for a training run.',
-    risk: 'Saving a lesson does not immediately change the AI\'s neural weights. The lesson remains in the training queue until a training run is initiated and the resulting candidate is promoted.'
+    what: 'Lets you save new lessons (facts, question-and-answer pairs, or step-by-step reasoning examples) for Chit to study in a future training run.',
+    example: 'Choose "A question and its answer" or "A step-by-step reasoning example", fill in the fields, and click Save lesson.',
+    best: 'Use Q&A lessons for direct factual questions, step-by-step reasoning examples for logic or math, and short passages for general reading.',
+    recommended: 'Check "Also save this as a memory" if you want Chit to use the lesson in Chat right away before you run training in Studio.',
+    risk: 'Saved lessons only change Chit\'s neural brain after you run "Learn saved lessons" in Studio and promote the new model.'
   },
   helpDataPage: {
-    what: 'Inspect training material for selected recipes and divide raw text files into training and held-out validation (eval) datasets required by learning plans.',
-    example: 'API Mapping: Inspecting files calls GET /data?config=recipe_name. Creating file splits calls POST /data/split with JSON payload {"source": "filename.txt", "config": "recipe_name", "by": "paragraph", "eval_fraction": 0.1, "dry_run": true/false}. UI "Replace existing training files" maps to overwrite: true.',
-    best: 'Always use "Preview a file split" (dry_run: true) first to verify line counts and byte splits before modifying dataset files on disk.',
-    recommended: 'Ensure your dataset is clean UTF-8 text with consistent paragraph breaks and sufficient eval data (at least 10%).',
-    risk: 'Checking "Replace existing training files" will overwrite existing train.txt and eval.txt files in the server data directory. Although backups are made, accidental overwrites can alter training behavior.'
+    what: 'Checks whether the training text files for a learning plan exist and are ready, and lets you split a text file into training and review sets.',
+    example: 'Pick a learning recipe and click "Inspect training material" to see file sizes, example counts, and any warnings.',
+    best: 'Always click "Preview a file split" first so you can check how many examples go into training vs. review before writing files.',
+    recommended: 'Inspect your chosen learning recipe here before starting any training job in Studio.',
+    risk: 'Creating a split with "Replace existing training files" checked overwrites the current train and review files (a backup is kept automatically).'
   },
   helpStudioPage: {
-    what: 'Configure, start, and monitor neural network training runs, and review/promote candidate checkpoints to become the live Champion model.',
-    example: 'API Mapping: Starting training calls POST /train with JSON payload {"config": "recipe", "init": "scratch"|"auto", "force_promote": false}. UI "from scratch" maps to init_checkpoint: null (fresh randomized brain); UI "from current" maps to init_checkpoint: "latest". Evaluating a candidate calls POST /candidates/{job_id}/evaluate; promoting calls POST /candidates/{job_id}/promote.',
-    best: 'Train on top of the current model ("from current") for continuous learning. Let training complete, run the safety evaluation against the 50 Golden Gate rules, and verify passing score before promoting.',
-    recommended: 'Leave "Force promotion" unchecked so candidates undergo automated safety evaluation before taking over live traffic.',
-    risk: 'Training "from scratch" (init_checkpoint: null) completely resets and wipes all existing neural weights, starting from randomized initialization. Training also uses significant CPU/GPU compute.'
+    what: 'Lets you choose a learning plan, start training runs, test newly trained candidate models for safety and quality, and make a passing candidate your live AI.',
+    example: 'Pick a learning plan on the left, review its settings, and click "Start learning with this plan". When it finishes, click "Test safety rules" and "Benchmark Bridge & Calibrate" before clicking "Make this the Live AI".',
+    best: 'Always run the safety test and Bridge benchmark on a finished candidate before promoting it to be your live AI.',
+    recommended: 'Leave "Force this candidate live" unchecked so every new AI version is checked against the 50 safety rules first.',
+    risk: 'Training uses heavy processor (CPU/GPU) and memory resources and can take time. Promoting a new model immediately replaces the live AI for all chats.'
   },
   helpDiagPage: {
-    what: 'Run comprehensive diagnostics across the server, neural runtime, memory store, and tokenization settings to detect hardware issues or garbled output.',
-    example: 'API Mapping: Diagnostics query GET /ready, GET /health, and GET /model. UI "Text reader" maps to "tokenizer" (ByteTokenizer or BpeTokenizer); UI "Context window" maps to "model_config.block_size". Generating test output calls POST /generate.',
-    best: 'Run diagnostics whenever responses appear garbled, repetitive, or off-topic. Check whether the tokenizer matches the model configuration.',
-    recommended: 'Inspect the active model\'s tokenizer sha256 against recipe expectations. A tokenizer mismatch is the most common cause of unreadable text.',
-    risk: 'This screen is diagnostic and read-only. It identifies issues and suggests next steps but does not alter model files or configuration.'
+    what: 'Runs health checks on the server, active AI model, text reader (tokenizer), and training files to help explain unreadable or unexpected replies.',
+    example: 'Choose a learning plan, click "Check Chit", and then click "Generate a sample response" to test how clearly the current model writes.',
+    best: 'Run this check whenever replies look garbled, repetitive, or cut off.',
+    recommended: 'Make sure the "Selected plan and active text reader" check shows a green match (both using byte-utf8).',
+    risk: 'All checks on this page are read-only and safe; they never alter your model or saved data.'
   },
   helpApiPage: {
-    what: 'Interactive developer reference for all allowlisted Chit API routes. Build requests visually or edit raw JSON payloads directly.',
-    example: 'API Mapping: Proxies HTTP calls through POST /_ui/proxy with JSON payload {"method": "GET"|"POST"|"DELETE", "path": "/route", "query": {...}, "body": {...}}, attaching the session-held API key.',
-    best: 'Use the guided builder to understand schema fields, default values, and response layouts before integrating external clients.',
-    recommended: 'Test with read-only GET requests (e.g. /health, /model, /sys_metrics) before submitting mutating POST or DELETE requests.',
-    risk: 'Requests sent through the proxy execute directly against the backend API and will alter live databases or start actual training runs.'
+    what: 'An interactive guide to every Chit API action. Pick an operation to see plain-English field explanations, build a request safely, and read the server response.',
+    example: 'Click "Server health" or "Chat message" in the operation list, edit the fields, and click "Send this request".',
+    best: 'Use the guided form builder rather than editing raw JSON by hand, because the builder checks field rules for you.',
+    recommended: 'Try read-only actions (labelled GET) first to explore how Chit responds.',
+    risk: 'Actions sent from this screen run on the live server and can save data, delete items, or start training.'
   },
-  activeAiHelpWrap:{what:'The exact file timestamp of the latest.pt checkpoint currently powering your chats.',example:'Match this timestamp with a job below to see which checkpoint is live.',best:'Use this to confirm that a new checkpoint was successfully promoted.',recommended:'Check this after promoting a new candidate.',risk:'None.'},
-apiKey:{what:'Lets this browser sign in to Chit. The key stays on the server for this browser session.',example:'Paste the API key given to you by the server owner.',best:'Only enter the key on the trusted Chit page. Do not share it in a message or screenshot.',recommended:'Use the key supplied for this server.',risk:'Anyone with this key may be able to change data or start training.'},
-chatInput:{what:'Write a message for Chit. Chat keeps a conversation going and may use saved memories.',example:'“Help me plan a simple weekly meal list.”',best:'Ask one clear question at a time. Add important context that Chit would not know.',recommended:'Use a complete sentence; press Enter to send or Shift+Enter for a new line.',risk:'Chit can make mistakes. Check important information.'},
-sendChat:{what:'Sends your message and adds Chit’s reply to this saved conversation.',example:'Send “What should I pack for a rainy day?”',best:'Give Chit enough detail to understand what you need.',recommended:'Start a new conversation when you switch to a different topic.',risk:'The conversation is saved under your account session.'},
-newChat:{what:'Starts a separate conversation with a fresh context.',example:'Use it before asking about an unrelated topic.',best:'Keep one topic in each conversation for clearer context.',recommended:'Use when you do not want earlier messages to guide the next answer.',risk:'This does not delete your old conversation; use Conversations to remove it.'},
-thinkToggle:{what:'Enables Chain-of-Thought (CoT) reasoning. Chit calculates intermediate scratchpad deduction steps before outputting its final answer.',example:'Turn on for math problems (e.g. "Ravi has 8 apples..."), logic riddles, or multi-step deductions.',best:'Use for analytical tasks to eliminate deduction errors without retraining. Leave off for casual greetings.',recommended:'Toggle on for logic and math; toggle off for everyday conversation.',risk:'Generates extra scratchpad tokens which take slightly longer to complete.'},
-searchToggle:{what:'Enables live internet search (Self-RAG). Chit queries DuckDuckGo for live facts and injects budgeted snippets into memory before answering.',example:'Turn on for recent sports scores, live news, entity definitions, or current facts outside Chit\'s training data.',best:'Use when asking about real-world events or facts that happened recently.',recommended:'Keep off for casual banter; turn on when you need verified, up-to-date facts.',risk:'Adds a brief ~1-2 second network search latency. Requires server internet connectivity.'},
-genPrompt:{what:'The request or starting text Chit will respond to.',example:'“Explain why leaves change colour in autumn.”',best:'Ask for one task and say what kind of answer you want.',recommended:'A short, clear request is a good starting point.',risk:'Very long prompts leave less room for the answer.'},
-genMode:{what:'Chooses whether Chit answers as an assistant or continues your text exactly.',example:'Choose “Answer my request” for a question; choose “Continue my text” for an unfinished sentence.',best:'Use assistant mode for everyday requests.',recommended:'Answer my request.',risk:'Continue mode does not add the normal assistant instructions or memory context.'},
-genTokens:{what:'Sets the maximum amount Chit may write.',example:'Choose “Concise” for a short answer or “More detail” for a longer one.',best:'Start with Detailed and increase it only when needed.',recommended:'Detailed.',risk:'A larger answer can take longer and may wander off topic.'},
-genTemp:{what:'Controls how predictable or varied the wording is.',example:'0 gives steadier wording; a higher number allows more variety.',best:'Lower it when answers look inconsistent.',recommended:'0 for troubleshooting; 0.4 for ordinary writing.',risk:'Higher values can make mistakes and gibberish more likely.'},
-genTopK:{what:'Limits how many next-word choices Chit considers.',example:'A smaller value narrows its choices.',best:'Leave this alone unless you are comparing response settings.',recommended:'50; at temperature 0 it has little or no effect.',risk:'Very small values can make answers repetitive.'},
-genSearch:{what:'Enables live web search grounding for one-shot assistant generation.',example:'Check this box when asking a factual or knowledge question in assistant mode.',best:'Combine with Concise or Detailed response length for grounded, factual summaries.',recommended:'Check for factual questions; uncheck for raw text continuation.',risk:'Only supported in assistant mode. If checked with continue mode, the request will be rejected.'},
-genThink:{what:'Enables intermediate Chain-of-Thought reasoning for one-shot assistant generation.',example:'Check this box when generating answers to math word problems or logical puzzles.',best:'Use for multi-step deduction to allow the model to compute intermediate steps.',recommended:'Check for reasoning tasks; uncheck for standard text continuation.',risk:'Only supported in assistant mode. Continue mode will reject thinking requests.'},
-runGenerate:{what:'Sends one request and shows the reply without saving a conversation.',example:'Write a prompt, then choose Generate.',best:'Use this for a one-time answer or to test a prompt.',recommended:'Use the normal Chat screen for a back-and-forth conversation.',risk:'A long response uses more time and compute.'},
-refreshSessions:{what:'Reloads the saved conversation list.',example:'Use after starting a new chat.',best:'Refresh if a recent conversation is missing.',recommended:'No setting needed.',risk:'This only reads the list.'},
-lessonKind:{what:'Chooses whether the lesson is a short passage or a question with its answer.',example:'Choose question and answer for a fact Chit should answer directly.',best:'Use a single clear fact or one question and its correct answer.',recommended:'A fact or short passage for general information.',risk:'Conflicting or incorrect lessons can teach Chit the wrong thing.'},
-lessonSource:{what:'Records where this lesson came from.',example:'“Product handbook, page 4” or “My preference”.',best:'Add a source when you may need to check the fact later.',recommended:'Optional; leave blank if there is no useful source.',risk:'Do not include private source details you do not want stored.'},
-lessonText:{what:'The passage Chit can study in a future training run.',example:'“The office is closed on public holidays.”',best:'Write short, complete sentences and check spelling.',recommended:'One topic per lesson.',risk:'Saving a lesson does not make Chit learn it until you train.'},
-lessonQuestion:{what:'The question that should match this lesson.',example:'“When is the office closed?”',best:'Write the question the way a person might ask it.',recommended:'One direct question.',risk:'A vague question can make the lesson harder to use.'},
-lessonAnswer:{what:'The correct answer to the question above.',example:'“The office is closed on public holidays.”',best:'Answer the question directly and include needed context.',recommended:'A short, accurate answer.',risk:'Chit may repeat errors in a lesson when trained on it.'},
-rememberLesson:{what:'Also saves the lesson as a memory so Chat can use it right away.',example:'Turn this on for a preference you want Chit to recall before training.',best:'Use for personal facts or details needed in near-term conversations.',recommended:'Leave off for general lessons intended only for training.',risk:'The memory and lesson are separate saved copies; removing one does not remove the other.'},
-saveLesson:{what:'Adds this lesson to Chit’s learning queue.',example:'Save a checked question and answer.',best:'Review the wording before saving.',recommended:'Save only reliable, useful information.',risk:'The model changes only after a training session; training can take time.'},
-knowledgeFilter:{what:'Shows lessons waiting to be learned, already learned, or all lessons.',example:'Choose “Ready to learn” to review the next training queue.',best:'Check pending lessons before starting training.',recommended:'Ready to learn.',risk:'Changing this only changes the list view.'},
-refreshKnowledge:{what:'Reloads saved lessons and their current status.',example:'Use after saving or training a lesson.',best:'Refresh when lesson counts look out of date.',recommended:'No setting needed.',risk:'This only reads saved lessons.'},
-memSearch:{what:'Finds saved memories that match the words you enter.',example:'Search “vegetarian” to find food preferences.',best:'Use a meaningful word or phrase from the memory.',recommended:'Search with one or two specific words.',risk:'An empty search cannot find useful results.'},
-doMemSearch:{what:'Searches Chit’s saved memories.',example:'Type “home city”, then press Search.',best:'Try a shorter word if there are no matches.',recommended:'Search only when you want to inspect or remove a memory.',risk:'This reads memories; it does not change them.'},
-newMemory:{what:'A fact or preference Chit can use in chat right away.',example:'“I prefer answers in simple English.”',best:'Write one short, searchable sentence.',recommended:'Save information that will help in future conversations.',risk:'A memory does not train the model. Do not save passwords or secrets.'},
-memoryType:{what:'A label to help you describe the saved memory.',example:'Use personal experience for a preference; use fact for general information.',best:'Pick the closest label; it does not change how Chit is trained.',recommended:'Personal experience or preference for personal details.',risk:'This label is for organizing; it is not a privacy control.'},
-memoryImportance:{what:'Marks how useful this memory is for future recall.',example:'Choose Very important for a strong, lasting preference.',best:'Use a higher value only for information that matters often.',recommended:'Important for a useful everyday fact.',risk:'A high value does not make the fact more accurate.'},
-saveMemory:{what:'Saves this information to Chit’s memory for use in chat.',example:'Save “I prefer metric measurements.”',best:'Check that the sentence is clear and contains no secret information.',recommended:'One useful fact per memory.',risk:'This is stored immediately; delete it later if it is no longer wanted.'},
-dataConfig:{what:'Chooses which saved training plan to inspect.',example:'Choose Everyday assistant to see its training files and readiness.',best:'Use the same plan you intend to train.',recommended:'Everyday assistant when available.',risk:'Inspection is read-only; choosing a plan does not start training.'},
-dataSource:{what:'Names a text file already present in the server’s training folder.',example:'“lessons.txt”',best:'Enter only the file name, not a computer path or web address.',recommended:'Preview the split before writing files.',risk:'The file must exist on the server and fit its size limit.'},
-overwriteSplit:{what:'Allows a new split to replace the plan’s current training files.',example:'Leave this off unless you have reviewed the preview and want to replace existing files.',best:'Keep it off for the first attempt.',recommended:'Off.',risk:'The old files are replaced; the server keeps a backup.'},
-inspectData:{what:'Checks which training files this plan will use and whether they are ready.',example:'Inspect the plan before training.',best:'Fix any missing-file or size warnings first.',recommended:'Run before every new training run.',risk:'This only reads file information.'},
-previewSplit:{what:'Shows how a text file would be divided without writing anything.',example:'Preview a file split, then review the estimated training and review portions.',best:'Always preview before creating a split.',recommended:'Use the default paragraph split for conversation text.',risk:'Preview does not change files.'},
-applySplit:{what:'Writes new training and review files from the selected text file.',example:'Use after a preview shows the right files and sizes.',best:'Keep a backup of your source file and confirm the selected plan.',recommended:'Do not replace existing files unless you mean to.',risk:'This changes training files. Replacing old files keeps a backup but affects future training.'},
-refreshModel:{what:'Reloads the current server and model status.',example:'Use after a model finishes training.',best:'Check this before troubleshooting an answer.',recommended:'No setting needed.',risk:'This only reads status.'},
-diagnosticConfig:{what:'Chooses which plan’s training files to check.',example:'Pick the same plan you use for training.',best:'Compare the plan’s text reader with the active model.',recommended:'Everyday assistant when available.',risk:'This check does not start training.'},
-runDiagnostics:{what:'Checks the server, model, readiness, training files, and recent jobs.',example:'Run this after an unexpected or unreadable reply.',best:'Review any attention messages and follow their suggested next steps.',recommended:'Run after choosing the plan that produced the problem.',risk:'These checks are read-only; they cannot prove that a model will answer well.'},
-diagnosticPrompt:{what:'The short request sent to the active model for a sample reply.',example:'“Reply with one clear sentence: What is a library?”',best:'Use a simple prompt so the sample is easy to judge.',recommended:'Keep the suggested example for a basic check.',risk:'The request uses compute, but does not create a saved conversation.'},
-runDiagnosticPrompt:{what:'Generates one sample answer from the active model.',example:'Use it to see whether the model can produce a clear sentence.',best:'Run the checks first, then judge the sample yourself.',recommended:'Use a short, familiar prompt.',risk:'This uses compute and is not a full quality test.'},
-responseReadable:{what:'Records that the sample looks readable to you.',example:'Choose this when the answer is understandable and on topic.',best:'Judge clarity and relevance, not whether you agree with every detail.',recommended:'Use only after reading the full sample.',risk:'This is your feedback; it does not change model settings.'},
-responseGarbled:{what:'Shows next steps for unreadable or off-topic sample answers.',example:'Choose this if the answer is mostly broken text or ignores the prompt.',best:'Run the system checks and inspect the selected plan’s training files.',recommended:'Use when the sample is hard to understand.',risk:'This feedback does not automatically retrain or change the model.'},
-openTrainingLibrary:{what:'Opens the training file inspection screen.',example:'Use it to read warnings about missing or small training files.',best:'Inspect the same plan selected in Troubleshooting.',recommended:'Review warnings before training.',risk:'The inspection itself does not change files.'},
-openStudio:{what:'Opens learning plan selection and training history.',example:'Use after checking that training material is ready.',best:'Read the selected plan details before starting.',recommended:'Use a plan suited to your available training data and hardware.',risk:'Starting training uses compute and may take time.'},
-trainConfig:{what:'Chooses the model size, context, study schedule, and text files used for a training run.',example:'Choose Everyday assistant to see its settings before training.',best:'Read the explanation below the selector and inspect its data first.',recommended:'Everyday assistant for normal assistant examples, when available.',risk:'Larger or longer plans use more time and memory. Training data quality affects results.'},
-startTrain:{what:'Starts a training run from the selected plan’s regular training files.',example:'Choose a plan, inspect its files, then start learning.',best:'Start only when training data is ready and no other run is active.',recommended:'Build on the current brain unless you intentionally need a fresh start.',risk:'Uses compute and may take time. The live model is kept unless the candidate completes and is promoted.'},
-lessonScope:{what:'Chooses whether to train on every saved lesson or only lessons not yet learned.',example:'Use pending lessons to focus on new material.',best:'Use all lessons when you want Chit to revisit the complete lesson set.',recommended:'All lessons.',risk:'Training only pending lessons may give less review of older material.'},
-trainKnowledge:{what:'Starts a learning run using lessons saved under Teach Chit.',example:'Save a few checked lessons, then choose Learn saved lessons.',best:'Inspect lessons and training files first.',recommended:'All lessons for balanced review, or pending for only new lessons.',risk:'Uses compute. Lessons are marked learned only if the model is promoted.'},
-apiMethod:{what:'Chooses whether the request reads information, creates or changes something, or deletes it.',example:'GET reads; POST performs an action; DELETE removes an item.',best:'Use the method shown on the selected API topic.',recommended:'Do not change it unless you know why.',risk:'POST and DELETE requests can change saved data or start work.'},
-apiGuideSearch:{what:'Finds matching sections in the complete plain-English API guide.',example:'Search for “temperature” to find generation settings.',best:'Use a short word or endpoint name.',recommended:'Leave blank to read the whole guide.',risk:'Search only hides sections on this page; it does not change data.'},
-clearApiGuideSearch:{what:'Clears the guide search and shows all guide sections again.',example:'Choose after finishing a search.',best:'Use when you want to browse other topics.',recommended:'No setting needed.',risk:'This only changes what is shown.'},
-runGuidedApi:{what:'Sends the request shown in the live JSON preview.',example:'Choose an operation, review each field and preview, then send.',best:'Check the route, values, and effects before sending.',recommended:'Use the guided controls for ordinary requests.',risk:'The request can save or remove information or start training.'},
-apiPath:{what:'The server action selected in the API reference.',example:'The route is filled in when you choose a topic above.',best:'Leave the selected route unchanged unless using a known ID.',recommended:'Use the example route supplied by the topic.',risk:'Changing the route can target a different action.'},
-apiQuery:{what:'Optional search or filtering choices for an advanced request.',example:'The selected topic fills in a working example when one is needed.',best:'Use the guided screen if you do not know these settings.',recommended:'Keep the supplied example.',risk:'Incorrect values can make the request fail or show a different set of records.'},
-apiBody:{what:'The advanced information sent with a request that creates or changes something.',example:'The selected topic fills in a sample when it needs one.',best:'Prefer the guided screen; it checks common values for you.',recommended:'Keep the supplied example unless you understand each field.',risk:'A request can start training or change saved information. Review it before sending.'},
-runApi:{what:'Sends the request shown in the advanced editor.',example:'Use after selecting an API topic and reviewing its example.',best:'Read the topic guide and confirm the method, route, and body.',recommended:'Use a guided screen for routine tasks.',risk:'Some requests change or delete data, or start long-running training.'},
-apiKeySubmit:{what:'Checks the key and opens the Chit console.',example:'Enter the key, then choose Continue.',best:'Use the key from the server owner.',recommended:'Sign in only on the trusted Chit address.',risk:'Never share your key.'},
-refreshSessions:{what:'Reloads your saved conversation list.',example:'Choose after creating a conversation.',best:'Use if the list is out of date.',recommended:'No setting needed.',risk:'Read-only.'},
-logout:{what:'Locks the console and clears session credentials from this browser.',example:'Choose Lock console before leaving your workstation.',best:'Lock the console whenever you finish your session.',recommended:'Lock console when away from your computer.',risk:'You will need the server API key to sign in again.'},
-refreshFactsBtn:{what:'Fetches recent personalized facts Chit remembered during this conversation.',example:'Click after stating your name, role, or preferences.',best:'Verify what session context Chit is currently holding in memory.',recommended:'Check whenever you want to confirm Chit registered your statements.',risk:'Read-only; does not change or delete facts.'},
-clearFactsBtn:{what:'Instructs Chit to permanently forget all personalized facts learned during this session.',example:'Click if Chit learned an outdated or mistaken preference.',best:'Use when switching contexts or clearing personal details.',recommended:'Click to clear session-specific facts.',risk:'Permanently deletes all extracted facts for this conversation from sessions.db.'},
-forcePromote:{what:'Bypasses the 50 Golden Gate automated safety evaluations when promoting a candidate model.',example:'Check only in local development when testing raw checkpoints without running full evaluation.',best:'Keep unchecked in production to maintain safety guarantees.',recommended:'Unchecked.',risk:'Promoting an unevaluated model may introduce hallucinations or regressed accuracy.'},
-reloadModelBtn:{what:'Reloads the active model checkpoint from disk into runtime memory.',example:'Use if a checkpoint was updated on disk outside the browser.',best:'Click to ensure the runtime is serving the latest champion weights.',recommended:'Use after manual server-side checkpoint updates.',risk:'Momentarily pauses active inference while reloading weights.'},
-rollbackModelBtn:{what:'Reverts the live model to a previously saved checkpoint by SHA-256 fingerprint.',example:'Enter a valid checkpoint hash and click Rollback.',best:'Use to recover if a recently promoted candidate performs poorly.',recommended:'Keep previous checkpoint hashes documented.',risk:'Immediately replaces the active neural weights with the selected historical checkpoint.'},
-rollbackHashInput:{what:'The SHA-256 fingerprint or identifier of the historical checkpoint to roll back to.',example:'Paste the 64-character hash of a known stable checkpoint.',best:'Obtain the exact hash from Studio training history.',recommended:'Verify the hash before initiating rollback.',risk:'Entering an invalid hash will cause the rollback to fail.'}
+  activeAiHelpWrap:{what:'Shows the exact date and time of the AI checkpoint file currently powering your chats.',example:'Compare this timestamp with a finished job in Studio to confirm which trained model is currently live.',best:'Check this after promoting a new candidate model or rolling back to an older version.',recommended:'Verify this timestamp whenever you update the live AI.',risk:'Read-only indicator; clicking it does not change the model.'},
+  apiKey:{what:'Lets this browser sign in to Chit. The key stays safely on the server for your current browser session.',example:'Paste the API key given to you by the server owner.',best:'Only enter the key on your trusted Chit page. Never share it in screenshots or messages.',recommended:'Use the API key configured for this server.',risk:'Anyone with this key can change saved data or start training runs.'},
+  chatInput:{what:'Write your message or question for Chit here. Chit keeps track of the conversation and uses relevant saved memories.',example:'“What is Chit and how does its memory work?”',best:'Ask one clear question at a time and include any helpful details.',recommended:'Write a complete sentence; press Enter to send or Shift+Enter for a new line.',risk:'Chit is a compact AI and can make mistakes. Double-check important facts.'},
+  chatTask:{what:'Chooses which trained skill Chit should use for your message, or lets Chit pick the best skill automatically.',example:'Leave on "Auto / Everyday Chat" for normal use, or choose "Grammar & Writing" when fixing a sentence.',best:'Use "Auto / Everyday Chat" most of the time—Chit\'s Router automatically switches to Knowledge, Behavior, Grammar, or Reasoning when your question needs it.',recommended:'Auto / Everyday Chat.',risk:'Choosing "Continue Raw Text" extends your text directly without chat formatting, thinking steps, or web search.'},
+  sendChat:{what:'Sends your message to Chit and adds the reply to this conversation.',example:'Type a message and click Send message (or press Enter).',best:'Give Chit enough context to answer clearly.',recommended:'Start a new conversation when switching to a completely different topic.',risk:'Messages are saved in your current conversation session.'},
+  newChat:{what:'Starts a fresh conversation with a clean slate so earlier messages do not influence the next reply.',example:'Click New conversation before switching from a math question to a writing task.',best:'Keep each conversation focused on one subject.',recommended:'Use whenever you change topics.',risk:'This does not delete your previous chat; you can still find it in Conversations.'},
+  thinkToggle:{what:'Turns on step-by-step thinking (Task: reasoning). Chit works through the problem in a collapsible "Thought process" box before giving its final answer.',example:'Turn on for word problems, logic puzzles, or multi-step questions.',best:'Use when a question needs careful deduction. Leave off for simple greetings or quick facts.',recommended:'Turn on for math and logic; leave off for casual chat.',risk:'Takes a little longer because Chit writes out its thinking steps first.'},
+  searchToggle:{what:'Lets Chit search the web for fresh facts before answering your message.',example:'Turn on when asking about recent events, live facts, or topics outside Chit\'s saved memories.',best:'Use when you need up-to-date information from the internet.',recommended:'Leave off for normal chat; turn on when you need live web facts.',risk:'Adds about 1–2 seconds for the internet search and requires server internet access.'},
+  genPrompt:{what:'The question, instruction, or starting text you want Chit to respond to.',example:'“Explain why leaves change colour in autumn.”',best:'State clearly what you want Chit to write or solve.',recommended:'A short, clear request works best.',risk:'Very long prompts leave less space in the context window for Chit\'s answer.'},
+  genMode:{what:'Chooses whether Chit answers your request like an assistant or continues writing directly from your text.',example:'Choose “Answer my request” for a question; choose “Continue my text” for an unfinished sentence.',best:'Use “Answer my request” for almost all questions and tasks.',recommended:'Answer my request.',risk:'“Continue my text” extends your words directly without assistant formatting, thinking steps, or web search.'},
+  genTask:{what:'Selects which trained skill header (Task: chat, knowledge, behavior, grammar, reasoning, or prose) Chit uses in assistant mode.',example:'Choose "Grammar & Writing" to rewrite a sentence, or "Knowledge & Facts" for factual Q&A.',best:'Leave on "Auto / Everyday Chat" if you want Chit\'s Router to pick the best skill automatically.',recommended:'Auto / Everyday Chat.',risk:'Only used when "How should Chit respond?" is set to "Answer my request".'},
+  genTokens:{what:'Sets the maximum length of Chit’s reply.',example:'Choose “Concise” for a quick answer or “Detailed” for a fuller explanation.',best:'Start with Detailed and increase only if the answer gets cut off.',recommended:'Detailed (160 bytes/tokens).',risk:'Very long settings take more time and can cause a small model to wander off topic.'},
+  genTemp:{what:'Controls how steady or creative Chit’s wording is.',example:'0.0 gives the most reliable, repeatable answer; 0.4–0.7 allows more varied phrasing.',best:'Lower it toward 0.0 if answers look inconsistent or off-track.',recommended:'0.0 for factual accuracy; 0.4 for everyday writing.',risk:'High values (above 0.8) increase the chance of spelling errors or nonsense words.'},
+  genTopK:{what:'Limits how many possible next characters or words Chit considers at each step.',example:'A smaller number keeps choices narrow; 50 is the standard balance.',best:'Leave at 50 unless you are experimenting with creative writing.',recommended:'50 (has no effect when Creativity is set to 0).',risk:'Very small values can make phrasing stiff or repetitive.'},
+  genSearch:{what:'Searches the web for live facts before generating a one-time assistant answer.',example:'Check this box when asking a factual question about the real world.',best:'Use in "Answer my request" mode when you want web-grounded facts.',recommended:'Unchecked for general writing; checked for live factual questions.',risk:'Only works in "Answer my request" mode (automatically disabled in "Continue my text" mode).'},
+  genThink:{what:'Turns on step-by-step Chain-of-Thought reasoning before generating the final answer.',example:'Check this box when asking a logic puzzle or multi-step question.',best:'Use in "Answer my request" mode for questions that benefit from working through steps.',recommended:'Checked for reasoning tasks; unchecked for simple questions.',risk:'Only works in "Answer my request" mode and uses extra tokens for the thinking steps.'},
+  runGenerate:{what:'Sends your prompt to Chit and shows the one-time response below without saving a conversation.',example:'Fill in your prompt and click Generate.',best:'Use this to test prompts or get a quick standalone answer.',recommended:'Use the Chat screen instead if you want a multi-turn conversation.',risk:'Longer responses take slightly more time and processor work.'},
+  refreshSessions:{what:'Reloads your list of saved conversations from the server.',example:'Click Refresh conversations after starting or deleting a chat.',best:'Use if a recent conversation is not showing up yet.',recommended:'Click whenever you want the latest list.',risk:'Safe and read-only; does not change any saved conversations.'},
+  lessonKind:{what:'Chooses what kind of lesson you are teaching Chit: a short fact passage, a question-and-answer pair, or a step-by-step reasoning example.',example:'Pick "A question and its answer" for direct Q&A, or "A step-by-step reasoning example" to teach how to solve a problem.',best:'Match the lesson type to how you want Chit to use the knowledge later.',recommended:'A question and its answer for clear facts; step-by-step reasoning for logic.',risk:'Inaccurate lessons can teach Chit wrong answers when trained.'},
+  lessonSource:{what:'An optional note reminding you where this lesson came from.',example:'“Project handbook” or “Team notes”.',best:'Add a short source note so you know why this lesson was saved.',recommended:'Optional; leave blank if not needed.',risk:'Do not put private or secret details in the source note.'},
+  lessonText:{what:'The fact or short paragraph you want Chit to study in a future training run (taught under Task: prose / knowledge).',example:'“Chit uses a 256-entry UTF-8 byte tokenizer so every character is read cleanly.”',best:'Write clear, complete sentences and check your spelling.',recommended:'Keep each lesson focused on one clear idea.',risk:'Chit only learns this into its neural weights after you run training in Studio.'},
+  lessonQuestion:{what:'The question Chit should learn to answer (taught under Task: knowledge).',example:'“What tokenizer does Chit use?”',best:'Phrase the question the way a real person would ask it.',recommended:'One clear, direct question.',risk:'Overly vague questions make it harder for Chit to learn a clean match.'},
+  lessonAnswer:{what:'The clear, accurate answer Chit should give for the question above.',example:'“Chit uses a 256-entry UTF-8 byte-level tokenizer.”',best:'Give a direct, honest answer in simple sentences.',recommended:'Keep the answer concise and factual.',risk:'If the answer contains mistakes, Chit may repeat those mistakes after training.'},
+  lessonInput:{what:'The problem or question that requires step-by-step thinking (taught under Task: reasoning).',example:'“If a notebook costs 15 rupees and a pen costs 5 rupees, how much do 2 notebooks and 1 pen cost?”',best:'Write a clear problem where working through steps leads to the answer.',recommended:'One self-contained problem per lesson.',risk:'Make sure the problem statement includes all information needed to solve it.'},
+  lessonReasoning:{what:'The step-by-step thinking Chit should write out before giving the final answer.',example:'“Two notebooks cost 2 * 15 = 30 rupees. Adding one 5-rupee pen gives 30 + 5 = 35 rupees.”',best:'Show each logical step clearly in order.',recommended:'1 to 3 clear sentences showing the deduction steps.',risk:'Skipping steps or writing faulty logic can confuse the model during training.'},
+  lessonReasoningAnswer:{what:'The final conclusion or answer reached at the end of the reasoning steps.',example:'“The total cost is 35 rupees.”',best:'State the final answer clearly so it matches the steps above.',recommended:'A short, direct final answer sentence.',risk:'Make sure the final answer agrees with the step-by-step thinking.'},
+  rememberLesson:{what:'Also saves this lesson into Chit’s long-term memory right now so Chat can recall it immediately without waiting for training.',example:'Check this box when teaching a fact you want Chit to know in your very next chat message.',best:'Turn on for important facts you want available right away.',recommended:'Checked for facts you need today; unchecked for bulk training lessons.',risk:'Creates both a memory and a lesson; deleting one later does not automatically delete the other.'},
+  saveLesson:{what:'Saves this lesson into Chit’s training queue so it can be included in future learning runs.',example:'Review your text or Q&A fields, then click Save lesson.',best:'Double-check spelling and accuracy before saving.',recommended:'Save clear, verified facts and examples.',risk:'Saving queues the lesson; run "Learn saved lessons" in Studio when you want to train the model on it.'},
+  knowledgeFilter:{what:'Filters the saved lessons list to show lessons waiting for training, lessons already trained, or all lessons.',example:'Choose “Ready to learn” to see what is queued for the next training run.',best:'Review “Ready to learn” before starting a lesson training job in Studio.',recommended:'Ready to learn.',risk:'Only changes which lessons are displayed on screen.'},
+  refreshKnowledge:{what:'Reloads the saved lessons list and updates the learning pipeline counts.',example:'Click Refresh lessons after adding or deleting lessons.',best:'Use if the lesson list looks out of date.',recommended:'Click to refresh the view.',risk:'Safe and read-only.'},
+  memSearch:{what:'Type a word or phrase here to search through Chit’s saved long-term memories.',example:'Type “simple English” or “project” to find matching memories.',best:'Use one or two specific keywords from the fact you are looking for.',recommended:'Search with a key noun or topic word.',risk:'Searching only reads memories; it never changes them.'},
+  doMemSearch:{what:'Runs the search and displays matching saved memories below.',example:'Type a keyword in Search memories and click Search.',best:'If no results appear, try a shorter keyword.',recommended:'Use whenever you want to review or clean up saved memories.',risk:'Safe and read-only.'},
+  newMemory:{what:'Write a fact or preference that Chit should remember and use immediately in conversations.',example:'“I prefer concise answers in simple English.”',best:'Write one short, clear statement that will be useful in future chats.',recommended:'Save helpful personal preferences or key project facts.',risk:'Saved immediately in memory. Do not store passwords or sensitive personal secrets.'},
+  memoryType:{what:'Labels whether this memory is a personal preference/experience or a general fact.',example:'Choose “Personal experience or preference” for how you like answers written; choose “A useful fact” for reference info.',best:'Pick whichever label best describes the note.',recommended:'Personal experience or preference for user details.',risk:'Used only to organize memories; both types can be recalled in chat.'},
+  memoryImportance:{what:'Sets how strongly this memory should stand out when Chit looks for relevant context.',example:'Choose “Very important” for core rules or preferences you want recalled often.',best:'Use “Important” for most facts and “Very important” for top priorities.',recommended:'Important (0.5).',risk:'Higher importance makes a memory more likely to be recalled, but does not verify that the text is true.'},
+  saveMemory:{what:'Saves the fact above into Chit’s long-term memory so Chat can recall it right away.',example:'Write a clear sentence and click Save memory.',best:'Check that the sentence is accurate before saving.',recommended:'One clear fact per memory card.',risk:'Stored immediately; you can delete it anytime from the memory search results.'},
+  dataConfig:{what:'Chooses which learning recipe’s training and review files you want to inspect or split.',example:'Pick “Everyday assistant” or “Full Unified Curriculum (6L-256)” to check its dataset files.',best:'Select the same learning recipe you plan to run in Studio.',recommended:'Match your intended Studio learning plan.',risk:'Choosing a recipe here is read-only and does not start training.'},
+  dataSource:{what:'The name of a raw text file inside the server’s data folder that you want to split into training and review files.',example:'“lessons.txt” or “corpus.txt”',best:'Type only the file name (no folder slashes or computer paths).',recommended:'Always click "Preview a file split" before creating files.',risk:'The file must already exist in the server’s data folder.'},
+  overwriteSplit:{what:'Allows "Create train and review files" to replace existing training files for the selected recipe (the server saves a backup copy first).',example:'Leave unchecked while previewing; check only when you intentionally want to replace the files.',best:'Keep unchecked until you have reviewed the split preview.',recommended:'Unchecked by default.',risk:'Replaces the recipe’s train and eval files used by future training runs.'},
+  inspectData:{what:'Checks whether the selected learning recipe’s training and review files exist, how many examples they have, and whether they are ready for training.',example:'Select a recipe and click Inspect training material.',best:'Run this check before starting a training job in Studio.',recommended:'Check every recipe before training.',risk:'Safe and read-only; does not change any files.'},
+  previewSplit:{what:'Shows a safe preview of how the text file would be divided into training (90%) and review (10%) examples without changing any files on disk.',example:'Enter a file name and click Preview a file split.',best:'Always preview first to make sure the example counts look right.',recommended:'Preview before creating any split.',risk:'Safe and read-only; no files are modified.'},
+  applySplit:{what:'Divides the named text file and writes the resulting training and review files to disk for the selected recipe.',example:'Use after "Preview a file split" shows the expected example counts.',best:'Confirm the selected learning recipe before clicking.',recommended:'Keep "Replace existing training files" unchecked unless you intend to overwrite.',risk:'Writes files in the server data folder that future training runs will study.'},
+  refreshModel:{what:'Reloads the summary of Chit’s current server health, loaded brain size, and processor device.',example:'Click Refresh status after promoting or reloading a model.',best:'Use to confirm the active brain is loaded and ready.',recommended:'Click anytime to refresh.',risk:'Safe and read-only.'},
+  diagnosticConfig:{what:'Selects which learning plan to compare against the currently active AI brain during health checks.',example:'Choose the learning plan that trained your current checkpoint.',best:'Compare the plan’s tokenizer and context window with the live model.',recommended:'Everyday assistant or Full Unified Curriculum (6L-256).',risk:'Safe and read-only; does not start training.'},
+  runDiagnostics:{what:'Runs a full check of the server connection, active AI brain, text reader (tokenizer), training data files, and recent training jobs.',example:'Click Check Chit when answers look garbled or unexpected.',best:'Read the green/orange check cards and follow any suggested next steps.',recommended:'Run whenever troubleshooting model behavior.',risk:'Safe and read-only.'},
+  diagnosticPrompt:{what:'A simple test question sent to the live AI to check whether it replies with a clean, readable English sentence.',example:'“Reply with one clear sentence: What is a library?”',best:'Keep the test prompt short and simple so it is easy to judge the reply.',recommended:'Use the provided default test sentence.',risk:'Runs one quick generation without saving a chat session.'},
+  runDiagnosticPrompt:{what:'Sends the test prompt above to Chit and displays the sample answer so you can judge its clarity.',example:'Click Generate a sample response, then read the output box below.',best:'Run "Check Chit" first, then test a sample response.',recommended:'Use to verify the live AI writes clean English.',risk:'Uses a small amount of processor work to generate one reply.'},
+  responseReadable:{what:'Notes that the sample answer looks clear and readable, and explains what to check if a specific chat question still gave trouble.',example:'Click Readable when the sample sentence makes sense.',best:'Use after reading the generated sample reply.',recommended:'Click when the test output is clean.',risk:'Only shows helpful guidance on screen; does not change model settings.'},
+  responseGarbled:{what:'Shows step-by-step troubleshooting advice when the sample answer looks broken, repetitive, or off-topic.',example:'Click Garbled or off-topic if the sample reply is unreadable.',best:'Follow the suggested checks for tokenizer match and checkpoint health.',recommended:'Click when the test output looks broken.',risk:'Only shows helpful guidance on screen; does not retrain the model automatically.'},
+  openTrainingLibrary:{what:'Takes you directly to the Training library screen so you can inspect training files and warnings.',example:'Click Review training material if diagnostics reported a data warning.',best:'Inspect the same learning plan you checked in Troubleshooting.',recommended:'Use when checking data readiness.',risk:'Safe navigation button.'},
+  openStudio:{what:'Takes you directly to the Studio screen where you can review learning plans and training jobs.',example:'Click Open learning plans to view or start training runs.',best:'Review the plan details before starting a training run.',recommended:'Use when you are ready to manage models in Studio.',risk:'Safe navigation button.'},
+  trainConfig:{what:'Selects the learning plan (model architecture, training steps, and Task-header dataset files) to view or train in Studio.',example:'Choose “Stage 1: English & Grammar Foundation (6L-256)” or “Full Unified Curriculum (6L-256)” to read its details.',best:'Read the explanation card below this selector before starting training.',recommended:'Everyday assistant or the 6L-256 staged curriculum plans.',risk:'Selecting a plan only displays its details; training does not start until you click Start learning.'},
+  startTrain:{what:'Starts a background training job using the selected learning plan’s training files.',example:'Choose a learning plan, review its settings, and click Start learning with this plan.',best:'Make sure your machine has enough free CPU/RAM and no other job is running.',recommended:'Keep "Force this candidate live" unchecked so the new model is safety-tested before going live.',risk:'Training uses heavy CPU/memory resources and can take a long time on a developer laptop.'},
+  lessonScope:{what:'Chooses whether "Learn saved lessons" trains on every lesson you have saved or only on new lessons not yet trained.',example:'Choose “All lessons (recommended)” to review everything together, or “Only lessons not yet learned” for a quick update.',best:'Use “All lessons” so Chit does not forget earlier lessons while studying new ones.',recommended:'All lessons (recommended).',risk:'Training only on pending lessons gives the model less review of older lessons.'},
+  trainKnowledge:{what:'Starts a background training run that studies the lessons you saved in Teach Chit.',example:'Save your lessons in Teach Chit, then come to Studio and click Learn saved lessons.',best:'Review your pending lessons in Teach Chit first to make sure they are accurate.',recommended:'Include All lessons and test the resulting candidate before making it live.',risk:'Uses processor and memory resources to train a new candidate model.'},
+  apiMethod:{what:'Selects the HTTP action type for the raw JSON editor: GET reads data, POST sends or starts something, PATCH updates a setting, and DELETE removes an item.',example:'GET /health reads server health; POST /chat sends a chat message.',best:'Let the operation buttons above fill this in automatically.',recommended:'Use the method set by the chosen operation.',risk:'POST, PATCH, and DELETE can change saved data or start training.'},
+  apiGuideSearch:{what:'Filters the full Chit API Guide below so only sections matching your search word are shown.',example:'Type “confidence”, “task”, or “sessions” to jump to matching guide sections.',best:'Search with one short keyword or route name.',recommended:'Leave blank to browse the entire guide.',risk:'Only filters the guide text on screen.'},
+  clearApiGuideSearch:{what:'Clears the search box above and shows all sections of the Chit API Guide again.',example:'Click Clear search when you want to read the full guide.',best:'Use after finishing a keyword search.',recommended:'Click to reset the guide view.',risk:'Only resets the guide filter on screen.'},
+  runGuidedApi:{what:'Sends the API request built in the guided form above and explains the server’s response in plain English.',example:'Fill in the guided fields, check the "JSON Chit will receive" preview, and click Send this request.',best:'Review the JSON preview before sending.',recommended:'Use this guided button rather than the raw JSON editor whenever possible.',risk:'Runs the selected action on the live server.'},
+  apiPath:{what:'The server endpoint path for the advanced raw JSON editor (such as /health or /chat).',example:'/chat or /sessions/0123456789abcdef0123456789abcdef',best:'Click an operation button at the top of the page to fill this path automatically.',recommended:'Keep the path from the selected operation.',risk:'Changing the path targets a different server action.'},
+  apiQuery:{what:'Optional URL filter parameters (as a JSON object) for the advanced request editor.',example:'{"limit": 50, "offset": 0}',best:'Use the guided form above unless you are testing custom query parameters.',recommended:'Keep the example JSON object.',risk:'Invalid JSON or out-of-range numbers will cause the request to fail.'},
+  apiBody:{what:'The raw JSON data sent with POST or PATCH requests in the advanced editor.',example:'{"message": "Hello, Chit.", "task": "chat", "temperature": 0}',best:'Prefer the guided form above, which builds valid JSON for you automatically.',recommended:'Use the example body filled in by the chosen operation.',risk:'Invalid JSON or unsupported fields will be rejected by the server.'},
+  runApi:{what:'Sends the raw JSON request from the advanced editor to the Chit server.',example:'Review the Method, API path, Query, and Body fields, then click Send API request.',best:'Double-check your JSON syntax before clicking.',recommended:'Use "Send this request" in the guided builder for everyday use.',risk:'Executes directly on the live server and can modify data or start training.'},
+  apiKeySubmit:{what:'Verifies your API key and unlocks the Chit Console for this browser session.',example:'Paste your server API key and click Continue.',best:'Sign in only on your trusted Chit server address.',recommended:'Enter the configured CHIT_API_KEY.',risk:'Never share your API key with untrusted parties.'},
+  logout:{what:'Signs out and locks the Chit Console in this browser window.',example:'Click Lock console when you finish working or step away from your computer.',best:'Lock the console whenever using a shared computer.',recommended:'Click when done with your session.',risk:'You will need to enter the API key again to unlock the console.'},
+  refreshFactsBtn:{what:'Checks what personal facts (like your name or preferences) Chit has automatically remembered during this chat session.',example:'Click Check for new facts after telling Chit something about yourself.',best:'Use to see the exact session facts Chit is keeping in mind for this conversation.',recommended:'Click anytime during an active chat.',risk:'Safe and read-only.'},
+  clearFactsBtn:{what:'Tells Chit to forget all personal facts it extracted during this specific conversation.',example:'Click Forget these facts if Chit picked up a mistaken detail in this chat.',best:'Use when you want to clear session-specific facts without deleting the whole conversation.',recommended:'Click only when you want to wipe this session\'s extracted facts.',risk:'Permanently clears the remembered facts for this conversation session.'},
+  forcePromote:{what:'Automatically makes the newly trained model your live AI as soon as training finishes, skipping the 50 safety tests and Bridge benchmark.',example:'Leave unchecked for normal use; check only if you intentionally want to skip safety testing.',best:'Keep unchecked so you can test and benchmark the candidate before making it live.',recommended:'Unchecked (safe default).',risk:'Replaces your live AI without checking whether the new model passes safety or quality gates.'},
+  reloadModelBtn:{what:'Reloads the live AI checkpoint file (checkpoints/latest.pt) from disk into server memory.',example:'Click Restart Live AI after updating checkpoint files on disk.',best:'Use when you want the server to re-read the live checkpoint and calibration curve from disk.',recommended:'Click after manual checkpoint updates.',risk:'Briefly pauses active chat generation for a second while reloading weights.'},
+  rollbackModelBtn:{what:'Restores the live AI back to an earlier archived checkpoint using its SHA-256 version ID.',example:'Paste a previous checkpoint SHA-256 ID into the box and click Undo Last Update (Rollback).',best:'Use if a newly promoted model gives worse answers than your previous version.',recommended:'Confirm the version ID before rolling back.',risk:'Immediately swaps the live AI back to the selected older checkpoint.'},
+  rollbackHashInput:{what:'Enter the SHA-256 version ID of the archived checkpoint you want to restore as the live AI.',example:'Paste the checkpoint SHA-256 fingerprint from an earlier model.',best:'Copy the exact ID rather than typing it by hand.',recommended:'Use a known good checkpoint ID.',risk:'An unknown or mistyped ID will be rejected safely without changing the live AI.'}
 };
 function inferredHelp(element){
-      if(element.classList.contains('job-ai-stamp'))return {what:'The file timestamp of the latest.pt checkpoint inside this job\'s folder.',example:'If this matches the Live AI Checkpoint above, this checkpoint is the one you are currently using.',best:'Use this to verify if a promotion was successful.',recommended:'None.',risk:'None.'};
-
+    if(element.classList.contains('job-ai-stamp'))return {what:'Shows the exact date and time when this job\'s checkpoint file was saved.',example:'If this matches the "Live AI Checkpoint" timestamp at the top of Studio, this job is currently powering your chats.',best:'Compare this timestamp with the Live AI Checkpoint to see which version is active.',recommended:'Check after promoting a candidate.',risk:'Safe and read-only.'};
+    if(element.classList.contains('eval-btn'))return {what:'Tests this trained candidate model against Chit\'s 50 Golden Gate safety and honesty rules.',example:'Click "Test safety rules" after a training job finishes.',best:'Always run this safety test before promoting a new candidate model.',recommended:'Run before clicking "Make this the Live AI".',risk:'Runs in the background and takes a short time to score all 50 rules.'};
+    if(element.classList.contains('bench-btn'))return {what:'Tests how well the Bridge guides this candidate model (checking calculator math accuracy, confidence honesty, word loops, and response speed) and calibrates its confidence scores.',example:'Click "Benchmark Bridge & Calibrate" on a finished training job.',best:'Run this alongside "Test safety rules" so the model gets a calibrated confidence curve before going live.',recommended:'Run before promoting a candidate.',risk:'Runs in the background and uses processor work for about a minute.'};
+    if(element.classList.contains('promote-btn'))return {what:'Makes this tested candidate model your new live AI for all chats and generations, and activates its calibrated confidence curve.',example:'Click "Make this the Live AI" after the candidate passes its safety test.',best:'Promote only when Safety Test says Passed and Bridge metrics look healthy.',recommended:'Confirm you are ready to replace the current live AI.',risk:'Immediately swaps the live AI for all users; the previous version is archived for rollback.'};
+    if(element.classList.contains('retrieval-btn'))return {what:'Asks Chit to answer your last message again using live web search because Chit had low confidence in its first answer.',example:'Click "🌐 Search Web" when Chit warns that its confidence is low.',best:'Use when your question asks about real-world or recent facts.',recommended:'Click to ground the answer with live web search.',risk:'Sends your last message again with web search enabled.'};
     const label=element.getAttribute('aria-label')||element.labels?.[0]?.textContent?.trim()||element.textContent?.trim()||element.getAttribute('placeholder')||element.id||'This control';
     const view=element.dataset?.view;
     const words=(element.textContent||'').trim().toLowerCase();
-    if(element.closest?.('#loginForm'))return {what:'Checks your key and signs in to Chit.',example:'Enter your key, then choose Continue.',best:'Use the key given by the server owner.',recommended:'Sign in only on the trusted Chit page.',risk:'Your key can allow changes to Chit. Never share it.'};
-    if(words==='continue conversation')return {what:'Opens this saved chat so you can keep talking in the same context.',example:'Choose it on the conversation you want to reopen.',best:'Start a new chat for a new topic.',recommended:'Review the conversation title before opening.',risk:'New messages will be added to this saved conversation.'};
-    if(words==='delete'||words==='remove lesson')return {what:'Removes the selected saved conversation or lesson.',example:'Choose only after confirming you no longer need it.',best:'Review the item before removing it.',recommended:'Keep it if you are unsure.',risk:'This removes saved information and may not be undoable.'};
-    if(words==='use in chat'||words==='use')return {what:'Copies this fact into the Chat message box so you can ask Chit about it.',example:'Choose Use, then add a question about the fact.',best:'Check the inserted text before sending it.',recommended:'Use when you want to discuss this fact now.',risk:'The fact is added to your draft; it is not sent until you choose Send.'};
-    if(element.classList.contains('eval-btn'))return {what:'Tests this new AI version against 50 strict safety rules.',example:'Choose this to start the automatic grading process.',best:'Always test a new AI before trusting it.',recommended:'Required before you can make it the live AI.',risk:'Testing can take several minutes in the background.'};
-    if(element.classList.contains('promote-btn'))return {what:'Replaces your current AI with this new tested version.',example:'Choose this to swap out the AI.',best:'Do this only if the test score says YES.',recommended:'Make sure you want to replace your current AI.',risk:'This immediately changes the AI for all your chats.'};
-    if(words==='copy')return {what:'Copies Chit’s reply to your clipboard.',example:'Choose Copy, then paste the text where you need it.',best:'Review the answer before sharing it.',recommended:'Use when you want to reuse the reply.',risk:'Copied text may contain mistakes; check it before sharing.'};
-    if(words==='try another answer')return {what:'Asks Chit to answer your latest message again.',example:'Choose after a reply missed your intent.',best:'Make your original prompt clearer if the next reply is also wrong.',recommended:'Try once after checking the prompt.',risk:'This sends another request and uses compute.'};
-    if(words.includes('advanced tools'))return {what:'Reveals developer tools, including the interactive API reference and test editor.',example:'Click to toggle advanced tools and API explorer.',best:'Explore when integrating Chit with external HTTP applications.',recommended:'Open when inspecting raw API endpoints.',risk:'None; expanding this section is read-only.'};
-    if(words.includes('advanced response settings'))return {what:'Configures fine-grained inference parameters such as temperature, top-k, and token limits.',example:'Adjust response creativity and diversity.',best:'Keep defaults for general assistant tasks; tweak for creative writing.',recommended:'Default settings (temperature 0.0 or 0.4).',risk:'High temperature or extreme top-k may produce unreadable text.'};
-    if(words.includes('technical evidence and limits'))return {what:'Displays low-level diagnostic telemetry, tokenizer details, and context window limits.',example:'Inspect active block size and token count evidence.',best:'Review when troubleshooting model output or context truncation.',recommended:'Check when diagnosing unreadable output.',risk:'Read-only diagnostic inspection.'};
-    if(words.includes('save a memory for chit'))return {what:'Opens the manual memory creation drawer to store persistent user preferences.',example:'Save facts like dietary restrictions or coding styles.',best:'Store concise, permanent facts.',recommended:'One clear fact per memory.',risk:'Memories are stored in memory.db and influence future inference.'};
-    if(words.includes('edit the raw json request')||words.includes('raw json'))return {what:'Enables direct editing of raw HTTP JSON payloads sent to the Chit backend.',example:'Craft custom JSON bodies for POST requests.',best:'Use when testing specific API parameters.',recommended:'Use guided controls unless testing custom fields.',risk:'Malformed payloads will be rejected with HTTP 422.'};
-    if(words.includes('read the complete chit api guide')||words.includes('api guide'))return {what:'Displays full plain-English documentation for all allowlisted Chit API routes.',example:'Read detailed route descriptions and parameter tables.',best:'Browse to understand endpoint contracts.',recommended:'Review before integrating external applications.',risk:'Read-only documentation.'};
-    const navInfo={chat:{what:'Opens the conversation screen where you can talk with Chit.',example:'Choose Chat to ask a question and continue the conversation.',best:'Use one conversation for one topic.',recommended:'Start here for normal use.',risk:'Replies can be wrong; check important facts.'},conversations:{what:'Opens your saved conversation list.',example:'Choose one to continue it or remove it.',best:'Use this when you need to return to an earlier topic.',recommended:'No setting needed.',risk:'Deleting a conversation removes its saved messages.'},generate:{what:'Opens the one-time answer screen.',example:'Ask for one answer without saving a conversation.',best:'Use Chat for a back-and-forth exchange.',recommended:'Use the default response settings.',risk:'Long answers take longer and may be less focused.'},brain:{what:'Opens saved memories and lesson progress.',example:'Search for a memory or review learning counts.',best:'Use memory for facts Chit should recall now.',recommended:'No setting needed.',risk:'Deleting a memory removes it from recall.'},teach:{what:'Opens the lesson form for information Chit may learn later.',example:'Save one checked fact or question and answer.',best:'Keep lessons accurate and focused.',recommended:'Use a short, clear lesson.',risk:'Lessons affect the model only after training.'},studio:{what:'Opens learning plans and training progress.',example:'Choose a plan, read its settings, then start learning.',best:'Inspect data before training.',recommended:'Use the everyday assistant plan when available.',risk:'Training uses compute and may take time.'},data:{what:'Opens the training file inspection screen.',example:'Check that the plan has enough training text.',best:'Preview a file split before writing it.',recommended:'No setting needed.',risk:'Creating a split changes files used by future training.'},diagnostics:{what:'Opens checks for the server, model, tokenizer, data, and recent training.',example:'Use after a reply looks unreadable or unexpected.',best:'Run checks, then try the simple sample prompt.',recommended:'Choose the same plan that produced the problem.',risk:'Checks cannot guarantee that a model will answer correctly.'},explorer:{what:'Opens the plain-language API reference and optional technical editor.',example:'Choose a topic to see what it does and what it needs.',best:'Use the guided screens for normal tasks.',recommended:'Only open the request editor if you understand the selected route.',risk:'Advanced requests can change data or start work.'}};
+    if(element.closest?.('#loginForm'))return {what:'Checks your API key and signs in to the Chit Console.',example:'Enter your key and click Continue.',best:'Use the key configured by the server administrator.',recommended:'Sign in only on your trusted Chit page.',risk:'Your key unlocks full console access; keep it private.'};
+    if(words==='stop learning session')return {what:'Stops this running or queued training job immediately.',example:'Click "Stop learning session" if you started a training job by mistake or need to free up your computer\'s CPU and memory.',best:'Use whenever a training run is taking too long on your machine.',recommended:'Confirm when prompted to cancel the job.',risk:'Stops the training run; your current live AI remains untouched and keeps working normally.'};
+    if(words==='continue conversation')return {what:'Reopens this saved conversation in the Chat screen so you can keep talking with the same history and remembered facts.',example:'Click "Continue conversation" on the chat card you want to resume.',best:'Use when returning to an earlier topic.',recommended:'Check the conversation title and message count before opening.',risk:'New messages you send will be added to this saved conversation.'};
+    if(words==='delete'||words==='remove lesson')return {what:'Permanently deletes this saved conversation, memory, or lesson.',example:'Click Delete or Remove lesson when you no longer want this item stored.',best:'Read the item carefully before confirming deletion.',recommended:'Keep the item if you might still need it.',risk:'Deletion is permanent and cannot be undone.'};
+    if(words==='use in chat'||words==='use')return {what:'Copies this saved memory or lesson into the Chat message box so you can ask Chit about it right away.',example:'Click Use, then type your question below the inserted text and press Send.',best:'Review the text placed in the message box before sending.',recommended:'Use when you want to bring a saved fact directly into your current chat.',risk:'Only fills the chat input box; nothing is sent until you click Send message.'};
+    if(words==='copy'||words==='copied'||words==='clipboard unavailable')return {what:'Copies Chit’s final answer to your clipboard (without copying the internal thought trace).',example:'Click Copy on any Chit reply, then paste it into your notes or document.',best:'Review the answer before sharing it elsewhere.',recommended:'Use whenever you want to save or share a reply.',risk:'Copied text may still contain AI mistakes; verify important facts.'};
+    if(words==='try another answer')return {what:'Sends your last message to Chit again with a touch of variety (temperature 0.25) to try a fresh phrasing.',example:'Click "Try another answer" if the first reply felt stiff or missed your point.',best:'If the second try also misses, rephrase your question with more detail.',recommended:'Try once before rewording your question.',risk:'Sends another chat request and adds the new reply to this conversation.'};
+    if(words.includes('advanced tools'))return {what:'Opens or closes the Advanced tools menu in the sidebar, which holds the Guided API Reference.',example:'Click "Advanced tools" to reveal the API reference button.',best:'Open when you want to inspect or test Chit API routes directly.',recommended:'Keep closed for everyday chatting; open for developer exploration.',risk:'Safe and read-only; only shows or hides the menu item.'};
+    if(words.includes('advanced response settings'))return {what:'Opens optional controls for Creativity (temperature), Response variety (top-k), live Web search, and step-by-step Thinking.',example:'Click "Advanced response settings" to turn on Web search or Thinking for a one-time generation.',best:'Keep the default slider values for everyday tasks and open this panel when you need Web search or Thinking.',recommended:'Creativity 0.4, Response variety 50.',risk:'Setting Creativity very high can make answers less accurate.'};
+    if(words.includes('technical evidence and limits'))return {what:'Opens a detailed table of technical facts reported by the server, such as exact byte counts, tokenizer name, and why the last generation stopped.',example:'Click "Technical evidence and limits" after running "Check Chit" to inspect low-level numbers.',best:'Use when troubleshooting context truncation or tokenizer mismatches.',recommended:'Open after running a diagnostic check.',risk:'Safe and read-only.'};
+    if(words.includes('save a memory for chit'))return {what:'Opens the form where you can type a new fact or personal preference into Chit’s long-term memory.',example:'Click "Save a memory for Chit" to add a preference like "I work in Python".',best:'Save short, clear facts that will be useful across many conversations.',recommended:'One fact per memory.',risk:'Only opens or closes the form until you click Save memory.'};
+    if(words.includes('edit the raw json request')||words.includes('raw json'))return {what:'Opens the raw HTTP JSON editor for developers who want to edit request bodies directly.',example:'Click to view or edit the raw Method, Path, Query, and JSON Body.',best:'Use the guided form builder above unless you need to test custom JSON.',recommended:'Guided form builder for everyday use.',risk:'Malformed JSON will be rejected by the server.'};
+    if(words.includes('read the complete chit api guide')||words.includes('api guide'))return {what:'Opens the complete plain-English Chit API Guide right inside this page, with a live search box.',example:'Click to browse or search all API routes, task headers, and troubleshooting tips.',best:'Use the search box inside to quickly find any topic.',recommended:'Read when learning how the API works.',risk:'Safe and read-only.'};
+    if(words.includes('example, recommended use and risk'))return {what:'Shows a quick summary of an example value, best practice, and what to watch out for on this API field.',example:'Click to expand the field tip below the input box.',best:'Read before changing an unfamiliar API field.',recommended:'Expand whenever you want a quick reminder.',risk:'Safe and read-only.'};
+    if(words.includes('show the complete response json'))return {what:'Shows the exact raw JSON data returned by the server for this API request.',example:'Click after sending a guided API request to inspect the full JSON payload.',best:'Use when debugging or building an app that calls the Chit API.',recommended:'Read the plain-English summary above first, then open raw JSON if needed.',risk:'Safe and read-only.'};
+    const navInfo={chat:{what:'Opens the Chat screen where you can talk back and forth with Chit using saved memories, web search, and automatic Task skill routing.',example:'Click Chat in the left sidebar to start or continue a conversation.',best:'Use one conversation per topic for the clearest answers.',recommended:'Start here for everyday use.',risk:'Always double-check important facts in AI replies.'},conversations:{what:'Opens your list of saved conversations so you can reopen an earlier chat or delete old ones.',example:'Click Conversations to find and resume a previous discussion.',best:'Reopen a conversation when continuing the same topic.',recommended:'Delete old test chats you no longer need.',risk:'Deleting a conversation permanently removes its messages.'},generate:{what:'Opens the Generate screen for one-time answers or raw text continuation without saving a chat session.',example:'Click Generate to ask a standalone question or continue a sentence prefix.',best:'Choose an Assistant skill (chat, knowledge, behavior, grammar, reasoning, or prose) to guide the answer.',recommended:'Use Chat for back-and-forth dialogue and Generate for one-off prompts.',risk:'Generate does not keep conversation history across runs.'},brain:{what:'Opens the Brain screen where you can search and save long-term memories and view the learning pipeline.',example:'Click Brain to add a personal preference or search existing memories.',best:'Use memories for facts you want Chit to recall immediately in chat.',recommended:'Keep memories short, true, and specific.',risk:'Deleting a memory removes it from future recall.'},teach:{what:'Opens the Teach Chit screen where you can save facts, Q&A pairs, or step-by-step reasoning lessons for future training.',example:'Click Teach Chit to add a new Q&A or reasoning lesson to the learning queue.',best:'Check "Also save this as a memory" if you want Chit to use the fact before the next training run.',recommended:'Write clear, verified lessons.',risk:'Lessons only update Chit\'s neural weights after training in Studio.'},studio:{what:'Opens Studio where you can inspect learning plans, run training jobs, test safety rules, benchmark the Bridge, and promote models.',example:'Click Studio to review the 6L-256 curriculum plans or check training job history.',best:'Always test safety rules and benchmark the Bridge before promoting a new candidate model.',recommended:'Inspect training files in Training library before starting a run.',risk:'Training uses heavy processor and memory resources.'},data:{what:'Opens the Training library screen to check dataset readiness, view live model status, or restart/rollback the live AI.',example:'Click Training library to verify that all training and review files exist.',best:'Preview any file split before writing changes to disk.',recommended:'Check dataset readiness before training.',risk:'Splitting files with overwrite enabled replaces existing training files.'},diagnostics:{what:'Opens Troubleshooting to run health checks on the server, active model, tokenizer, and training data.',example:'Click Troubleshooting if answers look garbled, repetitive, or cut short.',best:'Run "Check Chit" and test a sample sentence to pinpoint the issue.',recommended:'Check that the active model uses the expected byte-utf8 text reader.',risk:'Safe and read-only diagnostic checks.'},explorer:{what:'Opens the Guided API Reference where every Chit API endpoint is explained in simple English with a live request builder.',example:'Click API reference under Advanced tools to explore and test server endpoints.',best:'Use the guided form fields and JSON preview to build requests safely.',recommended:'Start with read-only GET operations like Server health.',risk:'Sending POST or DELETE requests changes live server data.'}};
     if(navInfo[view])return navInfo[view];
     const isButton=element.tagName==='BUTTON';const text=(element.textContent||'').trim().toLowerCase();
-    const risk=/delete|remove|stop|cancel|create|start|save|send|train|split|replace|logout|lock/.test(text)?'This action may change saved information, start work, or stop a job. Read the confirmation before continuing.':'This control does not change saved information by itself.';
-    const value=element.value||element.getAttribute('placeholder')||element.querySelector('option:checked')?.textContent||'the suggested value';
-    return {what:isButton?`Uses the “${label}” action.`:`Sets or provides ${label.toLowerCase()}.`,example:isButton?`Choose “${label}” when you want to do that action.`:`For example, use “${value}”.`,best:'Read the nearby explanation and use the simplest value that fits your goal.',recommended:isButton?'Choose this only when you are ready for the action.':`Start with ${value}.`,risk};
+    const risk=/delete|remove|stop|cancel|create|start|save|send|train|split|replace|logout|lock/.test(text)?'This action can change saved data, start background work, or stop a job. Review your settings before clicking.':'This control only adjusts what is selected or shown on screen.';
+    const value=element.value||element.getAttribute('placeholder')||element.querySelector('option:checked')?.textContent||'the suggested setting';
+    return {what:isButton?`Performs the “${label}” action on this screen.`:`Sets ${label.toLowerCase()} for this action.`,example:isButton?`Click “${label}” when you are ready to run it.`:`For example, choose “${value}”.`,best:'Read the short description nearby and pick the option that matches your goal.',recommended:isButton?'Review the fields above before clicking.':`Start with ${value}.`,risk};
 }
 let helpReturnFocus=null;
 function showContextHelp(element){
@@ -266,7 +274,25 @@ async function updateKnowledgePipeline() {
 }
 
 function learningPlanName(name){
-    const names={chit_assistant_cpu:'Everyday assistant',chit_cpu_learning:'Compact learning',chit_english_foundation:'English foundations',chit_english_mixed:'Mixed English practice',chit_strong:'Extended study',chit_tiny:'Small and quick',chit_train_txt:'Text-file practice',chit_bpe_experiment:'Tokenizer experiment',chit_byte_experiment:'Byte-token experiment',chit_rope_512_candidate:'Long-context candidate',chit_rope_512_rescue:'Long-context recovery'};
+    const names={
+        chit_assistant_cpu:'Everyday assistant',
+        chit_cpu_learning:'Compact learning',
+        chit_english_foundation:'English foundations',
+        chit_english_foundation_6l_256:'Stage 1: English & Grammar Foundation (6L-256)',
+        chit_conversation_reasoning_6l_256:'Stage 2: Conversation & Reasoning (6L-256)',
+        chit_knowledge_behavior_6l_256:'Stage 3: Knowledge & Behavior (6L-256)',
+        chit_v2_6l_256:'Full Unified Curriculum (6L-256)',
+        chit_1mb:'1 MB Extended Corpus',
+        chit_1mb_eval_100kb:'1 MB Corpus (Fast 100 KB Review)',
+        chit_english_mixed:'Mixed English practice',
+        chit_strong:'Extended study',
+        chit_tiny:'Small and quick',
+        chit_train_txt:'Text-file practice',
+        chit_bpe_experiment:'Tokenizer experiment',
+        chit_byte_experiment:'Byte-token experiment',
+        chit_rope_512_candidate:'Long-context candidate',
+        chit_rope_512_rescue:'Long-context recovery'
+    };
     return names[name]||name.replaceAll('_',' ').replace(/^chit /,'');
 }
 
@@ -291,19 +317,20 @@ async function showConfigDetails(name){
     if(!r.ok){panel.textContent=friendlyError(r.data,r.status);return}
     const cfg=r.data.config||{},model=cfg.model||{},training=cfg.training||{},data=cfg.data||{},tokenizer=cfg.tokenizer||{};
     const byteTokenizer=(tokenizer.name||'byte-utf8')==='byte-utf8';
-    const intro=document.createElement('p');intro.textContent=name==='chit_assistant_cpu'?'A general-purpose assistant plan. Check its example data and settings before you train.':name.includes('foundation')||name.includes('mixed')?'An English-focused plan that studies one or more text collections.':name.includes('experiment')?'An experimental plan for comparing how Chit reads text.':'A prepared plan with set model size, study schedule, and training material.';
+    const intro=document.createElement('p');intro.textContent=name==='chit_assistant_cpu'?'A balanced everyday assistant plan that studies all 7 Task skills together. Check its files and settings before you train.':name==='chit_v2_6l_256'?'The complete 6-layer unified curriculum across English prose, grammar, conversation, reasoning, knowledge, and honest behavior.':name.includes('conversation_reasoning')?'Stage 2 curriculum: builds multi-turn conversation and step-by-step reasoning skills on top of Stage 1 English foundations.':name.includes('knowledge_behavior')?'Stage 3 curriculum: teaches factual Q&A, memory grounding, and honest behavior when facts are missing or conflicting.':name.includes('foundation')||name.includes('mixed')?'An English-focused plan that builds strong grammar, sentence structure, and reading comprehension.':name.includes('experiment')?'An experimental plan for comparing how Chit reads text.':'A prepared learning plan with set model size, study schedule, and Task-header training material.';
     const facts=document.createElement('div');facts.className='config-facts';
     facts.append(configField('Training updates',`${training.max_steps??'Not set'} steps. Each step updates the model once; more steps take longer.`));
     facts.append(configField(byteTokenizer?'Context window (bytes)':'Context window (tokens)',`${model.block_size??'Not set'} ${byteTokenizer?'bytes':'tokens'} at a time. A longer window uses more memory and compute.`));
-    facts.append(configField('Model size',`${model.n_layer??'Not set'} layers · ${model.n_head??'Not set'} attention heads · ${model.n_embd??'Not set'} internal width. Larger values need more memory.`));
+    facts.append(configField('Model size',`${model.n_layer??'Not set'} layers · ${model.n_head??'Not set'} attention heads · ${model.n_embd??'Not set'} internal width. Matches the 6L-256 byte architecture.`));
     facts.append(configField('Training device',cfg.device||'Chosen automatically by the server'));
     if(training.batch_size)facts.append(configField('Examples per update',`${training.batch_size}. Larger batches use more memory.`));
     if(training.learning_rate)facts.append(configField('Learning rate',`${training.learning_rate}. This controls the size of each learning update; a value that is too high can make training unstable.`));
     if(training.eval_interval)facts.append(configField('Progress checks',`The server checks learning quality every ${training.eval_interval} updates.`));
     const sources=Array.isArray(data.sources)?data.sources:[];
-    if(sources.length){const weightTotal=sources.reduce((sum,source)=>sum+Math.max(0,Number(source.weight)||0),0);facts.append(configField('Weighted text collections',sources.map(source=>{const weight=Math.max(0,Number(source.weight)||0),share=weightTotal?Math.round(weight/weightTotal*100):0;return `${String(source.path||'Unnamed file').split(/[\\/]/).pop()} · about ${share}% of sampled text`}).join(' · ')))}
+    if(sources.length){const weightTotal=sources.reduce((sum,source)=>sum+Math.max(0,Number(source.weight)||0),0);facts.append(configField('Weighted text collections',sources.map(source=>{const weight=Math.max(0,Number(source.weight)||0),share=weightTotal?Math.round(weight/weightTotal*100):0;return `${String(source.path||'Unnamed file').split(/[\\/]/).pop()} · about ${share}% of sampled text`}).join(' · ')));if(data.eval_file)facts.append(configField('Combined review text',String(data.eval_file).split(/[\\/]/).pop()))}
     else{if(data.train_file)facts.append(configField('Training text',String(data.train_file).split(/[\\/]/).pop()));if(data.eval_file)facts.append(configField('Review text',String(data.eval_file).split(/[\\/]/).pop()))}
-    const tokenizerName=tokenizer.name||'byte-utf8 (default)';facts.append(configField('Text reader',tokenizerName==='byte-utf8'?'Reads UTF-8 one byte at a time. The context value above is therefore bytes.':tokenizerName==='bpe-tokenizers-json-v1'?'Uses a saved vocabulary to read common pieces of text together.':'Uses '+tokenizerName));
+    const tokenizerName=tokenizer.name||'byte-utf8 (default)';facts.append(configField('Text reader',tokenizerName==='byte-utf8'?'Reads UTF-8 one byte at a time (256 byte vocabulary). No words are ever unknown.':tokenizerName==='bpe-tokenizers-json-v1'?'Uses a saved vocabulary to read common pieces of text together.':'Uses '+tokenizerName));
+    facts.append(configField('Smart study method','Starts 70% of study windows cleanly at a "Task:" header and focuses learning on Chit\'s answers (Chit: / Reasoning: / Answer:) instead of memorizing user questions.'));
     if(tokenizer.sha256)facts.append(configField('Tokenizer fingerprint',`${tokenizer.sha256.slice(0,16)}… · identifies the vocabulary this plan expects.`));
     if(tokenizer.vocab_size)facts.append(configField('Vocabulary size',`${tokenizer.vocab_size} text pieces`));
     if(cfg.seed!==undefined)facts.append(configField('Repeatable setup',`Seed ${cfg.seed} makes random choices easier to reproduce.`));
@@ -645,16 +672,20 @@ function lessonPayload(){
     const kind=$('#lessonKind').value;
     const item={kind,source:$('#lessonSource').value.trim()||null,remember:$('#rememberLesson').checked};
     if(kind==='text')item.text=$('#lessonText').value.trim();
-    else{item.question=$('#lessonQuestion').value.trim();item.answer=$('#lessonAnswer').value.trim()}
+    else if(kind==='reasoning'){
+        item.input=$('#lessonInput')?.value.trim()||'';
+        item.reasoning=$('#lessonReasoning')?.value.trim()||'';
+        item.answer=$('#lessonReasoningAnswer')?.value.trim()||'';
+    }else{item.question=$('#lessonQuestion').value.trim();item.answer=$('#lessonAnswer').value.trim()}
     return item;
 }
 
 async function saveLesson(){
     const item=lessonPayload();const status=$('#lessonStatus');status.textContent='Saving lesson…';
-    if((item.kind==='text'&&!item.text)||(item.kind==='qa'&&(!item.question||!item.answer))){status.textContent='Fill in the lesson before saving it.';return}
+    if((item.kind==='text'&&!item.text)||(item.kind==='qa'&&(!item.question||!item.answer))||(item.kind==='reasoning'&&(!item.input||!item.reasoning||!item.answer))){status.textContent='Fill in all fields for the lesson before saving it.';return}
     const r=await callApi('POST','/knowledge',{}, {items:[item]});
     status.textContent=r.ok?(r.data.duplicates?'That lesson is already saved.':'Lesson saved. Train Chit when you’re ready for it to learn this material.'):friendlyError(r.data,r.status);
-    if(r.ok){$('#lessonText').value='';$('#lessonQuestion').value='';$('#lessonAnswer').value='';loadKnowledge();updateKnowledgePipeline()}
+    if(r.ok){$('#lessonText').value='';$('#lessonQuestion').value='';$('#lessonAnswer').value='';if($('#lessonInput'))$('#lessonInput').value='';if($('#lessonReasoning'))$('#lessonReasoning').value='';if($('#lessonReasoningAnswer'))$('#lessonReasoningAnswer').value='';loadKnowledge();updateKnowledgePipeline()}
 }
 
 async function loadKnowledge(){
@@ -669,8 +700,9 @@ async function loadKnowledge(){
     r.data.items.forEach(entry=>{
         const card=document.createElement('article');card.className='memory-card';
         const payload=entry.payload||{};const heading=document.createElement('h3');heading.textContent=entry.kind==='qa'?payload.question:entry.kind==='reasoning'?payload.input:(payload.text||'Lesson');
-        const content=document.createElement('p');content.className='memory-content';content.textContent=entry.kind==='qa'?payload.answer:entry.kind==='reasoning'?payload.answer:payload.text;
-        const meta=document.createElement('p');meta.className='status';meta.textContent=`${entry.status==='trained'?'Already learned':'Ready to learn'}${entry.source?` · ${entry.source}`:''}`;
+        const content=document.createElement('p');content.className='memory-content';content.textContent=entry.kind==='qa'?payload.answer:entry.kind==='reasoning'?`Steps: ${payload.reasoning||''}\nAnswer: ${payload.answer||''}`:payload.text;
+        const kindLabel=entry.kind==='qa'?'Q&A (Task: knowledge)':entry.kind==='reasoning'?'Reasoning (Task: reasoning)':'Passage (Task: prose)';
+        const meta=document.createElement('p');meta.className='status';meta.textContent=`${entry.status==='trained'?'Already learned':'Ready to learn'} · ${kindLabel}${entry.source?` · ${entry.source}`:''}`;
         const actions=document.createElement('div');actions.className='actions';
         const use=document.createElement('button');use.className='secondary';use.textContent='Use in chat';use.addEventListener('click',()=>{useMemory(`${heading.textContent}\n${content.textContent}`);document.querySelector('[data-view="chat"]').click()});
         const del=document.createElement('button');del.className='danger';del.textContent='Remove lesson';del.addEventListener('click',async()=>{if(!confirm('Remove this lesson from future training?'))return;const result=await callApi('DELETE',`/knowledge/${encodeURIComponent(entry.id)}`,{},null);if(result.ok){loadKnowledge();updateKnowledgePipeline()}else alert(friendlyError(result.data,result.status))});
@@ -703,7 +735,7 @@ async function trainSavedKnowledge(){
     if(r.ok)renderJobs();
 }
 
-$('#lessonKind').addEventListener('change',()=>{const qa=$('#lessonKind').value==='qa';$('#lessonTextField').classList.toggle('hidden',qa);$('#lessonQaFields').classList.toggle('hidden',!qa)});
+$('#lessonKind').addEventListener('change',()=>{const kind=$('#lessonKind').value;$('#lessonTextField').classList.toggle('hidden',kind!=='text');$('#lessonQaFields').classList.toggle('hidden',kind!=='qa');$('#lessonReasoningFields')?.classList.toggle('hidden',kind!=='reasoning')});
 $('#saveLesson').addEventListener('click',saveLesson);
 $('#refreshKnowledge').addEventListener('click',loadKnowledge);
 $('#knowledgeFilter').addEventListener('change',loadKnowledge);
@@ -800,6 +832,43 @@ if(requestedView)showView(requestedView,false);
 
 
 
+function taskBadgeInfo(task, requestedTask) {
+    const names = {
+        chat: 'Chat',
+        knowledge: 'Knowledge',
+        behavior: 'Behavior',
+        grammar: 'Grammar',
+        reasoning: 'Reasoning',
+        prose: 'Prose',
+        continue: 'Continue'
+    };
+    const descriptions = {
+        chat: 'Everyday conversation skill (Task: chat). Used for friendly dialogue, greetings, and general help.',
+        knowledge: 'Knowledge & Facts skill (Task: knowledge). Used when answering from saved memories, live web search, or Chit project facts.',
+        behavior: 'Honesty & Boundaries skill (Task: behavior). Used when facts are missing, conflicting, ambiguous, or restricted by safety rules.',
+        grammar: 'Grammar & Writing skill (Task: grammar). Used for fixing sentences, verb tenses, and rewriting text.',
+        reasoning: 'Step-by-Step Reasoning skill (Task: reasoning). Used for working through logic or math steps before answering.',
+        prose: 'Prose & Reading skill (Task: prose). Used for reading comprehension and explaining words in context.',
+        continue: 'Raw Text Continuation (Task: continue). Extends your text directly without chat formatting.'
+    };
+    const key = task || 'chat';
+    const autoPicked = (!requestedTask || requestedTask === 'chat') && key !== 'chat';
+    return {
+        label: `Task: ${names[key] || key}${autoPicked ? ' (auto)' : ''}`,
+        title: `${descriptions[key] || 'Task skill used for this reply.'}${autoPicked ? ' Chit\'s Router automatically chose this skill based on your message.' : ''}`
+    };
+}
+
+function sourceBadgeInfo(source) {
+    const map = {
+        tool: { label: '🧮 Calculator / Tool', title: 'Answered with 100% exactness by Chit\'s built-in calculator or date tool rather than guessing.' },
+        extractive: { label: '📌 Memory Fact', title: 'Answered directly from your saved memories or session facts so no details were made up.' },
+        abstain: { label: '🛡️ Safety / Honesty Guard', title: 'Held back from guessing because required facts were missing or the request crossed a safety boundary.' },
+        model: { label: '🧠 Neural Brain', title: 'Written by Chit\'s neural network and checked by the Bridge for clarity and loops.' }
+    };
+    return map[source] || null;
+}
+
 function addBubble(role, text, metadata = {}) {
     const b = document.createElement('div');
     b.className = 'bubble ' + role;
@@ -808,6 +877,7 @@ function addBubble(role, text, metadata = {}) {
     if (role === 'chit' && metadata && metadata.web_grounded) {
         const webGroundedHeader = document.createElement('div');
         webGroundedHeader.className = 'web-grounded-header';
+        webGroundedHeader.title = 'Chit searched the web for live facts and used the snippets below to ground this answer.';
         webGroundedHeader.innerHTML = `🌐 <strong>Grounded via Web Search</strong>`;
         
         const webSources = Array.isArray(metadata.web_sources) ? metadata.web_sources : [];
@@ -826,7 +896,7 @@ function addBubble(role, text, metadata = {}) {
                 badge.target = '_blank';
                 badge.rel = 'noopener noreferrer';
                 badge.textContent = `[${domain}]`;
-                badge.title = s.title ? `${s.title}: ${s.snippet || ''}` : (s.snippet || s.url || '');
+                badge.title = s.title ? `Web source — ${s.title}: ${s.snippet || ''}` : (s.snippet || s.url || 'Open web source in a new tab.');
                 badge.style.fontSize = '11px';
                 badge.style.padding = '1px 6px';
                 badge.style.borderRadius = '3px';
@@ -852,7 +922,7 @@ function addBubble(role, text, metadata = {}) {
         
         const tokenLabel = metadata.thought_tokens ? `${metadata.thought_tokens} tokens` : 'trace';
         thoughtDetails.innerHTML = `
-            <summary>💭 Thought process (${tokenLabel})</summary>
+            <summary title="Click to view or hide the step-by-step thinking Chit wrote before giving its final answer.">💭 Thought process (${tokenLabel})</summary>
             <div class="thought-body">${safeMarkdown(metadata.thoughts)}</div>
         `;
         b.appendChild(thoughtDetails);
@@ -872,8 +942,11 @@ function addBubble(role, text, metadata = {}) {
         const notice = document.createElement('div');
         notice.className = 'retrieval-notice';
         const reasonText = metadata.is_incomplete 
-            ? '⚡ Generation was truncated mid-sentence.' 
-            : `⚠️ Chit has low confidence in this answer (${Math.round((metadata.confidence || 0) * 100)}%).`;
+            ? '⚡ Generation was cut short by the response length limit before finishing the sentence.' 
+            : `⚠️ Chit has low confidence in this answer (${Math.round((metadata.confidence || 0) * 100)}%). Double-check important details or click Search Web.`;
+        notice.title = metadata.is_incomplete
+            ? 'The reply hit the maximum token limit before reaching a period. Try asking a more specific question.'
+            : 'Chit\'s confidence score is below 40%, meaning the model was unsure of its wording.';
         notice.innerHTML = `<span>${reasonText}</span>`;
         b.appendChild(notice);
     }
@@ -898,10 +971,33 @@ function addBubble(role, text, metadata = {}) {
         actions.appendChild(copyBtn);
         actions.appendChild(regenerate);
 
+        const effTask = metadata.effective_task || metadata.plan?.effective_task || metadata.task;
+        if (effTask) {
+            const tInfo = taskBadgeInfo(effTask, metadata.requested_task);
+            const tBadge = document.createElement('span');
+            tBadge.className = 'task-badge';
+            tBadge.textContent = tInfo.label;
+            tBadge.title = tInfo.title;
+            actions.appendChild(tBadge);
+        }
+
+        const sInfo = sourceBadgeInfo(metadata.source);
+        if (sInfo) {
+            const sBadge = document.createElement('span');
+            sBadge.className = 'source-badge';
+            sBadge.textContent = sInfo.label;
+            sBadge.title = sInfo.title;
+            actions.appendChild(sBadge);
+        }
+
         if (typeof metadata.confidence === 'number') {
+            const pct = Math.round(metadata.confidence * 100);
             const confBadge = document.createElement('span');
             confBadge.className = 'conf-badge ' + (metadata.is_uncertain ? 'conf-low' : 'conf-high');
-            confBadge.textContent = `${Math.round(metadata.confidence * 100)}% conf`;
+            confBadge.textContent = `${pct}% conf`;
+            confBadge.title = metadata.is_uncertain
+                ? `Low confidence (${pct}%): Chit was unsure when writing this reply. Please verify facts or try Search Web.`
+                : `Confidence score (${pct}%): How steady and certain Chit was when choosing the words in this reply${metadata.is_calibrated ? ' (calibrated for accuracy)' : ''}.`;
             actions.appendChild(confBadge);
         }
 
@@ -910,7 +1006,7 @@ function addBubble(role, text, metadata = {}) {
             webBtn.type = 'button';
             webBtn.className = 'action-btn retrieval-btn';
             webBtn.innerHTML = '🌐 Search Web';
-            webBtn.title = 'Chit is uncertain. Search the internet for live facts.';
+            webBtn.title = 'Ask Chit to answer your last message again using live internet search.';
             webBtn.onclick = () => {
                 const messages = document.querySelectorAll('.bubble.user');
                 if (messages.length) {
@@ -942,6 +1038,33 @@ async function updateSessionTitle(sid) {
     }
 }
 
+$('#chatTask')?.addEventListener('change', () => {
+    const taskVal = $('#chatTask').value;
+    const isCont = taskVal === 'continue';
+    const thinkEl = $('#thinkToggle'), searchEl = $('#searchToggle');
+    if (thinkEl) {
+        thinkEl.disabled = isCont;
+        if (isCont) thinkEl.checked = false;
+        else if (taskVal === 'reasoning') thinkEl.checked = true;
+        if (thinkEl.parentElement) {
+            thinkEl.parentElement.style.opacity = isCont ? '0.45' : '1';
+            thinkEl.parentElement.title = isCont
+                ? 'Step-by-step thinking is disabled in Continue Raw Text mode.'
+                : 'Ask Chit to work through the problem step by step before giving its final answer.';
+        }
+    }
+    if (searchEl) {
+        searchEl.disabled = isCont;
+        if (isCont) searchEl.checked = false;
+        if (searchEl.parentElement) {
+            searchEl.parentElement.style.opacity = isCont ? '0.45' : '1';
+            searchEl.parentElement.title = isCont
+                ? 'Web search is disabled in Continue Raw Text mode.'
+                : 'Let Chit search the web for fresh facts before answering your message.';
+        }
+    }
+});
+
 $('#sendChat').addEventListener('click', async () => {
     const box = $('#chatInput'), message = box.value.trim();
     if (!message) return;
@@ -956,17 +1079,19 @@ $('#sendChat').addEventListener('click', async () => {
         window._nextChatTemperature = undefined;
         const searchOverride = window._nextChatSearch || false;
         window._nextChatSearch = undefined;
-        const searchChecked = $('#searchToggle')?.checked || false;
-        const think = $('#thinkToggle')?.checked || false;
-        const payload = { message, session_id: chatId, think };
+        const selectedTask = $('#chatTask')?.value || 'chat';
+        const isContinueTask = selectedTask === 'continue';
+        const searchChecked = !isContinueTask && ($('#searchToggle')?.checked || false);
+        const think = !isContinueTask && ($('#thinkToggle')?.checked || selectedTask === 'reasoning');
+        const payload = { message, session_id: chatId, task: selectedTask, think };
         if (typeof tempOverride === 'number') payload.temperature = tempOverride;
-        if (searchOverride || searchChecked) payload.search = true;
+        if (!isContinueTask && (searchOverride || searchChecked)) payload.search = true;
 
         const r = await callApi('POST', '/chat', {}, payload);
         
         if (!r.ok) throw new Error(friendlyError(r.data,r.status));
         
-        chatId = r.data.session_id;
+        chatId = r.data.session_id || chatId;
         const rawRecalled = r.data?.metadata?.memory_ids;
         const genuineMemories = Array.isArray(rawRecalled) ? rawRecalled.filter(id => id && id !== 'web-search') : [];
         const hasMemory = genuineMemories.length > 0;
@@ -977,7 +1102,7 @@ $('#sendChat').addEventListener('click', async () => {
             ? 3 
             : (hasMemory ? 1 : 'adaptive');
         recordResponseEvidence({
-            mode: 'Chat',
+            mode: `Chat (${selectedTask})`,
             prompt: message,
             tokens: 'server default',
             temperature: recordedTemp,
@@ -998,7 +1123,7 @@ $('#sendChat').addEventListener('click', async () => {
             breadcrumb.textContent=`Chit used ${genuineMemories.length} saved ${genuineMemories.length===1?'memory':'memories'} to shape this reply.`;
             $('#chatlog').appendChild(breadcrumb);
         }
-        addBubble('chit', r.data.text || '', Object.assign({}, r.data?.metadata || {}, r.data || {}));
+        addBubble('chit', r.data.text || '', Object.assign({ requested_task: selectedTask }, r.data?.metadata || {}, r.data || {}));
         
     } catch (e) {
         addBubble('system', e.message);
@@ -1139,22 +1264,31 @@ $('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){
 $('#newChat').addEventListener('click',()=>{chatId=null;$('#chatlog').replaceChildren();$('#chatSession').textContent='New conversation'});
 $('#genMode')?.addEventListener('change',()=>{
     const isCont=$('#genMode').value==='continue';
-    const s=$('#genSearch'),t=$('#genThink');
-    if(s){s.disabled=isCont;if(isCont)s.checked=false;s.parentElement.style.opacity=isCont?'0.45':'1';s.parentElement.title=isCont?'Web search is only available in assistant mode':'';}
-    if(t){t.disabled=isCont;if(isCont)t.checked=false;t.parentElement.style.opacity=isCont?'0.45':'1';t.parentElement.title=isCont?'Thinking is only available in assistant mode':'';}
+    const s=$('#genSearch'),t=$('#genThink'),taskSel=$('#genTask');
+    if(s){s.disabled=isCont;if(isCont)s.checked=false;s.parentElement.style.opacity=isCont?'0.45':'1';s.parentElement.title=isCont?'Web search is only available when "How should Chit respond?" is set to "Answer my request".':'Searches the web for live facts before answering your request.';}
+    if(t){t.disabled=isCont;if(isCont)t.checked=false;t.parentElement.style.opacity=isCont?'0.45':'1';t.parentElement.title=isCont?'Step-by-step thinking is only available when "How should Chit respond?" is set to "Answer my request".':'Turns on step-by-step thinking before giving the final answer.';}
+    if(taskSel){taskSel.disabled=isCont;taskSel.style.opacity=isCont?'0.45':'1';taskSel.title=isCont?'Assistant skill selection is disabled in "Continue my text" mode because raw continuation uses Task: continue automatically.':controlHelp.genTask.what;}
+});
+$('#genTask')?.addEventListener('change',()=>{
+    if($('#genTask').value==='reasoning' && $('#genThink') && !$('#genThink').disabled){
+        $('#genThink').checked=true;
+    }
 });
 $('#runGenerate').addEventListener('click',async()=>{
     const status=$('#genStatus');status.textContent='Generating…';status.classList.remove('error');
     try{
+        const modeVal=$('#genMode').value;
+        const selectedTask=modeVal==='continue'?'continue':($('#genTask')?.value||'chat');
         const body={
             prompt:$('#genPrompt').value.trim(),
-            mode:$('#genMode').value,
+            mode:modeVal,
+            task:selectedTask,
             tokens:Number($('#genTokens').value),
             temperature:Number($('#genTemp').value),
             top_k:Number($('#genTopK').value),
             stop:[],
-            search:$('#genSearch')?.checked || false,
-            think:$('#genThink')?.checked || false,
+            search:modeVal!=='continue' && ($('#genSearch')?.checked || false),
+            think:modeVal!=='continue' && ($('#genThink')?.checked || selectedTask==='reasoning'),
         };
         if(!body.prompt)throw new Error('Write a prompt first.');
         const r=await callApi('POST','/generate',{},body);
@@ -1164,59 +1298,106 @@ $('#runGenerate').addEventListener('click',async()=>{
         const metaBox=$('#genMeta');
         if(metaBox){
             metaBox.replaceChildren();
-            if(r.data?.web_grounded){
+            const meta=Object.assign({}, r.data?.metadata||{}, r.data||{});
+            if(meta.web_grounded){
                 const pill=document.createElement('div');
                 pill.className='web-grounded-header';
-                const count=r.data.sources?.length?` (${r.data.sources.length} sources)`:'';
+                pill.title='Chit searched the web for live facts and used the retrieved snippets to ground this answer.';
+                const count=meta.sources?.length?` (${meta.sources.length} sources)`:'';
                 pill.innerHTML=`🌐 <strong>Grounded via Web Search</strong>${count}`;
                 metaBox.appendChild(pill);
             }
-            if(typeof r.data?.confidence==='number'){
+            const effTask=meta.effective_task || meta.plan?.effective_task || selectedTask;
+            if(effTask){
+                const tInfo=taskBadgeInfo(effTask, selectedTask);
+                const tBadge=document.createElement('span');
+                tBadge.className='task-badge';
+                tBadge.textContent=tInfo.label;
+                tBadge.title=tInfo.title;
+                metaBox.appendChild(tBadge);
+            }
+            const sInfo=sourceBadgeInfo(meta.source);
+            if(sInfo){
+                const sBadge=document.createElement('span');
+                sBadge.className='source-badge';
+                sBadge.textContent=sInfo.label;
+                sBadge.title=sInfo.title;
+                metaBox.appendChild(sBadge);
+            }
+            if(typeof meta.confidence==='number'){
+                const pct=Math.round(meta.confidence*100);
                 const badge=document.createElement('span');
-                badge.className='conf-badge '+(r.data.is_uncertain?'conf-low':'conf-high');
-                badge.textContent=`${Math.round(r.data.confidence*100)}% conf`;
+                badge.className='conf-badge '+(meta.is_uncertain?'conf-low':'conf-high');
+                badge.textContent=`${pct}% conf`;
+                badge.title=meta.is_uncertain
+                    ? `Low confidence (${pct}%): Chit was unsure when writing this reply. Double-check important facts.`
+                    : `Confidence score (${pct}%): How steady and certain Chit was when choosing the words in this reply${meta.is_calibrated?' (calibrated for accuracy)':''}.`;
                 metaBox.appendChild(badge);
             }
-            if(r.data?.is_uncertain || r.data?.is_incomplete){
+            if(meta.thoughts){
+                const thoughtDetails=document.createElement('details');
+                thoughtDetails.className='thought-container';
+                thoughtDetails.style.width='100%';
+                const tokenLabel=meta.thought_tokens?`${meta.thought_tokens} tokens`:'trace';
+                thoughtDetails.innerHTML=`<summary title="Click to view or hide the step-by-step thinking Chit wrote before giving its final answer.">💭 Thought process (${tokenLabel})</summary><div class="thought-body">${safeMarkdown(meta.thoughts)}</div>`;
+                metaBox.appendChild(thoughtDetails);
+            }
+            if(meta.is_uncertain || meta.is_incomplete){
                 const notice=document.createElement('div');
                 notice.className='retrieval-notice';
-                const reason=r.data.is_incomplete?'⚡ Generation was truncated mid-sentence.':`⚠️ Low model confidence (${Math.round((r.data.confidence||0)*100)}%).`;
+                const reason=meta.is_incomplete?'⚡ Generation was cut short by the response length limit before finishing the sentence.':`⚠️ Low model confidence (${Math.round((meta.confidence||0)*100)}%). Double-check important details.`;
+                notice.title=meta.is_incomplete?'Increase "Response length" if you want a longer answer.':'Chit\'s confidence score is below 40%, meaning the model was unsure of its wording.';
                 notice.innerHTML=`<span>${reason}</span>`;
                 metaBox.appendChild(notice);
             }
         }
 
-        recordResponseEvidence({mode:body.mode,prompt:body.prompt,tokens:body.tokens,temperature:body.temperature,topK:body.top_k,response:r.data});
+        recordResponseEvidence({mode:`${body.mode} (${selectedTask})`,prompt:body.prompt,tokens:body.tokens,temperature:body.temperature,topK:body.top_k,response:r.data});
         status.textContent='Done';
     }catch(e){status.textContent=e.message;status.classList.add('error')}
 });
 const routeGuides={
-'Server health':['Check whether the server and model are responding.','Nothing to enter.','Read-only. Reports whether a model is loaded and whether a training job is active.'],
-'Service readiness':['Check whether the model, memory, knowledge, and inference services are ready for use.','Nothing to enter.','Read-only. Useful when the server is online but some features may still be starting.'],
-'Live model details':['See which model is currently active and its main characteristics.','Nothing to enter.','Read-only. Shows the live model settings, device, and checkpoint details.'],
-'Generate a response':['Ask Chit for a single response without creating a continuing conversation.','Your prompt, response length, and optional generation settings.','Read-only for saved conversations. Assistant mode may use relevant memories; continue mode extends the text you provide.'],
-'Continue raw text':['Continue a piece of text from exactly where it ends.','A text prefix and response length.','Does not create a saved conversation. Useful for open-ended writing or text completion.'],
-'Chat message':['Send a message in a continuing conversation.','Your message, plus an optional conversation ID to continue a previous chat.','Creates or updates a saved conversation and may use relevant memories. The reply includes a session ID so the conversation can continue.'],
-'Create session':['Create an empty conversation before sending its first message.','Nothing to enter.','Creates a separate conversation with its own context. Most users can simply start chatting; Chit creates the session automatically.'],
-'List sessions':['See the conversations saved for this API key.','Optional page size and starting position.','Read-only. Each result identifies a conversation and may include its summary.'],
-'Read session':['Open one saved conversation and its messages.','The conversation ID and how many messages to show.','Read-only. Use the ID from the conversation list.'],
-'Delete session':['Permanently remove a saved conversation and its messages.','The conversation ID.','Changes saved data. The console asks you to confirm before sending this request.'],
-'Save a memory':['Save a fact or preference that Chit can use in later conversations.','The memory text; optionally choose a type, importance, and tags.','Adds one memory immediately. It does not train the model.'],
-'Search memories':['Find memories that match a word or phrase.','A search phrase and optional result limit.','Read-only. Chit’s chat can also use relevant memories automatically.'],
-'Delete memory':['Remove a saved memory so it is no longer available for recall.','The memory ID from a search result.','Changes saved data. It does not undo information already learned through model training.'],
-'List training presets':['See the available learning plans.','Nothing to enter.','Read-only. The console loads this list when it opens the Studio selector.'],
-'Start training':['Start a learning session using one selected plan.','A plan name; advanced options can set the device, seed, or model overrides.','Changes model files and uses compute. The current live brain remains available while the candidate trains.'],
-'List training jobs':['See current and previous learning sessions.','Nothing to enter.','Read-only. Use a job ID to see more detail or stop an active session.'],
-'Read training job':['Check progress and outcome for one learning session.','The training job ID.','Read-only. The result includes progress and whether the trained candidate was promoted.'],
-'Cancel training job':['Ask Chit to stop a learning session that is queued or running.','The training job ID.','Changes an active job. The currently served model is not replaced by cancelling.'],
-'Teach knowledge':['Save one or more lessons for Chit to learn later.','A short passage, a question with its answer, or a worked reasoning example.','Adds lessons to the learning queue. Set “remember” when a lesson should also be usable in chat before training.'],
-'List knowledge':['Browse lessons that are waiting to be learned or have already been trained.','Optional status, type, tag, and page settings.','Read-only.'],
-'Knowledge statistics':['See how many saved lessons are waiting, training, or already learned.','Nothing to enter.','Read-only.'],
-'Read knowledge entry':['Read the complete contents and status of one saved lesson.','The lesson ID from the lesson list.','Read-only.'],
-'Delete knowledge entry':['Remove a lesson from future training.','The lesson ID.','Changes the learning queue. A model trained on that lesson keeps what it already learned until retrained.'],
-'Train on knowledge':['Start a learning session using saved lessons.','A learning plan; optionally choose all lessons or only pending lessons.','Uses compute and creates a candidate model. Lessons are marked trained only if the resulting model is promoted.'],
-'Inspect training data':['Check which files a learning plan will study and whether the data is ready.','A learning plan name.','Read-only. Review warnings before starting training.'],
-'Split corpus file':['Divide a text file into training and review portions.','A file name in the server data folder, a plan, and a split style.','Preview first with dry-run. Writing changes the plan’s training files; existing files require explicit overwrite and are backed up.']
+'Server health':['Check whether the server and AI brain are online and responding.','Nothing to enter.','Read-only. Reports whether a model is loaded and whether a training job is running.'],
+'Service readiness':['Check whether the model, memory store, knowledge store, and request queue are ready for use.','Nothing to enter.','Read-only. Useful when the server is online and you want to verify every internal service is ready.'],
+'Live model details':['See which AI checkpoint is currently active, its layer count, context window, and text reader (tokenizer).','Nothing to enter.','Read-only. Shows the live model architecture, device, and checkpoint timestamp.'],
+'System metrics':['Check the server’s live processor (CPU), memory (RAM), and disk usage percentages.','Nothing to enter.','Read-only. Useful before starting a heavy training or benchmark run.'],
+'Generate a response':['Ask Chit for a single one-time answer without creating or saving a conversation.','Your prompt, chosen task skill, response length, and optional Web search or Thinking toggles.','Read-only for saved conversations. Assistant mode can use relevant memories and pick the best Task skill.'],
+'Continue raw text':['Continue a piece of text directly from where your words end (Task: continue).','A text prefix and maximum response length.','Does not create a saved conversation. Useful for completing an unfinished sentence or paragraph.'],
+'Chat message':['Send a message in a continuing conversation with automatic Task skill selection and memory recall.','Your message, optional task skill, and an optional conversation ID to continue an earlier chat.','Creates or updates a saved conversation, recalls relevant memories, and returns Chit’s reply and session ID.'],
+'Create session':['Create a new empty conversation session before sending its first message.','Nothing to enter.','Creates a separate conversation ID. In everyday use, simply sending a Chat message creates a session automatically.'],
+'List sessions':['See the saved conversations stored on the server.','Optional page limit and starting offset.','Read-only. Lists each conversation ID, message count, and summary.'],
+'Read session':['Open one saved conversation and read its message history.','The 32-character conversation ID and how many messages to return.','Read-only. Copy the session ID from List sessions.'],
+'Read facts':['See the personal facts (like your name or preferences) that Chit has automatically remembered during a conversation.','The 32-character conversation ID.','Read-only. Shows the key-value facts extracted from that chat session.'],
+'Configure facts':['Turn automatic fact extraction on or off for a specific conversation session.','The 32-character conversation ID and enabled (true or false).','Updates the session setting. When enabled, Chit remembers personal details shared in that chat.'],
+'Refresh facts':['Ask Chit to re-scan the conversation messages and update the remembered session facts right now.','The 32-character conversation ID.','Updates the extracted facts for that conversation based on its message history.'],
+'Clear facts':['Tell Chit to permanently forget all personal facts extracted during a specific conversation.','The 32-character conversation ID.','Deletes the remembered facts for that session while keeping the chat messages intact.'],
+'Read summary':['Read the short running summary that Chit keeps for a long conversation.','The 32-character conversation ID.','Read-only. Shows the progressive summary used when older messages scroll out of the context window.'],
+'Configure summary':['Turn automatic conversation summarizing on or off for a specific session.','The 32-character conversation ID and enabled (true or false).','Updates the session setting. Summaries help Chit remember earlier context in long chats.'],
+'Refresh summary':['Ask Chit to rebuild the running summary for a conversation right now.','The 32-character conversation ID.','Recomputes and saves the conversation summary from recent turns.'],
+'Clear summary':['Delete the saved running summary for a specific conversation.','The 32-character conversation ID.','Removes the summary text for that session without deleting the messages.'],
+'Delete session':['Permanently delete a saved conversation, its messages, remembered facts, and summary.','The 32-character conversation ID.','Permanently removes the conversation. The console asks you to confirm before sending.'],
+'Save a memory':['Save a fact or personal preference into Chit’s long-term memory so future chats can recall it immediately.','The memory text, type (experience or fact), importance (0 to 1), and optional tags.','Stores the memory right away without needing to retrain the neural model.'],
+'Search memories':['Find saved long-term memories that match a word or phrase.','A search keyword or phrase and maximum result count.','Read-only. Shows matching memories and their importance scores.'],
+'Delete memory':['Permanently remove a saved memory so Chit no longer recalls it in future chats.','The memory ID from a search result.','Deletes that memory card immediately from the memory database.'],
+'List training presets':['See all available learning plans (such as Everyday assistant and the 6L-256 staged curriculum configs).','Nothing to enter.','Read-only. Returns the list of learning plan names available in Studio.'],
+'Start training':['Start a background training run using a chosen learning plan.','A learning plan name, starting point (scratch, current, or auto), and force_promote flag.','Uses processor and memory resources to train a new candidate model while the current live AI keeps working.'],
+'List training jobs':['See active and past training runs and their progress.','Nothing to enter.','Read-only. Returns job IDs, step counts, loss scores, and status.'],
+'Read training job':['Check the detailed step progress, review loss, and status of one training job.','The 32-character training job ID.','Read-only. Shows whether the job is running, succeeded, failed, or promoted.'],
+'Cancel training job':['Stop a training job that is currently queued or running.','The 32-character training job ID.','Cancels the background training run safely without affecting your current live AI.'],
+'List candidates':['See all trained candidate checkpoints and their safety test and Bridge benchmark results.','Nothing to enter.','Read-only. Used by Studio to display finished candidate models.'],
+'Evaluate candidate':['Run the 50 Golden Gate behavioral safety and honesty tests on a finished candidate model.','The 32-character training job ID of the candidate.','Runs safety grading in the background. A candidate must pass this gate before normal promotion.'],
+'Benchmark candidate bridge':['Test how well the Bridge guides a candidate model (math exactness, confidence calibration, word loops, and speed) and fit its confidence curve.','The 32-character training job ID of the candidate.','Runs the Bridge benchmark and generates a calibrated confidence curve in the background.'],
+'Promote candidate':['Make a tested candidate model your new live AI for all chats and generations.','The 32-character training job ID of a passing candidate.','Hot-swaps the live AI to the new checkpoint and archives the previous checkpoint for rollback.'],
+'Rollback champion':['Restore the live AI back to a previously archived checkpoint using its SHA-256 fingerprint.','The SHA-256 fingerprint (to_sha256) of the archived checkpoint.','Immediately switches the live AI back to the specified earlier version.'],
+'Reload champion':['Reload the live AI checkpoint and calibration curve from disk into server memory.','Nothing to enter.','Refreshes the in-memory model weights from checkpoints/latest.pt.'],
+'Teach knowledge':['Save one or more lessons (facts, Q&A pairs, or step-by-step reasoning examples) into the training queue.','A list of lesson items (kind: text, qa, or reasoning).','Queues the lessons for future training. Set remember: true to also save them as immediate memories.'],
+'List knowledge':['Browse saved lessons waiting to be trained or already included in a trained model.','Optional status filter (pending or trained), limit, and offset.','Read-only. Returns saved lesson items and their training status.'],
+'Knowledge statistics':['See the count of lessons waiting to be learned vs. already learned.','Nothing to enter.','Read-only. Powers the Learning Pipeline counter on the Brain screen.'],
+'Read knowledge entry':['Read the full text, question/answer, or reasoning steps of one saved lesson.','The lesson entry ID from List knowledge.','Read-only. Shows all fields and timestamps for that lesson.'],
+'Delete knowledge entry':['Remove a saved lesson from the training queue so future training runs do not study it.','The lesson entry ID.','Deletes the lesson from the queue. Does not undo weights already trained into a model.'],
+'Train on knowledge':['Start a background training run that studies your saved lessons from Teach Chit.','A learning plan name, how many times to repeat lessons, and whether to study all or pending lessons.','Trains a candidate model on your saved lessons. Lessons are marked trained once the candidate is promoted.'],
+'Inspect training data':['Check whether a learning plan’s training and review text files exist and pass readiness checks.','A learning plan name (config).','Read-only. Reports file sizes, example counts, and any data warnings.'],
+'Split corpus file':['Divide a raw text file in the server’s data folder into training and review (eval) files.','The source file name, learning plan, split style (paragraph or line), review fraction, and dry_run flag.','Keep dry_run: true to preview first. Setting dry_run: false writes the new train and review files.']
 };
 function guideInline(text){let value=String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');value=value.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|#[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');return value}
 function guideSlug(text){return text.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
@@ -1236,44 +1417,121 @@ async function loadFullApiGuide(){const target=$('#fullApiGuide'),status=$('#api
 function filterApiGuide(){const query=$('#apiGuideSearch').value.trim().toLowerCase();let shown=0;$('#fullApiGuide').querySelectorAll('[data-guide-section]').forEach(section=>{const match=!query||section.textContent.toLowerCase().includes(query);section.hidden=!match;if(match)shown++});$('#apiGuideStatus').textContent=query?`${shown} guide section${shown===1?'':'s'} match “${query}”.`:'Full ChitAPIGuide.md loaded. Search filters its numbered sections.'}
 $('#apiGuideSearch').addEventListener('input',filterApiGuide);$('#clearApiGuideSearch').addEventListener('click',()=>{$('#apiGuideSearch').value='';filterApiGuide();$('#apiGuideSearch').focus()});
 const apiFieldHelp={
-prompt:['The instruction or text Chit should respond to.','“Explain how saved memory helps Chit.”','Be clear about the task and include the context Chit needs.','Long prompts leave less room for the answer.'],
-message:['The next thing you want to say in this conversation.','“Give me one example.”','Send one clear message; include the conversation ID to continue an earlier chat.','Chat messages are saved in the session.'],
-mode:['Chooses assistant-style answering or direct text continuation.','assistant answers a request; continue extends the given text.','Use assistant for questions and continue for unfinished text.','Continue mode does not add normal assistant instructions or memory.'],
-task:['Labels the kind of chat request.','chat or continue.','Use chat for a saved back-and-forth conversation.','Continue mode does not create a saved session.'],
-tokens:['Maximum new text the model may write.','100 for a short answer; up to 500.','Start with 60–160 and increase if the answer is cut short.','More text takes longer and may drift off topic.'],
-temperature:['Controls how varied the wording can be.','0 is steady; higher values are more varied.','Use 0 when you want repeatable answers.','Higher values can increase mistakes or gibberish.'],
-top_k:['Limits the number of next-token choices.','50 is the usual starting point.','Keep the suggested value unless comparing settings.','Has little effect when temperature is 0.'],
-stop:['Text that tells generation where to stop.','A list such as ["\\nUser:"].','Leave the default unless the model continues past the answer.','A matching stop string cuts off the response.'],
-session_id:['ID of the conversation to continue or inspect.','Copy the 32-character ID from a conversation result.','Leave empty to create a new chat when starting a chat.','Wrong IDs return not found; continuing a session adds saved messages.'],
-config:['Name of the training plan to use.','Choose a name returned by the training plans list.','Inspect the plan and its data before starting training.','Training changes model files and uses compute.'],
-force_promote:['Explicitly installs the successful candidate as the live model, skipping evaluation and reviewer gates.','true to force promotion; false keeps the normal candidate-only workflow.','Use only when you accept the unreviewed candidate replacing the current model.','Bypasses quality gates; the previous checkpoint is archived for rollback.'],
-promote:['Requests that the successful training job become the served model.','true requires force_promote:true; otherwise it returns 422.','Use force_promote only when intentionally bypassing evaluation and reviewer gates.','A forced candidate replaces the live model after successful training.'],
-init:['Chooses whether training starts from scratch or continues a model.','scratch starts fresh; current continues the live model; auto continues when possible.','Continue the current model unless you intentionally want a fresh start.','Starting from scratch does not build on prior weights.'],
-repeat:['How many times selected lessons are shown during training.','Use the plan’s suggested value as a starting point.','Keep it modest and review results before increasing.','More repeats may overfit a small set of lessons.'],
-select:['Which saved lessons to include in training.','Use all or pending, depending on the operation.','Use pending for only new lessons; all to revisit everything.','A narrow selection gives the model less review material.'],
-content:['The fact or preference to save as a memory.','“I prefer short answers.”','Write one clear, useful statement.','Memory is stored immediately; do not save secrets.'],
-memory_type:['Labels the memory as a fact or personal experience.','fact or experience.','Choose the closest meaning.','This label is for organization, not privacy.'],
-importance:['How strongly this memory should matter during recall.','A number from 0 to 1.','Use the middle value for ordinary useful facts.','Importance does not make a memory more accurate.'],
-tags:['Optional labels to help find a memory or lesson later.','["work", "preferences"].','Use a few short, meaningful labels.','Tags may reveal information about the saved content.'],
-q:['Words or phrase to search for.','office or meal preference.','Try specific words from the fact.','A broad search may return unrelated matches.'],
-limit:['Maximum number of items to return.','Use the suggested value first.','Increase if you need more results.','Large results can be slower and harder to review.'],
-offset:['Number of earlier results to skip when paging.','0 starts at the first result.','Use 0 first, then increase for another page.','A changing list can shift between pages.'],
-status:['Filters lessons by their learning status.','pending or trained.','Use pending to review lessons waiting for training.','This only changes which lessons are shown.'],
-kind:['Filters or labels the kind of lesson.','text, qa, or reasoning.','Choose the kind that matches the content.','A wrong label may make the lesson harder to use.'],
-source:['Name of the text file on the server to inspect or split.','corpus.txt.','Enter only a file name, not a folder path. Preview before writing.','A split can replace training files if overwrite is enabled.'],
-by:['What counts as one piece when splitting text.','paragraph keeps question-and-answer blocks together.','Use paragraph for multi-line examples; line for one-item-per-line files.','A poor split can separate related training examples.'],
-eval_fraction:['Share of examples held back for review instead of training.','0.1 keeps about 10% for review.','Keep some review data separate from training data.','Too little review data makes progress harder to judge.'],
-seed:['Number used to repeat the same random split.','42.','Keep the same seed to reproduce a split.','Changing it changes which examples go to each file.'],
-overwrite:['Allows existing training files to be replaced.','false is safest for a first preview.','Preview first; enable only when you mean to replace files.','Replaces files used in future training; backups may be created.'],
-dry_run:['Preview a file split without writing files.','true previews; false writes.','Always preview first.','Turning preview off writes or replaces training files.'],
-items:['The lessons to add or choose. Each item can contain its own fields.','Use the example structure and edit its text.','Check each question and answer before saving or training.','Saved lessons may later affect trained model weights.'],
-question:['The question a question-and-answer lesson should answer.','“When is the office closed?”','Write it as a person is likely to ask it.','A vague question can make the lesson difficult to recall.'],
-answer:['The correct answer for a question-and-answer lesson.','“The office is closed on public holidays.”','Answer directly and include necessary context.','If trained, incorrect text can teach the model a false answer.'],
-think:['Enable chain-of-thought intermediate reasoning scratchpad.','true','Turn on when answering logical, arithmetic, or multi-step questions.','Intermediate thinking adds scratchpad tokens.'],
-search:['Search the web for live factual context before answering.','true','Turn on when asking about recent events, live data, or unknown facts.','Queries DuckDuckGo in the background; requires internet connectivity.']
+prompt:['The question, instruction, or starting text you want Chit to respond to.','“Explain how saved memory helps Chit.”','State clearly what you want Chit to answer or continue.','Very long prompts leave less room in the 256-byte context window for the answer.'],
+message:['The next message you want to send in this conversation.','“How does Chit’s byte tokenizer work?”','Write one clear question or statement; include session_id to continue an earlier chat.','Messages are saved in the conversation session.'],
+mode:['Chooses whether Chit answers as a helpful assistant or continues your raw text directly.','assistant answers a request; continue extends the given text prefix.','Use assistant for questions and tasks; use continue for finishing an incomplete sentence.','Continue mode does not use assistant instructions, thinking steps, or web search.'],
+task:['Chooses which trained Task skill header Chit uses for this request.','chat, knowledge, behavior, grammar, reasoning, prose, or continue.','Leave on chat to let Chit’s Router pick the best skill automatically, or pick a specific skill to force that mode.','Choosing continue extends raw text without saving a chat session.'],
+tokens:['Maximum number of new bytes/tokens Chit may write in its reply.','100 for a short answer; up to 500 for a longer one.','Start with 80–160 and increase only if the answer gets cut off.','Longer limits take more time and can allow a small model to drift off topic.'],
+temperature:['Controls how steady or creative Chit’s wording is.','0 gives the steadiest, most repeatable answer; 0.4–0.7 allows more variety.','Use 0 for factual questions and math; use 0.4 for general writing.','Higher values increase the chance of spelling errors or made-up facts.'],
+top_k:['Limits how many top next-character choices Chit considers at each step.','50 is the standard setting.','Keep at 50 unless you are experimenting with sampling variety.','Has no effect when temperature is 0.'],
+stop:['Optional list of text strings that tell Chit to stop writing immediately if they appear.','["\\nUser:"]','Leave empty to use Chit’s built-in stop rules.','Any matching stop string cuts off the reply as soon as it is generated.'],
+session_id:['The 32-character ID of the conversation session to open, update, or delete.','Copy the 32-character hex ID from List sessions or a previous Chat reply.','Leave empty when starting a brand-new conversation in Chat.','An unknown ID returns 404 Not Found.'],
+job_id:['The 32-character ID of the training or candidate job to inspect, cancel, test, or promote.','Copy the 32-character hex ID from List training jobs or List candidates.','Use the exact job ID returned when training started.','An unknown ID returns 404 Not Found.'],
+memory_id:['The unique ID of the saved long-term memory you want to delete.','Copy the ID from a Search memories result.','Verify the memory text before deleting its ID.','Deleting a memory permanently removes it from recall.'],
+entry_id:['The unique ID of the saved knowledge lesson you want to read or delete.','Copy the ID from List knowledge.','Check the lesson contents before deleting.','Deleting removes the lesson from future training runs.'],
+enabled:['Turns this conversation feature (automatic fact extraction or running summary) on or off.','true turns it on; false turns it off.','Keep true so Chit remembers your details and summarizes long chats automatically.','Turning it off stops Chit from updating facts or summaries in that session.'],
+to_sha256:['The SHA-256 fingerprint of the archived model checkpoint you want to restore as the live AI.','Paste the 64-character SHA-256 hash of a previous champion checkpoint.','Copy the exact hash from Studio or server logs before rolling back.','Immediately replaces the live AI with the specified older checkpoint.'],
+config:['The name of the learning plan (training recipe) to inspect or run.','chit_assistant_cpu or chit_v2_6l_256.','Inspect the plan’s files in Training library before starting a training job.','Starting training uses heavy CPU/memory resources.'],
+force_promote:['Makes the newly trained model go live immediately when training finishes, skipping safety and Bridge checks.','false (recommended) keeps the normal safety-tested workflow; true forces immediate promotion.','Keep false so you can run safety tests and Bridge calibration first.','True replaces the live AI without verifying safety rules.'],
+promote:['Requests that a finished training job automatically become the live AI model.','false by default; setting true also requires force_promote: true.','Keep false and promote from Studio after testing the candidate.','Replaces the live model as soon as training completes.'],
+init:['Chooses whether training starts from a fresh blank brain or builds on top of the current live model.','auto continues from the current model when compatible; current requires continuing; scratch starts fresh.','Use auto or current for continual learning; use scratch only when training a brand-new stage from zero.','Scratch ignores all previously learned weights.'],
+repeat:['How many times each saved lesson is repeated in the training mix during a knowledge training run.','3 is the standard starting value.','Keep between 1 and 5 so lessons are learned without memorizing word-for-word.','Very high repeat counts can cause overfitting on a small set of lessons.'],
+select:['Chooses which saved lessons to include in a knowledge training run.','all studies every saved lesson; pending studies only new lessons not yet trained.','Use all for balanced review so older lessons are not forgotten.','Studying only pending lessons gives less review of earlier material.'],
+content:['The clear fact or personal preference to store in Chit’s long-term memory.','“I prefer concise answers in simple English.”','Write one short, true statement per memory.','Saved immediately in memory.db; never store passwords or secrets.'],
+memory_type:['Categorizes the memory as a personal preference/experience or a general fact.','experience or fact.','Pick experience for user preferences and fact for reference knowledge.','Used for organization; both types can be recalled in chat.'],
+importance:['How strongly this memory should be prioritized when Chit searches for relevant context (0.0 to 1.0).','0.5 for everyday facts; 0.8 for very important rules or preferences.','Use 0.5 for most memories and 0.8 for top priorities.','Higher importance increases recall priority but does not verify accuracy.'],
+tags:['Optional short keyword labels to help organize and find this memory or lesson later.','["preferences", "writing"]','Add 1 to 3 short topic words if helpful.','Tags are stored in plain text alongside the item.'],
+q:['The search word or phrase used to find matching saved memories.','“simple English” or “office”','Enter one or two specific keywords from the memory you want to find.','Very broad searches may return loosely related memories.'],
+limit:['Maximum number of records to return in one page of results.','50 is the standard page size.','Keep the default unless you need a larger list.','Very large limits take slightly longer to load.'],
+offset:['Number of earlier records to skip when paging through a long list.','0 starts at the very beginning of the list.','Start with 0, then add the limit value to view the next page.','If items are added or deleted while paging, positions can shift slightly.'],
+status:['Filters saved lessons by whether they are waiting to be trained or already learned.','pending shows lessons waiting for training; trained shows lessons already included in a promoted model.','Use pending to check what will be studied next.','Only filters the returned list; does not change lesson data.'],
+kind:['Selects the lesson format: a passage of text, a question-and-answer pair, or a step-by-step reasoning example.','text, qa, or reasoning.','Choose qa for factual questions, reasoning for step-by-step logic, and text for general reading passages.','Each kind is formatted with its matching Task header (Task: prose, Task: knowledge, or Task: reasoning).'],
+text:['The passage or fact statement for a text lesson.','“Chit uses a 256-entry UTF-8 byte tokenizer.”','Write clear, complete sentences.','Included in future training runs when saved.'],
+input:['The problem or question for a step-by-step reasoning lesson (Task: reasoning).','“If 3 pens cost 15 rupees, how much does 1 pen cost?”','State the problem clearly with all needed numbers or facts.','Used as the Input: field in Task: reasoning training examples.'],
+reasoning:['The step-by-step thinking that leads from the problem to the final answer in a reasoning lesson.','“Dividing 15 rupees by 3 pens gives 15 / 3 = 5 rupees per pen.”','Write each logical step in order so Chit learns how to work through the problem.','Used as the Reasoning: scratchpad in Task: reasoning training examples.'],
+remember:['When true, also saves this lesson into long-term memory immediately so Chat can recall it before training.','true saves to both knowledge and memory; false saves only to the training queue.','Set true when you want Chit to use the fact right away in Chat.','Creates a separate memory entry in memory.db.'],
+source:['For data split: the file name in the server data folder (e.g. corpus.txt). For lessons: an optional note on where the fact came from.','“corpus.txt” (when splitting files) or “Project handbook” (when saving a lesson).','When splitting data, enter only the file name inside data/.','Splitting with overwrite enabled can replace existing train/eval files.'],
+by:['How a text file is divided into individual training examples during a split.','paragraph keeps multi-line Task/User/Chit blocks together; line splits line-by-line.','Always use paragraph for Chit Task-formatted files so multi-line examples stay intact.','Splitting by line on a multi-line file will break Task headers apart from their answers.'],
+eval_fraction:['The share of examples held back for the review (eval) file when splitting a dataset (for example, 0.1 = 10%).','0.1 holds back 10% of examples for review and puts 90% in training.','Keep around 0.05 to 0.10 so review loss accurately measures model progress.','Too little review data makes it hard to tell if training improved the model.'],
+seed:['Fixed random number seed so a dataset split or training run happens the exact same way every time.','42 or 1337.','Keep the default seed for reproducible splits and training runs.','Changing the seed changes which examples land in the review set.'],
+overwrite:['Allows a dataset split to replace existing train and review files (the server automatically saves a .bak backup).','false prevents overwriting existing files; true replaces them after backing up.','Preview with dry_run: true first, then enable overwrite only when ready.','Replaces the training files used by future runs of that learning plan.'],
+dry_run:['Previews how a dataset split will divide the file without writing or changing any files on disk.','true previews counts only; false writes the train and review files.','Always run with true first to check the example counts.','Setting false writes files to the server data folder.'],
+items:['The list of lesson objects to save into Chit’s knowledge queue.','[{"kind": "qa", "question": "What is Chit?", "answer": "Chit is the neural brain of Atmini."}]','Review each question, reasoning step, and answer for accuracy before sending.','Saved lessons will be studied in future knowledge training runs.'],
+question:['The question for a question-and-answer lesson (Task: knowledge).','“What is Chit?”','Write the question the way a user would naturally ask it.','Paired with the answer field during training.'],
+answer:['The clear, accurate answer for a Q&A or reasoning lesson.','“Chit is the neural brain of Atmini.”','Keep the answer direct, truthful, and easy to read.','Chit’s training loss focuses directly on learning to write this answer.'],
+think:['Turns on Chain-of-Thought step-by-step reasoning (Task: reasoning) before Chit writes its final answer.','true turns on step-by-step thinking; false answers directly.','Turn on for logic puzzles, math word problems, or multi-step questions.','Generates extra thinking tokens before the final answer.'],
+search:['Searches the web for live facts before answering and grounds Chit’s reply in the retrieved snippets.','true enables live web search; false uses only local memories and the neural brain.','Turn on for recent events or facts not stored in Chit’s memory.','Requires server internet access and adds about 1–2 seconds for search.']
 };
-const responseFieldHelp={text:'The text Chit generated.',session_id:'The conversation ID. Save it to continue this conversation.',id:'The unique ID for the new item or training job.',state:'The current job state, such as queued, running, succeeded, failed, or cancelled.',progress:'How much of the training job is complete, from 0 to 1.',promoted:'True means the candidate checkpoint was made the live model.',status:'A short server health or result label.',model_loaded:'True when a model is ready to answer.',detail:'The server’s explanation of an error or rejected request.',warnings:'Things to review before using or training on this data.',ready_to_train:'True when the selected plan has usable training data.',train:'Information about training text and its size.',eval:'Information about held-back review text and its size.',metadata:'Extra facts recorded while generating or training.',memory_ids:'IDs of saved memories included as context.',parameters:'Number of adjustable values in the active model.',device:'The processor used for the model, such as CPU or GPU.',model_config:'Settings that describe the active model.',items:'The returned list of records.',total:'How many matching records exist.',created_at:'When this item was created.',trained_at:'When this lesson was included in a promoted model.',msg:'A plain-language description of this validation problem.',loc:'The part of the request that has the problem, such as body.prompt.',type:'A short code describing the kind of validation problem.',input:'The value that was rejected. Check it before sharing the error.',ctx:'Extra details about why this value was rejected.',confidence:'Calibrated sequence-level confidence score from 0.0 to 1.0 based on true model token likelihood.',web_grounded:'True when the answer was grounded using live web search snippets.',sources:'List of web search snippets retrieved from DuckDuckGo.',is_uncertain:'True when the model confidence is below the calibrated uncertainty threshold (40%).',is_incomplete:'True when generation was cut off by token length limits without terminal punctuation.',thoughts:'Intermediate Chain-of-Thought reasoning steps generated before the final answer.',thought_tokens:'Number of scratchpad tokens consumed by the Chain-of-Thought reasoning phase.'};
-const apiFieldChoices={mode:['assistant','continue'],task:['chat','continue'],init:['scratch','current','auto'],memory_type:['experience','fact'],status:['pending','trained'],kind:['text','qa','reasoning'],by:['line','paragraph'],select:['all','pending']};
+const responseFieldHelp={
+text:'The final answer or text continuation written by Chit.',
+raw_text:'The raw output from the neural network before Bridge cleanup or formatting.',
+session_id:'The 32-character conversation ID. Use this ID to continue the same chat session.',
+id:'The unique ID assigned to this conversation, memory, lesson, or training job.',
+state:'Current job status: queued (waiting), running (studying), succeeded (finished), failed, or cancelled.',
+progress:'How far along the training job is, from 0.0 (just started) to 1.0 (100% finished).',
+step:'The current training update step completed so far.',
+max_steps:'The total number of training update steps scheduled by the learning plan.',
+promoted:'True if this candidate checkpoint was promoted to become the live AI model.',
+status:'Overall health or readiness label (such as ok, ready, no_model, or degraded).',
+model_loaded:'True when a trained AI checkpoint is loaded in memory and ready to answer.',
+training_job:'The ID of the currently running training job, or null if the trainer is idle.',
+checks:'Individual readiness results for the model, memory store, knowledge store, and inference queue.',
+inference:'Live status of the request queue showing how many chat/generate requests are active or waiting.',
+detail:'Plain-English explanation from the server when a request was rejected or encountered an error.',
+warnings:'Important data or configuration notices you should review before starting a training run.',
+ready_to_train:'True when all required training and review files for this learning plan exist and pass checks.',
+train:'Details about the training dataset files, byte sizes, and example counts.',
+eval:'Details about the held-out review (evaluation) dataset file and its size.',
+metadata:'Detailed diagnostic facts recorded during generation, routing, and verification.',
+memory_ids:'List of saved long-term memory IDs that Chit recalled and used to ground this reply.',
+source:'Which part of Chit produced the final answer: model (neural brain), tool (calculator/date), extractive (saved memory/fact), or abstain (honesty/safety guard).',
+effective_task:'The trained Task skill header (chat, knowledge, behavior, grammar, reasoning, prose, or continue) that Chit’s Router selected for this turn.',
+plan:'The Router’s execution plan showing the chosen Task skill, token budgets, and sampling settings.',
+tokens_prompt:'How many bytes/tokens were used by the assembled prompt (including memories and recent chat history).',
+tokens_reserved:'How many bytes/tokens were reserved in the context window for Chit’s reply.',
+tokens_history_dropped:'How many older conversation messages were left out so the prompt would fit inside the context window.',
+parameters:'Total number of learnable neural network weights in the active AI model.',
+device:'The processor running the AI model (such as cpu or cuda GPU).',
+checkpoint:'File path of the currently active model checkpoint on the server.',
+checkpoint_timestamp:'Exact date and time when the checkpoint file was saved on disk.',
+tokenizer:'Details of the text reader used by the model (such as byte-utf8 with 256 byte values).',
+model_config:'Architecture settings of the loaded neural network (layers, attention heads, width, and block_size).',
+items:'The list of records returned by this request.',
+results:'The list of matching memory records returned by your search.',
+sessions:'The list of saved conversation sessions.',
+jobs:'The list of active and completed training jobs.',
+candidates:'The list of trained candidate checkpoints with their safety evaluation and Bridge benchmark scores.',
+total:'Total number of matching records stored on the server.',
+created_at:'Date and time when this record was created.',
+updated_at:'Date and time when this record was last updated.',
+trained_at:'Date and time when this lesson was included in a promoted model.',
+facts:'Personal facts (key-value pairs) that Chit automatically remembered during this conversation.',
+facts_enabled:'True when Chit is set to automatically remember personal facts shared in this conversation.',
+summary:'The short running summary of earlier messages in this conversation.',
+summary_enabled:'True when Chit is set to automatically maintain a running summary for this conversation.',
+cpu:'Current processor (CPU) usage percentage on the server.',
+mem:'Current system memory (RAM) usage percentage on the server.',
+disk:'Current storage disk usage percentage on the server.',
+evaluation:'Results of the 50 Golden Gate behavioral safety and honesty tests for this candidate.',
+behavioral_gate:'Detailed pass/fail score and rule ratings from the 50 Golden Gate safety evaluation.',
+bridge_benchmark:'Results from benchmarking how well the Bridge guides this candidate (math exactness, calibration error, speed, and loop rate).',
+msg:'Plain-English description of why a field value was rejected.',
+loc:'Which field in the request had a validation problem.',
+type:'Short validation error code reported by the server.',
+input:'The input value or problem statement associated with this record.',
+ctx:'Additional context explaining the validation rule.',
+confidence:'Confidence score from 0.0 to 1.0 showing how steady and certain Chit was when choosing the words in its reply.',
+is_calibrated:'True when the confidence score was adjusted using a verified calibration curve from Bridge benchmarking.',
+needs_retrieval:'True when Chit detected low confidence or missing facts and recommends running a live Web search.',
+web_grounded:'True when Chit searched the web and grounded this answer using live internet snippets.',
+sources:'List of web search snippets retrieved to ground the answer.',
+web_sources:'Clickable web source domains, titles, and snippets used to ground this answer.',
+is_uncertain:'True when Chit’s confidence score fell below the 40% certainty threshold.',
+is_incomplete:'True when the reply was cut off by the maximum token limit before finishing a complete sentence.',
+thoughts:'The step-by-step Chain-of-Thought reasoning Chit wrote before producing its final answer.',
+thought_tokens:'How many bytes/tokens were used by the step-by-step thinking trace.'
+};
+const apiFieldChoices={mode:['assistant','continue'],task:['chat','knowledge','behavior','grammar','reasoning','prose','continue'],init:['scratch','current','auto'],memory_type:['experience','fact'],status:['pending','trained'],kind:['text','qa','reasoning'],by:['line','paragraph'],select:['all','pending']};
 const apiNumericRules={tokens:{min:1,max:500,step:1},temperature:{min:0,max:2,step:.1},top_k:{min:1,max:256,step:1},importance:{min:0,max:1,step:.1},limit:{min:1,max:500,step:1},offset:{min:0,max:100000,step:1},repeat:{min:1,max:100,step:1},eval_fraction:{min:.000001,max:.499999,step:.01},seed:{min:0,max:4294967295,step:1}};
 let guidedState=null;
 function cloneJson(value){return value===undefined?null:JSON.parse(JSON.stringify(value))}

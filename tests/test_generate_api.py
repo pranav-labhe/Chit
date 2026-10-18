@@ -27,7 +27,7 @@ def test_generate_defaults_to_assistant_request_and_uses_memory(client):
     assert response.json()["text"] == "reply"
     assert set(response.json()) == {"text", "confidence", "web_grounded", "sources", "is_uncertain", "is_incomplete", "metadata"}
     (prompt, tokens, temperature, top_k), kwargs = calls[0]
-    assert prompt.startswith("Task: chat\nKnown memory:\n- The preferred color is amber.")
+    assert prompt.startswith("Task: knowledge\nKnown memory:\n- The preferred color is amber.")
     assert "User: What is the preferred color?\nChit:" in prompt
     assert (tokens, temperature, top_k) == (37, 0, 1)
     assert kwargs["stop"] == ["END"]

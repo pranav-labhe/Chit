@@ -32,8 +32,9 @@ def test_bridge_config_defaults_and_overrides():
     assert config.enable_calculator is True
     assert config.legacy_attractor_shim is True
     assert config.reserve_generation_budget is True
-    assert config.enable_generic_verifier is False
-    assert config.enable_calibration is False
+    assert config.enable_generic_verifier is True
+    assert config.enable_calibration is True
+    assert config.best_of_n == 3
     assert config.default_temperature == 0.7
     assert config.open_chat_top_k == 20
 
@@ -51,6 +52,7 @@ def test_router_generates_typed_plan():
     assert isinstance(p_cont, Plan)
     assert p_cont.intent == "continue"
     assert p_cont.strategy == "direct"
+    assert p_cont.effective_task == "continue"
 
     # Math plan
     p_math = router.route(Context(user_input="What is 15 + 27?"), config)
@@ -63,11 +65,21 @@ def test_router_generates_typed_plan():
     assert p_search.intent == "lookup"
     assert p_search.strategy == "search"
     assert p_search.decoding["temperature"] == 0.0
+    assert p_search.effective_task == "knowledge"
 
     # Thinking plan
     p_think = router.route(Context(user_input="Analyze this", think=True), config)
     assert p_think.intent == "think"
     assert p_think.strategy == "think"
+    assert p_think.effective_task == "reasoning"
+
+    # Behavior & Grammar & Explicit task routing
+    p_beh = router.route(Context(user_input="You do not have the evidence to answer. What should you do?"), config)
+    assert p_beh.effective_task == "behavior"
+    p_gram = router.route(Context(user_input="Rewrite this sentence in the past tense."), config)
+    assert p_gram.effective_task == "grammar"
+    p_explicit = router.route(Context(user_input="Hello", task="prose"), config)
+    assert p_explicit.effective_task == "prose"
 
 
 def test_context_builder_budgeting():
@@ -208,3 +220,67 @@ def test_candidate_benchmark_and_calibration_lifecycle(tmp_path, monkeypatch):
     cand = res["candidates"][0]
     assert cand["job_id"] == job_id
     assert cand["bridge_benchmark"] == dummy_bench
+
+
+def test_best_of_3_candidate_selection():
+    class MultiCandidateRuntime(MockRuntime):
+        def __init__(self):
+            super().__init__()
+            self.items = [
+                ("the the the the", 0.90, "stop"),  # Primary fails loop check
+                ("Unrelated statement.", 0.70, "stop"),  # Cand 2 valid, low overlap
+                ("Photosynthesis converts sunlight into energy.", 0.75, "stop"),  # Cand 3 valid, high overlap + conf
+            ]
+
+        def generate(self, prompt, n_tokens, temp, top_k, stop=None, return_details=False):
+            self.history.append({"prompt": prompt, "temp": temp, "top_k": top_k})
+            text, conf, fin = self.items.pop(0)
+            return (text, conf, fin) if return_details else text
+
+    rt = MultiCandidateRuntime()
+    bridge = Bridge(rt)
+    decision = bridge.process(Context(user_input="Explain how photosynthesis converts sunlight."))
+    assert decision.text == "Photosynthesis converts sunlight into energy."
+    assert decision.confidence == 0.75
+    assert len(rt.history) == 3  # 1 primary + 2 best-of-3 resampled candidates
+
+
+def test_calibration_rejects_degenerate_curve(tmp_path):
+    import json
+
+    deg_file = tmp_path / "deg_cal.json"
+    deg_file.write_text(
+        json.dumps({"mapping": [{"raw": 0.0, "calibrated": 0.13}, {"raw": 1.0, "calibrated": 0.1385}]}),
+        encoding="utf-8",
+    )
+    rt = MockRuntime()
+    rt.checkpoint_meta = {"path": "dummy.pt"}
+    bridge = Bridge(rt, config=BridgeConfig(calibration_file=str(deg_file)))
+    assert bridge._calibration_mapping is None
+
+    valid_file = tmp_path / "valid_cal.json"
+    valid_file.write_text(
+        json.dumps({"mapping": [{"raw": 0.0, "calibrated": 0.05}, {"raw": 1.0, "calibrated": 0.92}]}),
+        encoding="utf-8",
+    )
+    bridge_valid = Bridge(rt, config=BridgeConfig(calibration_file=str(valid_file)))
+    assert bridge_valid._calibration_mapping is not None
+
+
+def test_think_fallback_preserves_knowledge_task_and_clean_primary_skips_resampling(monkeypatch):
+    monkeypatch.setattr("pranav.chit.bridge.search_web", lambda *a, **kw: ["Chit uses 256 byte tokens."])
+    rt = MockRuntime(
+        responses=[
+            "Scratchpad without answer delimiter.",
+            "Chit uses 256 byte tokens.",
+        ]
+    )
+    bridge = Bridge(rt)
+    decision = bridge.process(Context(user_input="What tokenizer does Chit use?", search=True, think=True))
+    assert decision.text == "Chit uses 256 byte tokens."
+    # First call is Task: reasoning, second call (fallback) must preserve Task: knowledge (not Task: chat) and not resample
+    assert len(rt.history) == 2
+    assert rt.history[0]["prompt"].startswith("Task: reasoning\n")
+    assert rt.history[1]["prompt"].startswith("Task: knowledge\n")
+
+
