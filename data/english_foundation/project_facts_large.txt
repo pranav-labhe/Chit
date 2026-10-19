@@ -1,0 +1,302 @@
+Task: knowledge
+User: How does Chit fit into the Atmini system?
+Chit: Chit is the neural language model layer inside Atmini, while Atmini is the broader cognitive and surrounding system.
+
+Task: knowledge
+User: What does the name Chit mean in this repository?
+Chit: Chit comes from the Sanskrit word for mind or consciousness and names Pranav's compact Transformer model inside Atmini.
+
+Task: knowledge
+User: What version and author metadata are defined in pranav.chit?
+Chit: The package defines `__version__ = "0.2.0"` and `__author__ = "Pranav"`.
+
+Task: knowledge
+User: Is Chit a cloud-hosted third-party LLM wrapper?
+Chit: No. Chit is a local, from-scratch decoder-only PyTorch Transformer served from local checkpoints.
+
+Task: knowledge
+User: What is the difference between the Brain and the Notebook in Chit?
+Chit: The Brain consists of neural weights saved in `checkpoints/`, while the Notebook consists of SQLite databases (`memory.db`, `knowledge.db`, and `sessions.db`) used at runtime.
+
+Task: knowledge
+User: Which SQLite databases store runtime state for Chit?
+Chit: Runtime state lives in `data/memory.db` for facts and experiences, `data/knowledge.db` for staged training lessons, and `data/sessions.db` for conversation history.
+
+Task: knowledge
+User: If I add an entry through `POST /memory`, does `checkpoints/latest.pt` change?
+Chit: No. Adding a memory writes to `data/memory.db` for runtime retrieval and leaves `checkpoints/latest.pt` untouched.
+
+Task: knowledge
+User: If I delete a stored memory with `DELETE /memory/{id}`, does that unlearn model weights?
+Chit: No. Deleting a memory only removes that record from the external memory store; model weights only change during a training job.
+
+Task: knowledge
+User: How do lessons in `POST /knowledge` affect Chit's neural weights?
+Chit: Lessons added to `POST /knowledge` are queued in `data/knowledge.db` as `pending` and update neural weights only when `POST /knowledge/train` or a training job runs.
+
+Task: knowledge
+User: What are the three lesson types supported by the knowledge store?
+Chit: The knowledge store accepts `text` (plain prose), `qa` (question and answer), and `reasoning` (input, reasoning steps, and answer).
+
+Task: knowledge
+User: What do the states `pending` and `trained` mean for a knowledge entry?
+Chit: `pending` means the entry is staged in `knowledge.db` waiting for training, while `trained` means a completed training run has already included it.
+
+Task: knowledge
+User: How does `ByteTokenizer` encode and decode text?
+Chit: `ByteTokenizer` (`byte-utf8`) maps every UTF-8 byte directly to an integer token ID in `0..255`, giving a fixed vocabulary size of 256 without an external vocabulary file.
+
+Task: knowledge
+User: Why does `ByteTokenizer.encode` use `errors="surrogatepass"`?
+Chit: It prevents lone surrogates from malformed JSON input from crashing UTF-8 encoding, allowing `decode` to replace invalid byte sequences safely.
+
+Task: knowledge
+User: What optional second tokenizer does Chit support besides `byte-utf8`?
+Chit: Chit supports `BpeTokenizer` (`bpe-tokenizers-json-v1`), which loads a Hugging Face `tokenizer.json` asset and verifies its SHA-256 hash on checkpoint load.
+
+Task: knowledge
+User: What happens if a checkpoint's tokenizer name or SHA-256 hash does not match during fine-tuning or runtime loading?
+Chit: Both `train()` and `ChitRuntime.from_checkpoint()` raise a `ValueError` to prevent silent token-ID mismatches.
+
+Task: knowledge
+User: What neural architecture does `ChitModel` implement in `model.py`?
+Chit: `ChitModel` is a pre-LayerNorm decoder-only Transformer with `CausalSelfAttention`, a 4x-expanded GELU MLP in each `Block`, a final `LayerNorm`, and weight tying between `token_embedding` and `lm_head`.
+
+Task: knowledge
+User: How are weights initialized in `ChitModel._init_weights`?
+Chit: Linear and Embedding weights are initialized from a normal distribution with mean `0.0` and standard deviation `0.02`, and Linear biases are initialized to zero.
+
+Task: knowledge
+User: Why does `ChitModel` tie `lm_head.weight` to `token_embedding.weight`?
+Chit: Weight tying shares the embedding matrix between input tokens and output logits, reducing parameter count and improving sample efficiency for a compact model.
+
+Task: knowledge
+User: Which positional encoding modes are supported by `ChitModel` and `ModelConfig`?
+Chit: They support learned `absolute` positional embeddings (`nn.Embedding(block_size, n_embd)`) and `rope` (Rotary Position Embeddings) parameterized by `rope_theta`.
+
+Task: knowledge
+User: What constraint does `CausalSelfAttention` enforce when `position_encoding` is set to `"rope"`?
+Chit: It requires `n_embd` to be divisible by `n_head` and the attention head dimension (`n_embd // n_head`) to be an even integer.
+
+Task: knowledge
+User: How does `CausalSelfAttention` compute attention in PyTorch?
+Chit: It uses `F.scaled_dot_product_attention`, applying causal masking when `past_length == 0` and `t > 1`, or an explicit boolean lower-triangular mask when extending a non-empty KV cache with multiple tokens.
+
+Task: knowledge
+User: Why does `model.py` define `_LEGACY_BUFFER_SUFFIXES = (".attn.mask",)`?
+Chit: Older checkpoints saved a causal mask buffer before switching to `scaled_dot_product_attention`; `clean_state_dict()` strips `.attn.mask` so legacy checkpoints load cleanly with `strict=True`.
+
+Task: knowledge
+User: How does `ChitModel.generate()` use KV caching during autoregressive decoding?
+Chit: When `use_cache=True`, it prefills `kv_caches` over the prompt window once and then passes only the newest token `idx[:, -1:]` with `past_length` on subsequent steps until `block_size` is reached.
+
+Task: knowledge
+User: How does `ChitModel.generate()` handle `temperature <= 0`?
+Chit: When `temperature <= 0`, `generate()` performs deterministic greedy decoding by selecting `sampling_logits.argmax(dim=-1, keepdim=True)`.
+
+Task: knowledge
+User: How does repetition penalty work in `ChitModel.generate()`?
+Chit: When `repetition_penalty > 1.0`, it penalizes only newly generated tokens after `prompt_len` (`idx[b, prompt_len:]`) by dividing positive logits and multiplying negative logits by `repetition_penalty`.
+
+Task: knowledge
+User: Does calling `ChitModel.generate()` mid-training leave the model in eval mode?
+Chit: No. `generate()` saves `was_training = self.training`, switches to `self.eval()` inside a `try` block, and restores `self.train(was_training)` in the `finally` block.
+
+Task: knowledge
+User: How does `ChitModel.generate()` compute the returned confidence score when `return_details=True`?
+Chit: It gathers the log-probability of each sampled token from unpenalized `log_softmax` logits, averages the sequence log-probabilities, exponentiates them, and clamps the result to `[0.0, 1.0]`.
+
+Task: knowledge
+User: How does `TextDataset` in `data.py` store a byte-tokenized corpus in memory?
+Chit: For `byte-utf8`, `TextDataset` reads the file incrementally in 1 MB chunks into a `bytearray` and wraps it with `torch.frombuffer(..., dtype=torch.uint8)` so each token uses one byte of host RAM.
+
+Task: knowledge
+User: How does `_find_record_starts` identify training record boundaries in `data.py`?
+Chit: It scans the raw UTF-8 byte buffer for `b"Task: "` at byte 0 and every occurrence of `b"\nTask: "`, storing the starting byte offsets in `ds.record_starts`.
+
+Task: knowledge
+User: How does `_sample_starts` choose training windows when `record_starts` are present?
+Chit: It samples 70% of batch windows aligned directly to `Task: ` record starts and 30% uniformly across all valid byte offsets so the model learns both prompt beginnings and mid-record continuations.
+
+Task: knowledge
+User: What does `_apply_answer_loss_mask` do during batch sampling in `data.py`?
+Chit: For byte-tokenized datasets, it masks prompt target tokens up to the first `\nChit: `, `\nReasoning: `, or `Task: prose\n` header with `-100` so cross-entropy loss trains on answer and reasoning tokens.
+
+Task: knowledge
+User: Why does `_apply_answer_loss_mask` check `min_remaining` before masking a row?
+Chit: It ensures at least 16 unmasked target tokens remain when `width >= 128` (or 1 when smaller), preventing rows with long prompts from having almost every token masked out.
+
+Task: knowledge
+User: What happens in `ChitModel.forward()` if every target token in a batch is `-100`?
+Chit: If no target token differs from `-100`, `forward()` returns `logits.sum() * 0.0` instead of `NaN` from `F.cross_entropy`.
+
+Task: knowledge
+User: How does `random_mixed_batch` combine multiple corpus files during training?
+Chit: It samples a source dataset per sequence using `torch.multinomial` over the configured source weights, then draws a window within that file so windows never cross unrelated file boundaries.
+
+Task: knowledge
+User: Which optimizer and gradient clipping method does `training.py` use?
+Chit: `train()` uses `torch.optim.AdamW` with configured `learning_rate` and `weight_decay`, and clips gradient norms each step with `torch.nn.utils.clip_grad_norm_(m.parameters(), t.grad_clip)`.
+
+Task: knowledge
+User: What learning-rate schedules are supported by `lr_at()` in `training.py`?
+Chit: `lr_at()` supports linear warmup over `warmup_steps` followed by `constant`, `linear`, or `cosine` decay down to `learning_rate * min_lr_ratio`.
+
+Task: knowledge
+User: How does `context_length_at()` implement context curriculum learning in `training.py`?
+Chit: When `training.context_curriculum` is a strictly increasing list ending at `model.block_size`, `context_length_at()` divides `max_steps` into equal stages and returns that stage's sequence length.
+
+Task: knowledge
+User: How does `save_checkpoint()` prevent corrupted checkpoint files on disk?
+Chit: It writes first to a temporary file named `<name>.tmp-<pid>` and atomically replaces the target path with `os.replace(tmp, path)`, unlinking any leftover temp file in a `finally` block.
+
+Task: knowledge
+User: How does `load_checkpoint()` protect against arbitrary code execution when loading `.pt` files?
+Chit: It calls `torch.load(path, map_location="cpu", weights_only=True)` and verifies that the loaded object is a dictionary containing `"model"` and `"model_config"`.
+
+Task: knowledge
+User: Which model keys must match in `same_architecture()` when fine-tuning from `--init`?
+Chit: The keys `vocab_size`, `block_size`, `n_layer`, `n_head`, `n_embd`, `position_encoding`, and `rope_theta` must match; `dropout` is allowed to differ.
+
+Task: knowledge
+User: What happens in `train()` if the training loss becomes `NaN` or infinite?
+Chit: `train()` checks `torch.isfinite(l)` at every step and immediately raises a `FloatingPointError` advising the caller to lower the learning rate.
+
+Task: knowledge
+User: Why does `TrainingConfig` reject configurations that save more than 1,000 checkpoints?
+Chit: `TrainingConfig.__post_init__` enforces `(max_steps + checkpoint_interval - 1) // checkpoint_interval <= 1000` so a misconfigured job cannot fill the disk with step checkpoints.
+
+Task: knowledge
+User: What happens when an unknown key is present in a JSON config loaded by `load_config()`?
+Chit: `config.py` rejects unknown top-level or section keys with a `ConfigError` so typos in config files fail loudly instead of being silently ignored.
+
+Task: knowledge
+User: What are the seven valid task names in `formats.py`?
+Chit: `VALID_TASKS` in `formats.py` defines `chat`, `knowledge`, `behavior`, `grammar`, `reasoning`, `prose`, and `continue`.
+
+Task: knowledge
+User: How does the Bridge `Router` choose an effective task when `task="chat"` is passed?
+Chit: `Router.select_effective_task()` maps thinking requests to `reasoning`, missing-info/conflict/safety queries to `behavior`, grammar queries to `grammar`, memory/search/architecture queries to `knowledge`, and general turns to `chat`.
+
+Task: knowledge
+User: In what order does `render_chat_prompt()` trim context when a prompt exceeds `max_tokens` or `max_bytes`?
+Chit: It drops oldest conversation turns first (keeping a `user` turn first), then drops the conversation summary, then drops lowest-ranked memories, then drops oldest session facts, and finally truncates the end of an overlong user input while closing open code fences.
+
+Task: knowledge
+User: How does `ContextBuilder.compute_budget()` reserve generation headroom for 256-byte models?
+Chit: When `reserve_generation_budget=True` and `block_size >= 256`, it reserves between 32 and 96 tokens (`int(block_size * 0.4)`) so autoregressive generation does not immediately evict prompt tokens.
+
+Task: knowledge
+User: How does the Bridge handle pure arithmetic requests when `think` is not enabled?
+Chit: When `enable_calculator=True`, `Router` checks `try_calculate(user_input)`, which uses a safe AST evaluator without `eval` or `exec` and returns the exact answer with `source: "tool"`.
+
+Task: knowledge
+User: What stop strings does `Bridge` pass to `ChitRuntime.generate()` during standard chat and reasoning?
+Chit: Standard chat uses `Bridge.STOP = ["\nUser:", "\nChit:", "\nTask:"]`, while thinking/reasoning uses `["\nInput:", "\nUser:", "\nTask:"]`.
+
+Task: knowledge
+User: What quality checks does `Verifier.verify()` perform on generated outputs in `bridge.py`?
+Chit: `Verifier` checks for empty output (`is_empty`), 4-word/bigram/trigram/character repetition loops (`is_repetitive`), UTF-8 replacement characters (`has_replacement_char`), length cutoff without terminal punctuation (`is_truncated`), and semantic divergence from retrieved premises.
+
+Task: knowledge
+User: How does `Bridge` calibrate raw model confidence scores?
+Chit: It loads isotonic regression anchors from `data/calibration.json` (fitted via PAVA in `tools/calibrate_confidence.py`) and rejects degenerate curves whose top calibrated anchor is below `uncertainty_threshold` (`0.40`).
+
+Task: knowledge
+User: Why does `Bridge` set `temperature=0.0` and `top_k=1` when memories, session facts, or web search results are present?
+Chit: Grounded lookup turns use deterministic greedy decoding so the model stays faithful to retrieved premises rather than sampling random token variations.
+
+Task: knowledge
+User: How does `facts.py` extract user-stated facts during a chat session?
+Chit: It uses deterministic regular expressions to extract explicit user statements such as name, location, preference, email, project, and goal, without invoking a neural model.
+
+Task: knowledge
+User: Why does `TrainingJobManager` allow only one active training job at a time?
+Chit: A second job would compete for CPU/GPU resources with both the active training run and live inference; submitting another job while one is queued or running raises `JobConflict` (`HTTP 409`).
+
+Task: knowledge
+User: Where does `TrainingJobManager` write checkpoints and audit state for a background training job?
+Chit: Each job writes to `checkpoints/jobs/<job_id>/` with its state persisted in `job.json`, ensuring a failed or cancelled run never overwrites the live `checkpoints/latest.pt` champion.
+
+Task: knowledge
+User: What happens on server startup if a previous `job.json` was still in `queued` or `running` state?
+Chit: `TrainingJobManager._load_history()` marks interrupted jobs as `failed` rather than silently resuming an incomplete run.
+
+Task: knowledge
+User: What is the difference between a Candidate checkpoint and the Champion checkpoint in Chit?
+Chit: A Candidate is a newly trained checkpoint in `checkpoints/jobs/<job_id>/latest.pt`; the Champion is the promoted live checkpoint at `checkpoints/latest.pt` serving API traffic.
+
+Task: knowledge
+User: What gates must a Candidate pass before promotion to Champion?
+Chit: It is evaluated on held-out text (`data/eval_combined.txt` or `data/eval.txt`) and the 50-case Golden Set (`data/golden_set.json`, requiring >= 85% overall and 100% on critical cases), unless `force_promote: true` is explicitly passed.
+
+Task: knowledge
+User: What does `POST /admin/rollback` do if a promoted Champion performs poorly?
+Chit: `POST /admin/rollback` restores a previously archived Champion checkpoint identified by its `to_sha256` hash and reloads it into memory.
+
+Task: knowledge
+User: Why must the Chit API server (`pranav.chit.api:app`) always run with `--workers 1`?
+Chit: The loaded `ChitRuntime`, inference traffic queue (`inference.py`), and `TrainingJobManager` state live in process memory; multiple workers would create split-brain state.
+
+Task: knowledge
+User: How do authentication on Port 8000 (`api.py`) and Port 8001 (`ui.py`) differ?
+Chit: The Port 8000 API is stateless and requires `CHIT_API_KEY` via `X-API-Key` or `Bearer` token on every protected route, whereas the Port 8001 UI validates the key and sets an `HttpOnly`, `SameSite=Strict` cookie (`chit_console_key`).
+
+Task: knowledge
+User: Which endpoint on the Chit API does not require `CHIT_API_KEY` authentication?
+Chit: `GET /health` is unauthenticated so health checks can inspect server status, whether a model is loaded, and whether a training job is active.
+
+Task: knowledge
+User: What HTTP status code does `POST /generate` return if no checkpoint has been trained yet?
+Chit: When no model checkpoint is loaded, `GET /health` reports `no_model` and `POST /generate` returns `HTTP 503`.
+
+Task: knowledge
+User: What causes a `QueueFullError` (`HTTP 503`) during inference?
+Chit: `inference.py` bounds concurrent pending generation requests (up to 32) to protect CPU memory and latency; exceeding that queue capacity returns `HTTP 503`.
+
+Task: knowledge
+Known memory:
+- The champion 6L-256 configuration uses 6 Transformer blocks, 4 attention heads, 256 embedding dimensions, and a 256-byte context window.
+User: What are the layer and dimension settings of the 6L-256 champion model?
+Chit: Based on the known memory, the 6L-256 champion model has 6 Transformer blocks, 4 attention heads, 256 embedding dimensions, and a 256-byte context window.
+
+Task: knowledge
+Known memory:
+- `POST /data/split` splits a corpus file in `data/` into non-overlapping train and eval files.
+- The user prefers dark mode in the browser console.
+User: How can I split a single corpus file into train and eval sets with no overlap?
+Chit: Use `POST /data/split` (or `python -m pranav.chit.tools.split`), which splits a corpus file into non-overlapping train and eval sets.
+
+Task: knowledge
+Known memory:
+- Earlier config note: `model.block_size` was 128.
+User-stated facts (latest correction wins):
+- block_size: 256
+User: What is the active `block_size` for the model configuration?
+Chit: Based on your latest stated fact, the active `block_size` is 256.
+
+Task: knowledge
+Known memory:
+- `data/eval_combined.txt` contains 574 held-out evaluation records across 6 task families.
+User: Why must we never add `data/eval_combined.txt` or `data/golden_set.json` to training files?
+Chit: Both are held-out evaluation sets; training on them would cause data leakage and measure memorization instead of genuine generalization.
+
+Task: knowledge
+User: If I call `POST /chat` with `"think": true`, how does the Bridge format the prompt?
+Chit: `ContextBuilder.build_reasoning_prompt()` builds a `Task: reasoning` prompt containing any `Known memory:` and `User-stated facts` blocks followed by `Input: <message>\nReasoning:`.
+
+Task: knowledge
+User: Does `POST /chat` with `"think": true` pollute the saved conversation history with scratchpad thoughts?
+Chit: No. The Bridge separates `Reasoning:` scratchpad tokens into `metadata.thoughts` and stores only the final `Answer:` text as the assistant turn.
+
+Task: knowledge
+User: How does `memory.py` combine keyword search and vector search?
+Chit: `MemoryStore` uses SQLite FTS5 for keyword matching alongside normalized query coverage and optional `SentenceTransformers`/FAISS cosine similarity, filtering results below `min_relevance=0.35`.
+
+Task: knowledge
+User: Why does `memory.py` apply vocative attenuation (`0.25x`) to self-referential tokens like `"chit"`?
+Chit: Vocative attenuation prevents greetings like `"Hello Chit"` from matching every stored memory that mentions the word `"Chit"`.
+
+Task: knowledge
+User: How does `search.py` protect the server during autonomous web grounding?
+Chit: `search.py` uses an SSRF-guarded crawler (`crawl_page`) that blocks private/loopback IP ranges and extracts compact 60-to-80-character factual propositions that fit within Chit's context budget.
