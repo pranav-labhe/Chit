@@ -25,7 +25,7 @@
   },
   "data": {
     "train_file": "data/train_1mb.txt",
-    "eval_file": "data/eval_100kb.txt",
+    "eval_file": "data/eval_combined.txt",
     "sources": [
       {"path": "data/english_foundation/structural.txt", "weight": 0.3},
       {"path": "data/english_foundation/lexical_prose.txt", "weight": 0.3},
