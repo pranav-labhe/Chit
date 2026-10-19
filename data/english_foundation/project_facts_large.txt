@@ -240,7 +240,7 @@ Chit: The loaded `ChitRuntime`, inference traffic queue (`inference.py`), and `T
 
 Task: knowledge
 User: How do authentication on Port 8000 (`api.py`) and Port 8001 (`ui.py`) differ?
-Chit: The Port 8000 API is stateless and requires `CHIT_API_KEY` via `X-API-Key` or `Bearer` token on every protected route, whereas the Port 8001 UI validates the key and sets an `HttpOnly`, `SameSite=Strict` cookie (`chit_console_key`).
+Chit: The Port 8000 API uses `CHIT_API_KEY` via the `X-API-Key` header on protected routes, while the Port 8001 UI validates the key and sets an `HttpOnly`, `SameSite=Strict` cookie named `chit_ui_session`.
 
 Task: knowledge
 User: Which endpoint on the Chit API does not require `CHIT_API_KEY` authentication?
