@@ -132,6 +132,13 @@ Knowledge is for structured data that should be "baked" into the model's weights
 2. **Bake:** Use `POST /knowledge/train` to start a training job.
 3. **Verify:** Check `GET /train/{id}` to ensure the job succeeded and the model was promoted.
 
+### Subword BPE Tokenizer Training (`POST /train/tokenizer`)
+For learning plans using subword BPE tokenization (such as `chit_scratch_mix_v4_6l_256_subword_large`), you can build the immutable BPE tokenizer asset directly from the training corpus files:
+- **Build Asset**: Call `POST /train/tokenizer` with `{"config": "chit_scratch_mix_v4_6l_256_subword_large", "vocab_size": 2000, "overwrite": true}`.
+- **Corpus Aggregation**: Gathers only the training `.txt` source files specified in `cfg.data.sources` (or `cfg.data.train_file`), strictly excluding `cfg.data.eval_file`.
+- **Dual Placement**: Saves the atomic JSON asset to `cfg.tokenizer.model_file` (e.g. `checkpoints/tokenizers/chit-bpe-v1.json`) and mirrors it beside `latest.pt` (`checkpoints/tokenizer.json`).
+- **Response**: Returns `vocab_size`, `checkpoint_asset_sha256`, target paths, and the exact `files_used`.
+
 **When to use Memory vs. Knowledge?**
 - Use **Memory** for dynamic, user-specific facts (e.g., "The user prefers Python").
 - Use **Knowledge** for static, universal truths (e.g., "The capital of France is Paris").
@@ -171,5 +178,5 @@ Chit has a finite `block_size` (context window). If a request is too long:
 ### Tokenization
 Depending on the loaded model, Chit uses either **Byte-level** or **BPE** tokenization. 
 - **Byte models:** One token $\approx$ one UTF-8 byte.
-- **BPE models:** One token $\approx$ a common sub-word.
+- **BPE models:** One token $\approx$ a common sub-word. Use `POST /train/tokenizer` to generate the static `tokenizer.json` asset directly from the training config's corpus sources.
 The API handles this transparently, but you can check the active tokenizer via `GET /model`.

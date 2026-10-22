@@ -650,6 +650,25 @@ class TrainRequest(BaseModel):
     force_promote: bool = Field(default=False, description="force-install this candidate after successful training, bypassing evaluation and reviewer gates")
 
 
+class TokenizerTrainRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    config: str = Field(
+        default="chit_scratch_mix_v4_6l_256_subword_large",
+        pattern=r"^[A-Za-z0-9_-]{1,64}$",
+        description="name of a JSON file in CHIT_CONFIG_DIR, without .json",
+    )
+    vocab_size: int | None = Field(
+        default=None,
+        ge=256,
+        le=50_000,
+        description="target BPE vocabulary size; defaults to the config's model.vocab_size (or 2000 if config vocab_size <= 256)",
+    )
+    overwrite: bool = Field(
+        default=True,
+        description="overwrite existing tokenizer JSON files if they already exist",
+    )
+
+
 def _overrides(m: BaseModel) -> dict:
     return {k: v for k, v in m.model_dump().items() if v is not None}
 
@@ -827,6 +846,74 @@ def _ensure_idle() -> None:
 @app.get("/train/configs", dependencies=[Depends(require_training_access)])
 def list_train_configs():
     return {"configs": sorted(p.stem for p in Path(CONFIG_DIR).glob("*.json"))}
+
+
+@app.post("/train/tokenizer", dependencies=[Depends(require_training_access)])
+def train_tokenizer_asset(r: TokenizerTrainRequest):
+    cfg = build_config(TrainRequest(config=r.config))
+    if cfg.data.sources:
+        corpus_files = []
+        seen = set()
+        for s in cfg.data.sources:
+            p = Path(s.path)
+            if p not in seen:
+                seen.add(p)
+                corpus_files.append(p)
+    else:
+        corpus_files = [Path(cfg.data.train_file)]
+
+    missing = [p for p in corpus_files if not p.is_file()]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=[f"data source {p} not found on server" for p in missing],
+        )
+
+    if r.vocab_size is not None:
+        target_vocab = r.vocab_size
+    elif cfg.model.vocab_size > 256:
+        target_vocab = cfg.model.vocab_size
+    else:
+        target_vocab = 2000
+
+    sidecar_path = Path(CHECKPOINT).parent / "tokenizer.json"
+    if cfg.tokenizer.model_file:
+        config_model_path = Path(cfg.tokenizer.model_file)
+    else:
+        config_model_path = Path(CHECKPOINT).parent / "tokenizers" / "chit-bpe-v1.json"
+
+    if not r.overwrite:
+        existing = []
+        if config_model_path.exists():
+            existing.append(str(config_model_path))
+        if sidecar_path.exists() and sidecar_path.resolve() != config_model_path.resolve():
+            existing.append(str(sidecar_path))
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"tokenizer asset already exists: {', '.join(existing)}; pass overwrite=true to replace",
+            )
+
+    from .tools.train_tokenizer import train_bpe_tokenizer
+
+    with _data_lock:
+        result = train_bpe_tokenizer(corpus_files, config_model_path, vocab_size=target_vocab)
+        if sidecar_path.resolve() != config_model_path.resolve():
+            sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+            sidecar_tmp = sidecar_path.with_name(f"{sidecar_path.name}.tmp-{os.getpid()}")
+            shutil.copyfile(config_model_path, sidecar_tmp)
+            os.replace(sidecar_tmp, sidecar_path)
+
+    return {
+        "status": "created",
+        "config": r.config,
+        "tokenizer": result["tokenizer"],
+        "vocab_size": result["vocab_size"],
+        "path": str(config_model_path),
+        "latest_sidecar_path": str(sidecar_path),
+        "checkpoint_asset_sha256": result["checkpoint_asset_sha256"],
+        "files_used": result["files_used"],
+    }
 
 
 @app.post("/train", status_code=202, dependencies=[Depends(require_training_access)])

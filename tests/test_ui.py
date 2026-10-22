@@ -34,14 +34,14 @@ def test_ui_is_single_page_and_lists_every_documented_api_route():
         ("POST", "/sessions"), ("GET", "/sessions"),
         ("GET", "/sessions/{session_id}"), ("DELETE", "/sessions/{session_id}"),
         ("POST", "/memory"), ("GET", "/memory/search"), ("DELETE", "/memory/{memory_id}"),
-        ("GET", "/train/configs"), ("POST", "/train"), ("GET", "/train"),
+        ("GET", "/train/configs"), ("POST", "/train/tokenizer"), ("POST", "/train"), ("GET", "/train"),
         ("GET", "/train/{job_id}"), ("POST", "/train/{job_id}/cancel"),
         ("POST", "/knowledge"), ("GET", "/knowledge"), ("GET", "/knowledge/stats"),
         ("GET", "/knowledge/{entry_id}"), ("DELETE", "/knowledge/{entry_id}"),
         ("POST", "/knowledge/train"), ("GET", "/data"), ("POST", "/data/split"),
     }
     assert expected.issubset({(r["method"], r["path"]) for r in ui.ROUTES})
-    assert len(expected) == 25
+    assert len(expected) == 26
 
 
 def test_login_is_required_key_is_server_side_and_sessions_are_isolated():
@@ -91,6 +91,34 @@ def test_proxy_forwards_key_request_and_response_without_exposing_key(monkeypatc
         "method": "POST", "url": "http://127.0.0.1:8000/train?example=yes",
         "key": KEY, "body": json.dumps({"config": "tiny", "init": "scratch"}, separators=(",", ":")),
     }
+    assert KEY not in response.text
+
+
+def test_proxy_allows_train_tokenizer(monkeypatch):
+    observed = {}
+
+    def upstream(request):
+        observed["method"] = request.method
+        observed["url"] = str(request.url)
+        observed["key"] = request.headers.get("x-api-key")
+        observed["body"] = request.content.decode()
+        return httpx.Response(200, json={"status": "created", "vocab_size": 2000})
+
+    monkeypatch.setattr(ui, "_new_http_client", lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(upstream), follow_redirects=False))
+
+    with TestClient(ui.app) as client:
+        client.post("/_ui/login", json={"api_key": KEY})
+        response = client.post("/_ui/proxy", json={
+            "method": "POST", "path": "/train/tokenizer",
+            "body": {"config": "chit_scratch_mix_v4_6l_256_subword_large", "vocab_size": 2000, "overwrite": True},
+        })
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "created", "vocab_size": 2000}
+    assert observed["method"] == "POST"
+    assert observed["url"] == "http://127.0.0.1:8000/train/tokenizer"
+    assert observed["key"] == KEY
     assert KEY not in response.text
 
 

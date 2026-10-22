@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from typing import Iterable
 
 
@@ -38,7 +39,12 @@ class BpeTokenizer:
             from tokenizers import Tokenizer
         except ImportError as exc:
             raise RuntimeError("BPE support requires the optional 'bpe' dependencies") from exc
-        return cls(Tokenizer.from_file(path))
+        if not Path(path).is_file():
+            raise FileNotFoundError(f"tokenizer asset file not found: {path}")
+        try:
+            return cls(Tokenizer.from_file(path))
+        except Exception as exc:
+            raise OSError(f"cannot load tokenizer from {path}: {exc}") from exc
 
     @classmethod
     def from_asset(cls, asset: str):

@@ -1380,6 +1380,7 @@ const routeGuides={
 'Search memories':['Find saved long-term memories that match a word or phrase.','A search keyword or phrase and maximum result count.','Read-only. Shows matching memories and their importance scores.'],
 'Delete memory':['Permanently remove a saved memory so Chit no longer recalls it in future chats.','The memory ID from a search result.','Deletes that memory card immediately from the memory database.'],
 'List training presets':['See all available learning plans (such as Everyday assistant and the 6L-256 staged curriculum configs).','Nothing to enter.','Read-only. Returns the list of learning plan names available in Studio.'],
+'Train BPE tokenizer':['Train a byte-level BPE tokenizer asset from a learning plan’s corpus files and save it for training and live inference.','A learning plan name (config), target vocabulary size (default: 2000), and overwrite flag.','Creates the tokenizer asset beside the active checkpoint and at the config’s model_file path before training starts.'],
 'Start training':['Start a background training run using a chosen learning plan.','A learning plan name, starting point (scratch, current, or auto), and force_promote flag.','Uses processor and memory resources to train a new candidate model while the current live AI keeps working.'],
 'List training jobs':['See active and past training runs and their progress.','Nothing to enter.','Read-only. Returns job IDs, step counts, loss scores, and status.'],
 'Read training job':['Check the detailed step progress, review loss, and status of one training job.','The 32-character training job ID.','Read-only. Shows whether the job is running, succeeded, failed, or promoted.'],
@@ -1432,6 +1433,7 @@ entry_id:['The unique ID of the saved knowledge lesson you want to read or delet
 enabled:['Turns this conversation feature (automatic fact extraction or running summary) on or off.','true turns it on; false turns it off.','Keep true so Chit remembers your details and summarizes long chats automatically.','Turning it off stops Chit from updating facts or summaries in that session.'],
 to_sha256:['The SHA-256 fingerprint of the archived model checkpoint you want to restore as the live AI.','Paste the 64-character SHA-256 hash of a previous champion checkpoint.','Copy the exact hash from Studio or server logs before rolling back.','Immediately replaces the live AI with the specified older checkpoint.'],
 config:['The name of the learning plan (training recipe) to inspect or run.','chit_assistant_cpu or chit_v2_6l_256.','Inspect the plan’s files in Training library before starting a training job.','Starting training uses heavy CPU/memory resources.'],
+vocab_size:['Target BPE vocabulary size for the subword tokenizer (must be at least 256).','2000 for standard subword vocabularies; up to 50000.','Keep at 2000 or match your config’s model.vocab_size.','Must be at least 256 for UTF-8 byte coverage and must match model.vocab_size during training.'],
 force_promote:['Makes the newly trained model go live immediately when training finishes, skipping safety and Bridge checks.','false (recommended) keeps the normal safety-tested workflow; true forces immediate promotion.','Keep false so you can run safety tests and Bridge calibration first.','True replaces the live AI without verifying safety rules.'],
 promote:['Requests that a finished training job automatically become the live AI model.','false by default; setting true also requires force_promote: true.','Keep false and promote from Studio after testing the candidate.','Replaces the live model as soon as training completes.'],
 init:['Chooses whether training starts from a fresh blank brain or builds on top of the current live model.','auto continues from the current model when compatible; current requires continuing; scratch starts fresh.','Use auto or current for continual learning; use scratch only when training a brand-new stage from zero.','Scratch ignores all previously learned weights.'],
@@ -1526,13 +1528,18 @@ needs_retrieval:'True when Chit detected low confidence or missing facts and rec
 web_grounded:'True when Chit searched the web and grounded this answer using live internet snippets.',
 sources:'List of web search snippets retrieved to ground the answer.',
 web_sources:'Clickable web source domains, titles, and snippets used to ground this answer.',
+vocab_size:'The total number of subword tokens in the trained tokenizer vocabulary.',
+path:'The file path where the trained tokenizer JSON asset was written.',
+latest_sidecar_path:'The companion tokenizer file path placed beside the latest model checkpoint.',
+checkpoint_asset_sha256:'The cryptographic SHA-256 hash of the trained tokenizer asset.',
+files_used:'The list of training-only text corpus files used to build the tokenizer vocabulary.',
 is_uncertain:'True when Chit’s confidence score fell below the 40% certainty threshold.',
 is_incomplete:'True when the reply was cut off by the maximum token limit before finishing a complete sentence.',
 thoughts:'The step-by-step Chain-of-Thought reasoning Chit wrote before producing its final answer.',
 thought_tokens:'How many bytes/tokens were used by the step-by-step thinking trace.'
 };
 const apiFieldChoices={mode:['assistant','continue'],task:['chat','knowledge','behavior','grammar','reasoning','prose','continue'],init:['scratch','current','auto'],memory_type:['experience','fact'],status:['pending','trained'],kind:['text','qa','reasoning'],by:['line','paragraph'],select:['all','pending']};
-const apiNumericRules={tokens:{min:1,max:500,step:1},temperature:{min:0,max:2,step:.1},top_k:{min:1,max:256,step:1},importance:{min:0,max:1,step:.1},limit:{min:1,max:500,step:1},offset:{min:0,max:100000,step:1},repeat:{min:1,max:100,step:1},eval_fraction:{min:.000001,max:.499999,step:.01},seed:{min:0,max:4294967295,step:1}};
+const apiNumericRules={vocab_size:{min:256,max:50000,step:1},tokens:{min:1,max:500,step:1},temperature:{min:0,max:2,step:.1},top_k:{min:1,max:256,step:1},importance:{min:0,max:1,step:.1},limit:{min:1,max:500,step:1},offset:{min:0,max:100000,step:1},repeat:{min:1,max:100,step:1},eval_fraction:{min:.000001,max:.499999,step:.01},seed:{min:0,max:4294967295,step:1}};
 let guidedState=null;
 function cloneJson(value){return value===undefined?null:JSON.parse(JSON.stringify(value))}
 function humanFieldName(key){return key.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}

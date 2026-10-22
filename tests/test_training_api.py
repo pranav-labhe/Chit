@@ -86,6 +86,7 @@ def test_training_requires_auth(client, monkeypatch):
     ("POST", "/candidates/0123456789abcdef0123456789abcdef/promote", {}),
     ("POST", "/admin/rollback", {"params": {"to_sha256": "dummy"}}),
     ("POST", "/admin/reload", {}),
+    ("POST", "/train/tokenizer", {"json": {"config": "test"}}),
 ])
 def test_candidate_and_admin_endpoints_require_auth(client, monkeypatch, method, path, kwargs):
     # Missing API key -> 401
@@ -101,3 +102,96 @@ def test_candidate_and_admin_endpoints_require_auth(client, monkeypatch, method,
     from conftest import H
     res_auth = client.request(method, path, headers=H, **kwargs)
     assert res_auth.status_code not in (401, 403)
+
+
+def test_train_tokenizer_and_bpe_training_flow(client, tmp_path):
+    import json
+    from pathlib import Path
+
+    pytest.importorskip("tokenizers")
+    data = tmp_path / "data"
+    s1 = data / "source1.txt"
+    s2 = data / "source2.txt"
+    ev = data / "eval_bpe.txt"
+    s1.write_text("Chit neural brain reasoning and dialogue. " * 30, encoding="utf-8")
+    s2.write_text("Atmini cognitive architecture and memory stream. " * 30, encoding="utf-8")
+    ev.write_text("Evaluation held out text tokens. " * 10, encoding="utf-8")
+
+    cfg_dir = Path(api.CONFIG_DIR)
+    tok_target = tmp_path / "custom_tok" / "bpe.json"
+
+    bpe_cfg = {
+        "device": "cpu",
+        "model": {"vocab_size": 300, "block_size": 16, "n_layer": 1, "n_head": 2, "n_embd": 16},
+        "training": {"max_steps": 2, "batch_size": 2, "eval_interval": 1, "eval_steps": 1, "checkpoint_interval": 1},
+        "data": {
+            "train_file": str(s1),
+            "eval_file": str(ev),
+            "sources": [
+                {"path": str(s1), "weight": 0.5},
+                {"path": str(s2), "weight": 0.5},
+            ],
+        },
+        "tokenizer": {
+            "name": "bpe-tokenizers-json-v1",
+            "model_file": str(tok_target),
+        },
+    }
+    (cfg_dir / "bpe_test.json").write_text(json.dumps(bpe_cfg), encoding="utf-8")
+
+    # 1. Before training tokenizer, start_training should fail validate_config because tokenizer is unusable
+    r_fail = client.post("/train", json={"config": "bpe_test"}, headers=H)
+    assert r_fail.status_code == 422
+    assert "tokenizer configuration is unusable" in r_fail.text
+
+    # 2. Call POST /train/tokenizer
+    res = client.post("/train/tokenizer", json={"config": "bpe_test", "vocab_size": 300}, headers=H)
+    assert res.status_code == 200
+    data_res = res.json()
+    assert data_res["status"] == "created"
+    assert data_res["config"] == "bpe_test"
+    assert data_res["vocab_size"] == 300
+    assert data_res["path"] == str(tok_target)
+    sidecar = Path(api.CHECKPOINT).parent / "tokenizer.json"
+    assert data_res["latest_sidecar_path"] == str(sidecar)
+    assert len(data_res["checkpoint_asset_sha256"]) == 64
+    assert str(s1) in data_res["files_used"]
+    assert str(s2) in data_res["files_used"]
+    assert str(ev) not in data_res["files_used"]
+    assert tok_target.is_file()
+    assert sidecar.is_file()
+    assert tok_target.read_text(encoding="utf-8") == sidecar.read_text(encoding="utf-8")
+
+    # 3. overwrite=False returns 409
+    res_conflict = client.post("/train/tokenizer", json={"config": "bpe_test", "overwrite": False}, headers=H)
+    assert res_conflict.status_code == 409
+    assert "already exists" in res_conflict.json()["detail"]
+
+    # 4. Now validate_config succeeds and POST /train starts cleanly
+    r_train = client.post("/train", json={"config": "bpe_test"}, headers=H)
+    assert r_train.status_code == 202
+
+
+def test_train_tokenizer_missing_source_file(client, tmp_path):
+    import json
+    from pathlib import Path
+
+    cfg_dir = Path(api.CONFIG_DIR)
+    bpe_cfg = {
+        "device": "cpu",
+        "data": {
+            "train_file": str(tmp_path / "data" / "train.txt"),
+            "eval_file": str(tmp_path / "data" / "eval.txt"),
+            "sources": [
+                {"path": str(tmp_path / "data" / "missing.txt"), "weight": 1.0},
+            ],
+        },
+        "tokenizer": {
+            "name": "bpe-tokenizers-json-v1",
+            "model_file": str(tmp_path / "tok.json"),
+        },
+    }
+    (cfg_dir / "missing_source.json").write_text(json.dumps(bpe_cfg), encoding="utf-8")
+    res = client.post("/train/tokenizer", json={"config": "missing_source"}, headers=H)
+    assert res.status_code == 422
+    assert "not found on server" in res.text
