@@ -1,0 +1,69 @@
+{
+  "seed": 42,
+  "device": "auto",
+  "model": {
+    "vocab_size": 256,
+    "block_size": 512,
+    "n_layer": 6,
+    "n_head": 4,
+    "n_embd": 256,
+    "dropout": 0.1,
+    "position_encoding": "rope",
+    "rope_theta": 10000.0
+  },
+  "training": {
+    "batch_size": 8,
+    "learning_rate": 0.0004,
+    "weight_decay": 0.1,
+    "max_steps": 6000,
+    "eval_interval": 250,
+    "eval_steps": 16,
+    "checkpoint_interval": 1000,
+    "grad_clip": 1.0,
+    "warmup_steps": 300,
+    "lr_schedule": "cosine",
+    "min_lr_ratio": 0.1
+  },
+  "data": {
+    "train_file": "data/train_1mb_large.txt",
+    "eval_file": "data/eval_combined_large.txt",
+    "sources": [
+      {
+        "path": "data/train_1mb_large.txt",
+        "weight": 0.177
+      },
+      {
+        "path": "data/english_foundation/structural_large.txt",
+        "weight": 0.17
+      },
+      {
+        "path": "data/english_foundation/lexical_prose_large.txt",
+        "weight": 0.17
+      },
+      {
+        "path": "data/english_foundation/conversation_large.txt",
+        "weight": 0.2
+      },
+      {
+        "path": "data/english_foundation/project_facts_large.txt",
+        "weight": 0.003
+      },
+      {
+        "path": "data/conversation_reasoning/conversation_large.txt",
+        "weight": 0.13
+      },
+      {
+        "path": "data/conversation_reasoning/reasoning_large.txt",
+        "weight": 0.05
+      },
+      {
+        "path": "data/knowledge_behavior/knowledge_large.txt",
+        "weight": 0.045
+      },
+      {
+        "path": "data/knowledge_behavior/behavior_large.txt",
+        "weight": 0.055
+      }
+    ]
+  }
+}
