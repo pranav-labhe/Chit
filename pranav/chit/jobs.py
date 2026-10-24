@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import threading
+import traceback
 import uuid
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
@@ -251,6 +252,15 @@ class TrainingJobManager:
     def _run(self, job: TrainingJob, cfg: ChitConfig,
              after_success: Callable[[dict], None] | None = None) -> None:
         self._update(job, persist=True, state=JobState.RUNNING, started_at=_now())
+        out_dir = Path(job.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_file = out_dir / "train.log"
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"))
+        chit_logger = logging.getLogger("pranav.chit")
+        chit_logger.addHandler(file_handler)
+        log.info("Starting training job %s (output_dir=%s)...", job.id, job.output_dir)
+
         try:
             ckpt = train(
                 cfg,
@@ -268,10 +278,21 @@ class TrainingJobManager:
             log.info('training job %s: %s', job.id, e)
             self._finish(job, JobState.CANCELLED)
             return
-        except Exception as e:  # report to the client; full traceback stays in the server log
-            log.exception('training job %s failed', job.id)
-            self._finish(job, JobState.FAILED, error=f'{type(e).__name__}: {e}')
+        except BaseException as e:  # report to the client; full traceback stays in the server log
+            tb = traceback.format_exc()
+            log.exception('training job %s failed: %s\n%s', job.id, e, tb)
+            err_msg = f'{type(e).__name__}: {e}' if str(e) else type(e).__name__
+            self._finish(job, JobState.FAILED, error=err_msg)
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
             return
+        finally:
+            try:
+                chit_logger.removeHandler(file_handler)
+                file_handler.flush()
+                file_handler.close()
+            except Exception:
+                pass
 
         self._update(job, checkpoint=str(ckpt))
         # Write a final deterministic held-out report. Golden response export

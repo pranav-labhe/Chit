@@ -55,10 +55,16 @@ class BpeTokenizer:
         return cls(Tokenizer.from_str(asset))
 
     def encode(self, text: str) -> list[int]:
-        return self._tokenizer.encode(text, add_special_tokens=False).ids
+        try:
+            return self._tokenizer.encode(text, add_special_tokens=False).ids
+        except Exception as exc:
+            raise RuntimeError(f"BPE token encoding failed: {exc}") from exc
 
     def decode(self, ids: Iterable[int]) -> str:
-        return self._tokenizer.decode([int(i) for i in ids], skip_special_tokens=False)
+        try:
+            return self._tokenizer.decode([int(i) for i in ids], skip_special_tokens=False)
+        except Exception as exc:
+            raise RuntimeError(f"BPE token decoding failed: {exc}") from exc
 
 
 def create_tokenizer(name: str = ByteTokenizer.name, model_file: str | None = None,

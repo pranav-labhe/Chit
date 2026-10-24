@@ -1,10 +1,13 @@
 """Datasets and batching for next-token prediction."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import torch
 from torch.utils.data import Dataset
+
+logger = logging.getLogger(__name__)
 
 
 def _find_record_starts(raw_bytes: bytes | bytearray) -> torch.Tensor:
@@ -90,11 +93,18 @@ class TextDataset(Dataset):
         else:
             if text is None:
                 text = Path(source).read_text(encoding="utf-8")
-            ids = tokenizer.encode(text)
+            try:
+                ids = tokenizer.encode(text)
+            except Exception as exc:
+                src_label = str(source) if source is not None else "provided text"
+                logger.error("Failed to tokenize dataset from %s: %s", src_label, exc, exc_info=True)
+                raise RuntimeError(f"Failed to tokenize dataset from {src_label}: {exc}") from exc
             if len(ids) <= block_size:
                 raise ValueError(f"dataset has {len(ids)} tokens; it must be larger than block_size ({block_size})")
             token_data = torch.tensor(ids, dtype=torch.int32)
             self.record_starts = _find_record_starts(text.encode("utf-8")) if self.is_byte else torch.empty(0, dtype=torch.long)
+            del ids
+            del text
         if len(token_data) <= block_size:
             raise ValueError(f"dataset has {len(token_data)} tokens; it must be larger than block_size ({block_size})")
         self.data = token_data

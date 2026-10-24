@@ -149,15 +149,47 @@ def train(
     """
     set_seed(c.seed)
     dev = device_for(c.device)
-    tok = create_tokenizer(c.tokenizer.name, c.tokenizer.model_file)
+    log.info("Initializing training on device %s (seed=%s)...", dev, c.seed)
+    try:
+        tok = create_tokenizer(c.tokenizer.name, c.tokenizer.model_file)
+    except Exception as exc:
+        log.exception("Failed to initialize tokenizer %s (%s): %s", c.tokenizer.name, c.tokenizer.model_file, exc)
+        raise RuntimeError(f"Failed to initialize tokenizer '{c.tokenizer.name}': {exc}") from exc
+
     if c.model.vocab_size != tok.vocab_size:
         raise ValueError(f"model.vocab_size ({c.model.vocab_size}) must equal tokenizer vocab ({tok.vocab_size})")
+
     train_sources = c.data.sources
-    train_datasets = ([TextDataset(source.path, tok, c.model.block_size) for source in train_sources]
-                      if train_sources else [TextDataset(c.data.train_file, tok, c.model.block_size)])
+    train_datasets = []
+    if train_sources:
+        log.info("Loading %d configured training sources with tokenizer %s...", len(train_sources), tok.name)
+        for idx, source in enumerate(train_sources):
+            log.info("Loading training source [%d/%d]: %s (weight=%.3f)...", idx + 1, len(train_sources), source.path, source.weight)
+            try:
+                ds = TextDataset(source.path, tok, c.model.block_size)
+                train_datasets.append(ds)
+                log.info("Loaded training source [%d/%d]: %s (%d tokens, block_size=%d).", idx + 1, len(train_sources), source.path, len(ds.data), ds.block_size)
+            except Exception as exc:
+                log.exception("Error loading training source %s: %s", source.path, exc)
+                raise RuntimeError(f"Error loading training source '{source.path}': {exc}") from exc
+    else:
+        log.info("Loading single training file: %s...", c.data.train_file)
+        try:
+            train_datasets = [TextDataset(c.data.train_file, tok, c.model.block_size)]
+        except Exception as exc:
+            log.exception("Error loading training file %s: %s", c.data.train_file, exc)
+            raise RuntimeError(f"Error loading training file '{c.data.train_file}': {exc}") from exc
+
     train_weights = [source.weight for source in train_sources] if train_sources else [1.0]
     source_window_counts = [0 for _ in train_datasets]
-    ev = TextDataset(c.data.eval_file, tok, c.model.block_size)
+
+    log.info("Loading evaluation dataset: %s...", c.data.eval_file)
+    try:
+        ev = TextDataset(c.data.eval_file, tok, c.model.block_size)
+        log.info("Loaded evaluation dataset: %s (%d tokens).", c.data.eval_file, len(ev.data))
+    except Exception as exc:
+        log.exception("Error loading evaluation dataset %s: %s", c.data.eval_file, exc)
+        raise RuntimeError(f"Error loading evaluation dataset '{c.data.eval_file}': {exc}") from exc
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
