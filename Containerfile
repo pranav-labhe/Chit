@@ -26,7 +26,7 @@ RUN if [ "$CHIT_WITH_EMBEDDINGS" = "1" ]; then pip install '.[embeddings]'; fi
 # FAISS CPU publishes Linux aarch64 wheels for the Python/glibc runtime used
 # here. Keep it out of the portable Windows requirements; SQLite remains the
 # canonical store and exact-search fallback if the optional package is absent.
-RUN pip install '.[ann]'
+RUN pip install '.[ann,bpe]'
 
 # Paths in the configs (data/train.txt, checkpoints/...) are relative to /app.
 # compose.yaml mounts data/ and checkpoints/ from the host so they persist.

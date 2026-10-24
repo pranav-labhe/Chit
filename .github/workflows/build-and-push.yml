@@ -53,6 +53,9 @@ jobs:
 
       - name: Verify Linux ARM64 FAISS runtime
         run: docker run --rm --platform linux/arm64 $ECR_REPOSITORY:${{ github.run_number }} python -c "import faiss; print('FAISS', faiss.__version__)"
+
+      - name: Verify Linux ARM64 Tokenizers runtime
+        run: docker run --rm --platform linux/arm64 $ECR_REPOSITORY:${{ github.run_number }} python -c "import tokenizers; print('Tokenizers', tokenizers.__version__)"
             
 
       - name: Tag image
