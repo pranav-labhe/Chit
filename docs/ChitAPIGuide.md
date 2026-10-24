@@ -133,10 +133,11 @@ Knowledge is for structured data that should be "baked" into the model's weights
 3. **Verify:** Check `GET /train/{id}` to ensure the job succeeded and the model was promoted.
 
 ### Subword BPE Tokenizer Training (`POST /train/tokenizer`)
-For learning plans using subword BPE tokenization (such as `chit_scratch_mix_v4_6l_256_subword_large`), you can build the immutable BPE tokenizer asset directly from the training corpus files:
-- **Build Asset**: Call `POST /train/tokenizer` with `{"config": "chit_scratch_mix_v4_6l_256_subword_large", "vocab_size": 2000, "overwrite": true}`.
+For learning plans using subword BPE tokenization (such as `chit_scratch_mix_v4_6l_256_subword_large`), the canonical production tokenizer asset is tracked at `data/tokenizers/chit-bpe-v1.json`:
+- **Canonical Asset Protection**: `POST /train/tokenizer` protects the tracked production asset in `data/tokenizers/` from accidental overwriting. Custom or experimental tokenizers must configure a non-canonical `model_file` path (e.g. under `checkpoints/tokenizers/`).
+- **Build Asset**: Call `POST /train/tokenizer` with `{"config": "<experimental_bpe_config>", "vocab_size": 2000, "overwrite": true}`.
 - **Corpus Aggregation**: Gathers only the training `.txt` source files specified in `cfg.data.sources` (or `cfg.data.train_file`), strictly excluding `cfg.data.eval_file`.
-- **Dual Placement**: Saves the atomic JSON asset to `cfg.tokenizer.model_file` (e.g. `checkpoints/tokenizers/chit-bpe-v1.json`) and mirrors it beside `latest.pt` (`checkpoints/tokenizer.json`).
+- **Dual Placement**: Saves the atomic JSON asset to `cfg.tokenizer.model_file` and mirrors it beside `latest.pt` (`checkpoints/tokenizer.json`).
 - **Response**: Returns `vocab_size`, `checkpoint_asset_sha256`, target paths, and the exact `files_used`.
 
 **When to use Memory vs. Knowledge?**

@@ -1,13 +1,24 @@
 """Datasets and batching for next-token prediction."""
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
 from pathlib import Path
 
 import torch
 from torch.utils.data import Dataset
 
 logger = logging.getLogger(__name__)
+
+
+def _stream_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(64 * 1024):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _find_record_starts(raw_bytes: bytes | bytearray) -> torch.Tensor:
@@ -74,7 +85,7 @@ def _apply_answer_loss_mask(chunk: torch.Tensor, y: torch.Tensor, is_byte: bool)
 class TextDataset(Dataset):
     """All windows of ``block_size + 1`` tokens over one text, for next-token prediction."""
 
-    def __init__(self, source: str | Path | None, tokenizer, block_size: int, *, text: str | None = None):
+    def __init__(self, source: str | Path | None, tokenizer, block_size: int, *, text: str | None = None, allow_fallback: bool = False):
         if (source is None) == (text is None):
             raise ValueError("pass exactly one of a file path or text=")
         self.is_byte = getattr(tokenizer, "name", "") == "byte-utf8"
@@ -90,21 +101,116 @@ class TextDataset(Dataset):
                     raw.extend(chunk.encode("utf-8"))
             token_data = torch.frombuffer(raw, dtype=torch.uint8)
             self.record_starts = _find_record_starts(raw)
+        elif not self.is_byte and text is None:
+            src_path = Path(source)
+            bin_path = src_path.with_name(f"{src_path.name}.bpe.bin")
+            manifest_path = src_path.with_name(f"{src_path.name}.bpe.manifest.json")
+            if bin_path.is_file() and manifest_path.is_file():
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as mf:
+                        m_data = json.load(mf)
+                except Exception as exc:
+                    raise ValueError(f"Corrupt manifest JSON for '{src_path}': {exc}") from exc
+
+                if not isinstance(m_data, dict):
+                    raise ValueError(f"Invalid manifest structure for '{src_path}': expected JSON object, got {type(m_data).__name__}")
+
+                if m_data.get("version") != 1:
+                    raise ValueError(f"Unsupported manifest version '{m_data.get('version')}' for '{src_path}'; expected 1")
+
+                if m_data.get("generator_version") != "1.0":
+                    raise ValueError(f"Incompatible artifact generator version '{m_data.get('generator_version')}' for '{src_path}'; expected '1.0'")
+
+                if m_data.get("dtype") != "int32":
+                    raise ValueError(f"Unsupported artifact dtype '{m_data.get('dtype')}' for '{src_path}'; expected 'int32'")
+
+                expected_tok_name = getattr(tokenizer, "name", "")
+                if m_data.get("tokenizer_name") != expected_tok_name:
+                    raise ValueError(
+                        f"Tokenizer name mismatch for '{src_path}': manifest has '{m_data.get('tokenizer_name')}', "
+                        f"but active tokenizer is '{expected_tok_name}'"
+                    )
+
+                if m_data.get("artifact_file") != bin_path.name:
+                    raise ValueError(
+                        f"Artifact file name mismatch for '{src_path}': manifest points to '{m_data.get('artifact_file')}', "
+                        f"expected '{bin_path.name}'"
+                    )
+
+                token_count = m_data.get("token_count")
+                if not isinstance(token_count, int) or token_count <= 0:
+                    raise ValueError(f"Invalid token_count in manifest for '{src_path}': expected positive integer, got {token_count!r}")
+
+                if token_count <= block_size:
+                    raise ValueError(f"Dataset '{src_path}' has {token_count} tokens; it must be larger than block_size ({block_size})")
+
+                for h_field in ("source_sha256", "tokenizer_sha256", "artifact_sha256"):
+                    val = m_data.get(h_field)
+                    if not isinstance(val, str) or len(val) != 64 or not all(c in "0123456789abcdefABCDEF" for c in val):
+                        raise ValueError(f"Manifest for '{src_path}' has invalid {h_field}: {val!r} (expected 64-char hex string)")
+
+                expected_tok_sha256 = getattr(tokenizer, "asset_sha256", None)
+                if not isinstance(expected_tok_sha256, str) or len(expected_tok_sha256) != 64:
+                    raise ValueError(f"Active subword tokenizer '{tokenizer}' does not expose a valid 64-char asset_sha256")
+
+                if m_data["tokenizer_sha256"] != expected_tok_sha256:
+                    raise ValueError(
+                        f"Tokenizer hash mismatch for '{src_path}': manifest has {m_data['tokenizer_sha256'][:12]}, "
+                        f"but active tokenizer reports {expected_tok_sha256[:12]}"
+                    )
+
+                src_sha256 = _stream_sha256(src_path)
+                if m_data["source_sha256"] != src_sha256:
+                    raise ValueError(
+                        f"Source file hash mismatch for '{src_path}': text modified since artifact generation "
+                        f"(manifest={m_data['source_sha256'][:12]}, actual={src_sha256[:12]})"
+                    )
+
+                expected_bin_size = token_count * 4
+                actual_bin_size = bin_path.stat().st_size
+                if actual_bin_size != expected_bin_size:
+                    raise ValueError(
+                        f"Binary artifact size mismatch for '{src_path}': expected {expected_bin_size} bytes ({token_count} int32 tokens), "
+                        f"got {actual_bin_size} bytes"
+                    )
+
+                bin_sha256 = _stream_sha256(bin_path)
+                if m_data["artifact_sha256"] != bin_sha256:
+                    raise ValueError(
+                        f"Binary artifact checksum corruption detected for '{src_path}': expected {m_data['artifact_sha256'][:12]}, "
+                        f"got {bin_sha256[:12]}"
+                    )
+
+                logger.info("Memory-mapping verified pre-tokenized BPE artifact: %s (%d tokens)", bin_path.name, token_count)
+                token_data = torch.from_file(str(bin_path), shared=False, size=token_count, dtype=torch.int32)
+                self.record_starts = torch.empty(0, dtype=torch.long)
+            else:
+                allow = allow_fallback or os.environ.get("CHIT_ALLOW_IN_MEMORY_TOKENIZATION") == "1"
+                if not allow:
+                    raise FileNotFoundError(
+                        f"Missing pre-tokenized subword artifact for '{src_path}' (expected '{bin_path.name}' and '{manifest_path.name}'). "
+                        f"Run 'python -m pranav.chit.pretokenize' to generate artifacts and prevent server OOM."
+                    )
+                logger.warning("No pre-tokenized artifact for '%s'; falling back to in-memory tokenization", src_path)
+                text = src_path.read_text(encoding="utf-8")
+                try:
+                    ids = tokenizer.encode(text)
+                except Exception as exc:
+                    logger.error("Failed to tokenize dataset from %s: %s", src_path, exc, exc_info=True)
+                    raise RuntimeError(f"Failed to tokenize dataset from {src_path}: {exc}") from exc
+                token_data = torch.tensor(ids, dtype=torch.int32)
+                self.record_starts = torch.empty(0, dtype=torch.long)
+                del ids
+                del text
         else:
-            if text is None:
-                text = Path(source).read_text(encoding="utf-8")
             try:
                 ids = tokenizer.encode(text)
             except Exception as exc:
-                src_label = str(source) if source is not None else "provided text"
-                logger.error("Failed to tokenize dataset from %s: %s", src_label, exc, exc_info=True)
-                raise RuntimeError(f"Failed to tokenize dataset from {src_label}: {exc}") from exc
-            if len(ids) <= block_size:
-                raise ValueError(f"dataset has {len(ids)} tokens; it must be larger than block_size ({block_size})")
+                logger.error("Failed to tokenize dataset from provided text: %s", exc, exc_info=True)
+                raise RuntimeError(f"Failed to tokenize dataset from provided text: {exc}") from exc
             token_data = torch.tensor(ids, dtype=torch.int32)
             self.record_starts = _find_record_starts(text.encode("utf-8")) if self.is_byte else torch.empty(0, dtype=torch.long)
             del ids
-            del text
         if len(token_data) <= block_size:
             raise ValueError(f"dataset has {len(token_data)} tokens; it must be larger than block_size ({block_size})")
         self.data = token_data

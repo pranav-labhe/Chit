@@ -9,6 +9,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 checkpoints/
+*.bpe.bin
+*.bpe.manifest.json
 data/memory.db*
 data/memory.json.pre-sqlite
 data/memory.json.backup-*

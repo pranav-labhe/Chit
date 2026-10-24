@@ -42,7 +42,7 @@ import sys
 import threading
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Annotated, Literal, Union
 
@@ -83,6 +83,7 @@ MAX_DATASET_BYTES = int(float(os.environ.get("CHIT_MAX_DATASET_MB", "200")) * 10
 ALLOW_UNAUTHENTICATED_TRAINING = os.environ.get("CHIT_ALLOW_UNAUTHENTICATED_TRAINING") == "1"
 MAX_KNOWLEDGE_BATCH = 500
 DATA_DIR = os.environ.get("CHIT_DATA_DIR", "data")
+SYNC_LOCK_PATH = Path(os.environ.get("CHIT_SYNC_LOCK", Path(DATA_DIR) / ".sync.lock"))
 SESSIONS_DB = os.environ.get("CHIT_SESSIONS_DB", "data/sessions.db")
 SESSION_TTL_DAYS = float(os.environ.get("CHIT_SESSION_TTL_DAYS", "30"))
 MAX_SESSION_TURNS = int(os.environ.get("CHIT_MAX_SESSION_TURNS", "200"))
@@ -837,7 +838,22 @@ def _force_promote_candidate(snapshot: dict) -> None:
 
 
 def _ensure_idle() -> None:
-    active = get_jobs().active_id()
+    if SYNC_LOCK_PATH.exists():
+        lock_owner = None
+        try:
+            with open(SYNC_LOCK_PATH, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read(256).strip()
+                if content:
+                    lock_owner = content
+        except OSError:
+            pass
+        raise HTTPException(
+            status_code=423,
+            detail={"message": "Server maintenance or data sync in progress; new training jobs are locked.",
+                    "lock_path": str(SYNC_LOCK_PATH),
+                    "lock_owner": lock_owner},
+        )
+    active = get_jobs().active_id() if _state.get("jobs") else None
     if active:
         raise HTTPException(status_code=409, detail={"message": f"training job {active} is already active",
                                                      "active_job": active})
@@ -850,6 +866,7 @@ def list_train_configs():
 
 @app.post("/train/tokenizer", dependencies=[Depends(require_training_access)])
 def train_tokenizer_asset(r: TokenizerTrainRequest):
+    _ensure_idle()
     cfg = build_config(TrainRequest(config=r.config))
     if cfg.data.sources:
         corpus_files = []
@@ -880,7 +897,14 @@ def train_tokenizer_asset(r: TokenizerTrainRequest):
     if cfg.tokenizer.model_file:
         config_model_path = Path(cfg.tokenizer.model_file)
     else:
-        config_model_path = Path(CHECKPOINT).parent / "tokenizers" / "chit-bpe-v1.json"
+        config_model_path = Path("data/tokenizers/chit-bpe-v1.json")
+
+    canonical_tracked = Path("data/tokenizers/chit-bpe-v1.json").resolve()
+    if config_model_path.resolve() == canonical_tracked:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot overwrite canonical production tokenizer 'data/tokenizers/chit-bpe-v1.json'. Custom tokenizer training requires configuring a non-canonical model_file path in the learning plan.",
+        )
 
     if not r.overwrite:
         existing = []
@@ -918,9 +942,9 @@ def train_tokenizer_asset(r: TokenizerTrainRequest):
 
 @app.post("/train", status_code=202, dependencies=[Depends(require_training_access)])
 def start_training(r: TrainRequest, response: Response):
+    _ensure_idle()
     cfg, init = resolve_init(r, build_config(r))
     validate_config(cfg)
-    _ensure_idle()
     job_id = uuid.uuid4().hex
     job_dir = Path(JOBS_DIR) / job_id
     try:
@@ -1067,8 +1091,8 @@ class KnowledgeTrainRequest(TrainRequest):
 @app.post("/knowledge/train", status_code=202, dependencies=[Depends(require_training_access)])
 def train_on_knowledge(r: KnowledgeTrainRequest, response: Response):
     """Train on the stored knowledge now. Entries become 'trained' when the run is promoted."""
+    _ensure_idle()
     cfg, init = resolve_init(r, build_config(r))
-    _ensure_idle()  # fail fast, before writing a dataset
     store = get_knowledge()
     entries = store.select(status="pending" if r.select == "pending" else None, tags=r.tags)
     if not entries:
@@ -1177,12 +1201,12 @@ def data_status(config: str = Query("chit_cpu_learning", pattern=r"^[A-Za-z0-9_-
 @app.post("/data/split", dependencies=[Depends(require_training_access)])
 def split_data(r: SplitRequest):
     """Split a corpus file from the data folder into the config's train and eval files."""
+    _ensure_idle()
     cfg, train_path, eval_path = _data_paths(r.config)
     if cfg.data.sources:
         raise HTTPException(status_code=422, detail=[
             "this config trains from data.sources; split each configured source separately instead of writing train_file"])
     source = _resolve_source(r.source)
-    _ensure_idle()
     try:
         text = source.read_text(encoding="utf-8")
         res = datasets.split_corpus(text, r.by, r.eval_fraction, r.seed)

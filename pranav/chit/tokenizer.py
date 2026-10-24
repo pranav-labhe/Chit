@@ -22,6 +22,11 @@ class ByteTokenizer:
         return data.decode("utf-8", errors="replace")
 
 
+LEGACY_TOKENIZER_ALIASES: dict[str, str] = {
+    "data/tokenizers/chit-bpe-v1.json": "checkpoints/tokenizers/chit-bpe-v1.json",
+}
+
+
 class BpeTokenizer:
     """Tokenizer backed by an immutable Hugging Face ``tokenizer.json`` asset."""
 
@@ -39,12 +44,17 @@ class BpeTokenizer:
             from tokenizers import Tokenizer
         except ImportError as exc:
             raise RuntimeError("BPE support requires the optional 'bpe' dependencies") from exc
-        if not Path(path).is_file():
-            raise FileNotFoundError(f"tokenizer asset file not found: {path}")
+        target = Path(path)
+        if not target.is_file():
+            alias = LEGACY_TOKENIZER_ALIASES.get(str(path).replace("\\", "/"))
+            if alias and Path(alias).is_file():
+                target = Path(alias)
+            else:
+                raise FileNotFoundError(f"tokenizer asset file not found: {path}")
         try:
-            return cls(Tokenizer.from_file(path))
+            return cls(Tokenizer.from_file(str(target)))
         except Exception as exc:
-            raise OSError(f"cannot load tokenizer from {path}: {exc}") from exc
+            raise OSError(f"cannot load tokenizer from {target}: {exc}") from exc
 
     @classmethod
     def from_asset(cls, asset: str):

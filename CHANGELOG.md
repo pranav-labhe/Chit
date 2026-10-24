@@ -3,6 +3,13 @@
 ## Latest Changes
 
 ### Added
+- **Memory-Mapped Pre-Tokenized Subword Datasets & Manifest Pipeline (`pranav/chit/pretokenize.py`, `data.py`)**:
+  - Implemented offline/CI pre-tokenization utility compiling subword text datasets into memory-mapped binary `int32` token artifacts (`.bpe.bin`) with atomic JSON manifests (`.bpe.manifest.json`).
+  - Added strict runtime validation in `TextDataset`: validates `source_sha256`, `tokenizer_sha256`, exact binary file size (`token_count * 4`), and `artifact_sha256` integrity before memory-mapping via `torch.from_file(..., shared=False)`.
+  - Enforced fail-closed loading on server: file-backed BPE training fails early if artifacts are missing or corrupted, completely preventing in-memory allocation spikes and process termination on memory-constrained servers (`t4g.small` with 2 GB RAM). Inline `text=` datasets and `ByteTokenizer` continue to operate untouched.
+  - Relocated canonical production tokenizer to `data/tokenizers/chit-bpe-v1.json` with explicit backward-compatibility alias mapping (`checkpoints/tokenizers/chit-bpe-v1.json`) and protected it against server-side overwrites in `POST /train/tokenizer`.
+  - Pinned `tokenizers==0.23.2` across `requirements.txt` and `pyproject.toml`.
+  - Updated `sync-data-ec2.yml`: inverted execution order to sync data dependencies before configs, added binary-aware validation, removed race-prone automatic push triggers, and added safe backup rotation.
 - **Unified `Task:` Vocabulary & Router Auto-Selection (`pranav/chit/formats.py`, `api.py`, `ui.py`, `bridge.py`)**:
   - Locked in 7 canonical tasks across runtime, API, and training corpus: `VALID_TASKS = ("chat", "knowledge", "behavior", "grammar", "reasoning", "prose", "continue")`.
   - Updated `render_reasoning()` to emit `Task: reasoning\n[Known memory / Facts]\nInput: ...\nReasoning: ...\nAnswer: ...`.

@@ -31,15 +31,7 @@ on:
         description: "Show what would change and copy nothing"
         type: boolean
         default: false
-      allow_during_training:
-        description: "Allow replacing training text while a training job is running"
-        type: boolean
-        default: false
-  # A change to a config on main goes live by itself. Training text is never synced automatically.
-  push:
-    branches: [main]
-    paths:
-      - "configs/**"
+  # Note: Configs and data are synced strictly via manual workflow_dispatch to avoid rollout race conditions.
 
 permissions:
   contents: read
@@ -57,9 +49,10 @@ jobs:
 
     env:
       CHIT_HOME: ${{ vars.CHIT_HOME || '/opt/chit' }}
+      CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
       # Files under data/ that are synced (shell patterns, matched at any depth).
       # Never synced: databases, memory.json, *.bak, checkpoints.
-      DATA_PATTERNS: "*.txt *.jsonl memory_seed.json"
+      DATA_PATTERNS: "*.txt *.jsonl memory_seed.json chit-bpe-v1.json *.bpe.bin *.bpe.manifest.json"
 
     steps:
       - name: Checkout repository
@@ -71,14 +64,13 @@ jobs:
           IN_SCOPE: ${{ inputs.scope }}
           IN_PRUNE: ${{ inputs.prune_configs }}
           IN_DRY: ${{ inputs.dry_run }}
-          IN_ALLOW: ${{ inputs.allow_during_training }}
         run: |
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "push" ]; then
-            scope=configs-only; prune=false; dry=false; allow=false
+            scope=configs-only; prune=false; dry=false
           else
-            scope="$IN_SCOPE"; prune="$IN_PRUNE"; dry="$IN_DRY"; allow="$IN_ALLOW"
+            scope="$IN_SCOPE"; prune="$IN_PRUNE"; dry="$IN_DRY"
           fi
 
           case "$scope" in
@@ -101,11 +93,22 @@ jobs:
             echo "SYNC_DATA=$d"
             echo "PRUNE_CONFIGS=$prune"
             echo "DRY_RUN=$dry"
-            echo "ALLOW_DURING_TRAINING=$allow"
             echo "SYNC_TS=$(date -u +%Y%m%dT%H%M%SZ)"
           } >> "$GITHUB_ENV"
 
-          echo "Event: $EVENT_NAME | scope: $scope | prune: $prune | dry run: $dry | allow during training: $allow"
+          echo "Event: $EVENT_NAME | scope: $scope | prune: $prune | dry run: $dry"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate pre-tokenized BPE artifacts in CI
+        if: env.SYNC_DATA == 'true'
+        run: |
+          set -euo pipefail
+          pip install tokenizers==0.23.2
+          python -m pranav.chit.pretokenize configs/
 
       - name: Validate configs and data
         run: |
@@ -162,6 +165,29 @@ jobs:
               for p in sorted(Path("data").rglob("*")):
                   if p.is_file() and synced(p) and not p.name.endswith((".bak", "~", ".swp")):
                       total += p.stat().st_size
+                      if p.name.endswith(".bpe.bin"):
+                          if p.stat().st_size % 4 != 0:
+                              error("binary token file size is not a multiple of 4 bytes (int32)", str(p))
+                          continue
+                      elif p.name.endswith(".bpe.manifest.json"):
+                          import json, hashlib
+                          try:
+                              m = json.loads(p.read_text(encoding="utf-8"))
+                              bin_p = p.with_name(m["artifact_file"])
+                              if not bin_p.is_file():
+                                  error(f"manifest artifact_file {bin_p} missing", str(p))
+                              elif bin_p.stat().st_size != m.get("token_count", 0) * 4:
+                                  error("manifest token_count does not match binary artifact size", str(p))
+                              else:
+                                  h = hashlib.sha256()
+                                  with open(bin_p, "rb") as bf:
+                                      while chunk := bf.read(64 * 1024):
+                                          h.update(chunk)
+                                  if h.hexdigest() != m.get("artifact_sha256"):
+                                      error("binary artifact sha256 does not match manifest artifact_sha256", str(p))
+                          except Exception as exc:
+                              error(f"invalid manifest JSON: {exc}", str(p))
+                          continue
                       try:
                           p.read_text(encoding="utf-8")
                       except UnicodeDecodeError:
@@ -214,12 +240,13 @@ jobs:
             ServerAliveInterval 15
           EOF
           echo "SSH_CFG=$HOME/.ssh/chit_config" >> "$GITHUB_ENV"
+          echo "SYNC_LOCK_ID=gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${RANDOM}" >> "$GITHUB_ENV"
 
       - name: Check the server
         run: |
           set -euo pipefail
 
-          out="$(ssh -F "$SSH_CFG" chit-ec2 "CHIT_HOME='$CHIT_HOME' bash -s" <<'REMOTE'
+          out="$(ssh -F "$SSH_CFG" chit-ec2 "CHIT_HOME='$CHIT_HOME' DRY_RUN='$DRY_RUN' SYNC_DATA='$SYNC_DATA' SYNC_CONFIGS='$SYNC_CONFIGS' SYNC_LOCK_ID='$SYNC_LOCK_ID' bash -s" <<'REMOTE'
           set -euo pipefail
           command -v rsync >/dev/null || { echo "ERROR: rsync is not installed on the server" >&2; exit 1; }
 
@@ -232,36 +259,117 @@ jobs:
             [ -w "$d" ] || { echo "ERROR: $d is not writable by $(id -un). Run once on the server: sudo chown $(id -un): $d" >&2; exit 1; }
           done
 
-          # Is a training job running? /health is public and names the active job.
-          if health="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health 2>/dev/null)"; then
-            if printf '%s' "$health" | grep -Eq '"training_job" *: *"'; then echo "TRAINING_ACTIVE=yes"; else echo "TRAINING_ACTIVE=no"; fi
+          # Check container state via docker with strict disambiguation
+          container_running="unknown"
+          if command -v docker >/dev/null 2>&1; then
+            inspect_out=""
+            if inspect_out="$(docker inspect -f '{{.State.Running}}' chit 2>&1)"; then
+              container_running="$inspect_out"
+            else
+              if echo "$inspect_out" | grep -Eiq 'no such (container|object)'; then
+                container_running="not_found"
+              else
+                container_running="ambiguous"
+                echo "docker inspect failed unexpectedly: $inspect_out" >&2
+              fi
+            fi
           else
-            echo "TRAINING_ACTIVE=unknown"
+            container_running="no_docker"
           fi
+          echo "CONTAINER_STATE=$container_running"
+
+          if [ "$container_running" = "ambiguous" ] || [ "$container_running" = "unknown" ] || [ "$container_running" = "no_docker" ]; then
+            echo "ERROR: Cannot verify Docker container state (container_running=$container_running). Aborting to prevent data corruption." >&2
+            exit 1
+          fi
+
+          was_running="false"
+          lock_file="$CHIT_HOME/data/.sync.lock"
+
+          cleanup_lock() {
+            if [ -f "$lock_file" ]; then
+              if [ "$(head -n 1 "$lock_file" 2>/dev/null || true)" = "$SYNC_LOCK_ID" ]; then
+                rm -f "$lock_file"
+                echo "Cleaned up pre-sync maintenance lock: $lock_file (owner: $SYNC_LOCK_ID)"
+              fi
+            fi
+          }
+
+          if [ "$SYNC_DATA" = "true" ]; then
+            if [ "$DRY_RUN" != "true" ]; then
+              # Step 1: Acquire atomic lock BEFORE checking health or stopping the container
+              if ( set -C; printf '%s\n' "$SYNC_LOCK_ID" > "$lock_file" ) 2>/dev/null; then
+                echo "GATE_LOCK=acquired_fs"
+              else
+                existing="$(head -n 1 "$lock_file" 2>/dev/null || true)"
+                echo "GATE_LOCK=conflict_fs:$existing"
+                echo "ERROR: Server filesystem already locked by '$existing'. Aborting." >&2
+                exit 1
+              fi
+
+              # Verify ownership
+              current_owner="$(head -n 1 "$lock_file" 2>/dev/null || true)"
+              if [ "$current_owner" != "$SYNC_LOCK_ID" ]; then
+                echo "ERROR: Lock ownership verification failed (got '$current_owner', expected '$SYNC_LOCK_ID'). Aborting." >&2
+                exit 1
+              fi
+            else
+              echo "GATE_LOCK=dry_run"
+            fi
+
+            # Step 2: Under lock protection, check container health and activity
+            if [ "$container_running" = "true" ]; then
+              if health="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health 2>/dev/null)"; then
+                if printf '%s' "$health" | grep -Eq '"training_job" *: *"[^"]+"'; then
+                  echo "ERROR: A training job is currently active. Offline data sync cannot proceed while training is in progress. Aborting." >&2
+                  cleanup_lock
+                  exit 1
+                fi
+              else
+                echo "WARNING: /health endpoint did not respond, but container is running."
+              fi
+
+              if [ "$DRY_RUN" != "true" ]; then
+                echo "Stopping 'chit' container under lock protection for offline data sync..."
+                if ! docker stop -t 30 chit; then
+                  echo "ERROR: Failed to stop 'chit' container. Aborting data sync." >&2
+                  cleanup_lock
+                  exit 1
+                fi
+                was_running="true"
+              else
+                echo "Dry run: would stop 'chit' container for offline data sync."
+                was_running="true"
+              fi
+            else
+              echo "Container 'chit' is not running ($container_running)."
+              was_running="false"
+            fi
+          else
+            # Configs-only sync: container remains online
+            if [ "$container_running" = "true" ]; then
+              if health="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health 2>/dev/null)"; then
+                if printf '%s' "$health" | grep -Eq '"training_job" *: *"[^"]+"'; then
+                  echo "TRAINING_ACTIVE=yes"
+                else
+                  echo "TRAINING_ACTIVE=no"
+                fi
+              else
+                echo "TRAINING_ACTIVE=unknown"
+              fi
+            fi
+          fi
+
+          echo "WAS_RUNNING=$was_running"
           REMOTE
           )"
           echo "$out"
+          was_running="$(printf '%s\n' "$out" | grep '^WAS_RUNNING=' | cut -d= -f2- || echo "false")"
+          echo "WAS_RUNNING=$was_running" >> "$GITHUB_ENV"
 
           if printf '%s\n' "$out" | grep -q '^TRAINING_ACTIVE=yes'; then
-            if [ "$SYNC_DATA" = "true" ] && [ "$ALLOW_DURING_TRAINING" != "true" ] && [ "$DRY_RUN" != "true" ]; then
-              echo "::error::A training job is running. Wait for it to finish, or run again with allow_during_training. (Configs alone can be synced at any time.)"
-              exit 1
-            fi
-            echo "::warning::A training job is running; the running job keeps the text it already loaded."
+            echo "::warning::A training job is running; configs will take effect when the next job starts."
           fi
-
-      - name: Sync configs
-        if: env.SYNC_CONFIGS == 'true'
-        run: |
-          set -euo pipefail
-
-          args=(-rltp --chmod=D755,F644 --checksum --itemize-changes
-                --exclude='*.bak' --exclude='*~' --exclude='.*.swp' --exclude='.DS_Store'
-                --backup --backup-dir="$CHIT_HOME/backups/sync-$SYNC_TS/configs")
-          [ "$PRUNE_CONFIGS" = "true" ] && args+=(--delete)
-          [ "$DRY_RUN" = "true" ]       && args+=(--dry-run)
-
-          rsync "${args[@]}" -e "ssh -F $SSH_CFG" configs/ "chit-ec2:$CHIT_HOME/configs/" | tee /tmp/rsync-configs.log
 
       - name: Sync data files
         if: env.SYNC_DATA == 'true'
@@ -279,6 +387,19 @@ jobs:
           # No --delete here: text that exists only on the server (for example from POST /data/split) is never removed.
           rsync "${args[@]}" -e "ssh -F $SSH_CFG" data/ "chit-ec2:$CHIT_HOME/data/" | tee /tmp/rsync-data.log
 
+      - name: Sync configs
+        if: env.SYNC_CONFIGS == 'true'
+        run: |
+          set -euo pipefail
+
+          args=(-rltp --chmod=D755,F644 --checksum --itemize-changes
+                --exclude='*.bak' --exclude='*~' --exclude='.*.swp' --exclude='.DS_Store'
+                --backup --backup-dir="$CHIT_HOME/backups/sync-$SYNC_TS/configs")
+          [ "$PRUNE_CONFIGS" = "true" ] && args+=(--delete)
+          [ "$DRY_RUN" = "true" ]       && args+=(--dry-run)
+
+          rsync "${args[@]}" -e "ssh -F $SSH_CFG" configs/ "chit-ec2:$CHIT_HOME/configs/" | tee /tmp/rsync-configs.log
+
       - name: Verify checksums on the server
         if: env.DRY_RUN != 'true'
         run: |
@@ -287,17 +408,21 @@ jobs:
           skip=(! -name '*.bak' ! -name '*~' ! -name '.*.swp' ! -name '.DS_Store')
           : > /tmp/manifest.txt
 
-          if [ "$SYNC_CONFIGS" = "true" ]; then
-            find configs -type f "${skip[@]}" -print0 | sort -z | xargs -0 -r sha256sum >> /tmp/manifest.txt
-          fi
           if [ "$SYNC_DATA" = "true" ]; then
             expr=(\( )
             for p in $DATA_PATTERNS; do
               [ "${#expr[@]}" -gt 1 ] && expr+=(-o)
-              expr+=(-name "$p")
+              if [[ "$p" == *"/"* ]]; then
+                expr+=(-path "*$p")
+              else
+                expr+=(-name "$p")
+              fi
             done
             expr+=(\))
             find data -type f "${expr[@]}" "${skip[@]}" -print0 | sort -z | xargs -0 -r sha256sum >> /tmp/manifest.txt
+          fi
+          if [ "$SYNC_CONFIGS" = "true" ]; then
+            find configs -type f "${skip[@]}" -print0 | sort -z | xargs -0 -r sha256sum >> /tmp/manifest.txt
           fi
 
           n="$(wc -l < /tmp/manifest.txt | tr -d ' ')"
@@ -307,12 +432,36 @@ jobs:
           ssh -F "$SSH_CFG" chit-ec2 "cd '$CHIT_HOME' && sha256sum -c --quiet -" < /tmp/manifest.txt
           echo "Verified $n file(s): server copies match git."
 
+      - name: Restart container
+        if: env.DRY_RUN != 'true' && env.WAS_RUNNING == 'true' && success()
+        run: |
+          set -euo pipefail
+          echo "Restarting 'chit' container..."
+          ssh -F "$SSH_CFG" chit-ec2 "docker start chit"
+
+          echo "Waiting for Chit API /health to become ready..."
+          ready=false
+          for i in $(seq 1 15); do
+            if ssh -F "$SSH_CFG" chit-ec2 "curl -fsS --max-time 3 http://127.0.0.1:8000/health" >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" = "true" ]; then
+            echo "Chit API is online and healthy."
+          else
+            echo "::error::Chit API did not answer /health within 30s after restart."
+            exit 1
+          fi
+
       - name: Remove old backups and check the app
         if: env.DRY_RUN != 'true'
         run: |
           set -euo pipefail
-          # Keep 30 days of replaced files, then clean up.
-          ssh -F "$SSH_CFG" chit-ec2 "find '$CHIT_HOME/backups' -mindepth 1 -maxdepth 1 -name 'sync-*' -mtime +30 -exec rm -rf {} +" || true
+          # Retain only the 5 most recent sync backups safely to protect disk space
+          ssh -F "$SSH_CFG" chit-ec2 "find '$CHIT_HOME/backups' -mindepth 1 -maxdepth 1 -type d -name 'sync-*' | sort -r | tail -n +6 | while read -r old_dir; do [ -n \"\$old_dir\" ] && rm -rf \"\$old_dir\"; done" || true
           ssh -F "$SSH_CFG" chit-ec2 "curl -fsS --max-time 5 http://127.0.0.1:8000/health" || echo "::warning::Chit did not answer /health (is the container running?)"
           echo
 
@@ -341,8 +490,29 @@ jobs:
               echo "Replaced or deleted files were saved on the server under \`${CHIT_HOME:-?}/backups/sync-${SYNC_TS}/\` (kept 30 days)."
             fi
             echo
-            echo "Configs are read on every \`POST /train\`; training text is read when a job starts. No restart is needed."
+            echo "Data sync is performed offline with atomic filesystem locking. Configs are read dynamically on POST /train."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release maintenance lock
+        if: env.DRY_RUN == 'true' || success()
+        run: |
+          if [ -f "${SSH_CFG:-}" ] && [ -n "${SYNC_LOCK_ID:-}" ]; then
+            ssh -F "$SSH_CFG" chit-ec2 "CHIT_HOME='$CHIT_HOME' SYNC_LOCK_ID='$SYNC_LOCK_ID' bash -s" <<'REMOTE'
+            set -euo pipefail
+            lock_file="$CHIT_HOME/data/.sync.lock"
+            if [ -f "$lock_file" ]; then
+              current_id="$(head -n 1 "$lock_file" 2>/dev/null || true)"
+              if [ "$current_id" = "$SYNC_LOCK_ID" ]; then
+                rm -f "$lock_file"
+                echo "Maintenance lock released on disk: $lock_file (owner: $SYNC_LOCK_ID)"
+              else
+                echo "Maintenance lock not released: owned by another process (owner: '$current_id', expected: '$SYNC_LOCK_ID')"
+              fi
+            else
+              echo "Maintenance lock not present on disk: $lock_file"
+            fi
+            REMOTE
+          fi
 
       - name: Remove SSH credentials
         if: always()

@@ -40,7 +40,9 @@ Chit (चित्) is a compact neural brain designed for fast, context-aware t
 - **Position Encoding**: Absolute embeddings remain the default for legacy compatibility; configurations may opt into RoPE. KV-cache introduces zero new parameters and maintains 100% checkpoint compatibility.
 
 ### 🔡 Tokenization (`tokenizer.py`)
-- **Default**: Every UTF-8 byte is exactly one token. New checkpoints may carry a serialized byte-level BPE tokenizer and its SHA-256 fingerprint.
+- **Default**: Every UTF-8 byte is exactly one token. New checkpoints may carry a serialized byte-level BPE tokenizer and its SHA-256 fingerprint (`asset_sha256`).
+- **Canonical Subword Storage**: Tracked canonical BPE tokenizers are placed under `data/tokenizers/` (e.g., `data/tokenizers/chit-bpe-v1.json`). To protect production models, the canonical tokenizer is protected against in-place overwrites.
+- **Memory-Mapped Pre-Tokenized Artifacts**: File-backed subword training loads datasets from verified pre-tokenized binary `int32` token artifacts (`<source>.bpe.bin`) paired with atomic manifests (`<source>.bpe.manifest.json`). This keeps RAM usage flat on memory-constrained servers (`t4g.small` with 2 GB RAM) by mapping data via kernel page cache without building large Python lists.
 - **Robustness**: Uses `surrogatepass` during encoding to handle lone surrogates from malformed input, and `replace` during decoding to ensure stability.
 
 ### ⚙️ Training Loop & Record-Aligned Answer-Focused Sampling (`training.py`, `data.py`)

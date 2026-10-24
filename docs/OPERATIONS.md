@@ -78,6 +78,13 @@ For a container with semantic embeddings enabled, build with `--build-arg CHIT_W
 
 Byte-tokenizer checkpoints remain the default and are loaded when older checkpoints omit tokenizer metadata. BPE checkpoints carry the serialized tokenizer asset and its SHA-256 fingerprint, so inference does not depend on a mutable tokenizer file after training. Train a tokenizer using only the training corpus, then set `tokenizer.name` to `bpe-tokenizers-json-v1`, `tokenizer.model_file` to the resulting asset, and `model.vocab_size` to the command's reported vocabulary size. BPE training is a new model lineage and cannot reuse byte-tokenizer weights.
 
+### Subword Pre-Tokenization Pipeline & Memory-Mapped Loading
+To eliminate startup memory allocation spikes and tokenization delays on memory-constrained servers (`t4g.small` with 2 GB RAM), subword (BPE) training loads pre-tokenized binary token files via OS memory mapping (`torch.from_file(..., shared=False)`):
+- **Canonical Asset Placement**: Canonical BPE tokenizer assets are tracked under `data/tokenizers/` (e.g., `data/tokenizers/chit-bpe-v1.json`). To protect production lineages from accidental mutation, the server rejects attempts to overwrite canonical assets in `data/tokenizers/`.
+- **Pre-Tokenization Generation**: Pre-tokenize all referenced sources using `python -m pranav.chit.pretokenize configs/`. This generates `<source>.bpe.bin` (portable little-endian `int32` token streams) and `<source>.bpe.manifest.json`.
+- **Integrity & Fail-Closed Enforcement**: During training startup, `TextDataset` verifies the manifest schema (`version=1`, `generator_version="1.0"`, `dtype="int32"`, `tokenizer_name`), validates exact 4-byte size alignment, and verifies streaming SHA-256 checksums for both the source text and the binary token artifact. If artifacts are missing, corrupt, or out-of-sync with the source text, training fails fast before allocating memory.
+- **Missing Artifact Recovery**: If a job fails with `FileNotFoundError: Missing pre-tokenized subword artifact`, run `python -m pranav.chit.pretokenize <config_path>` to regenerate the missing artifacts and manifests, then sync them to the server via the `sync-data-ec2.yml` GitHub Actions workflow.
+
 Absolute position embeddings remain the default. RoPE is an opt-in model configuration; old checkpoints without the position-encoding field are interpreted as absolute-position checkpoints. Increasing context length changes compute and memory requirements and does not by itself guarantee better long-context recall.
 
 ## Health, queue, and request identifiers

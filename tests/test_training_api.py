@@ -195,3 +195,44 @@ def test_train_tokenizer_missing_source_file(client, tmp_path):
     res = client.post("/train/tokenizer", json={"config": "missing_source"}, headers=H)
     assert res.status_code == 422
     assert "not found on server" in res.text
+
+
+def test_maintenance_lock_endpoints_and_owner_reporting(client):
+    lock_file = api.SYNC_LOCK_PATH
+    try:
+        # 1. Lock with owner ID on disk
+        lock_file.write_text("gha-run-42-1-xyz\n", encoding="utf-8")
+
+        for url, payload in [
+            ("/train", body()),
+            ("/train/tokenizer", {"config": "bpe_test"}),
+            ("/knowledge/train", {"select": "all"}),
+            ("/data/split", {"source": "train.txt", "config": "test"}),
+        ]:
+            res = client.post(url, json=payload, headers=H)
+            assert res.status_code == 423, f"{url} expected 423 Locked, got {res.status_code}"
+            detail = res.json()["detail"]
+            assert detail["lock_owner"] == "gha-run-42-1-xyz"
+            assert detail["lock_path"] == str(lock_file)
+            assert "maintenance" in detail["message"].lower()
+
+        # 2. Bounded lock owner length
+        lock_file.write_text("X" * 500, encoding="utf-8")
+        res = client.post("/train", json=body(), headers=H)
+        assert res.status_code == 423
+        assert len(res.json()["detail"]["lock_owner"]) == 256
+
+        # 3. Empty lock file reports lock_owner=None
+        lock_file.write_text("   \n", encoding="utf-8")
+        res = client.post("/train", json=body(), headers=H)
+        assert res.status_code == 423
+        assert res.json()["detail"]["lock_owner"] is None
+
+        # 4. Unlocked state restores normal operation
+        lock_file.unlink()
+        res = client.post("/train", json=body(), headers=H)
+        assert res.status_code == 202
+    finally:
+        if lock_file.exists():
+            lock_file.unlink()
+

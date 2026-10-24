@@ -26,6 +26,6 @@
   },
   "tokenizer": {
     "name": "bpe-tokenizers-json-v1",
-    "model_file": "checkpoints/tokenizers/chit-bpe-v1.json"
+    "model_file": "data/tokenizers/chit-bpe-v1.json"
   }
 }
