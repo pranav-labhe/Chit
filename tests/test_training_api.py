@@ -206,6 +206,7 @@ def test_maintenance_lock_endpoints_and_owner_reporting(client):
         for url, payload in [
             ("/train", body()),
             ("/train/tokenizer", {"config": "bpe_test"}),
+            ("/train/pretokenize", {"config": "bpe_test"}),
             ("/knowledge/train", {"select": "all"}),
             ("/data/split", {"source": "train.txt", "config": "test"}),
         ]:
@@ -235,4 +236,93 @@ def test_maintenance_lock_endpoints_and_owner_reporting(client):
     finally:
         if lock_file.exists():
             lock_file.unlink()
+
+
+def test_train_pretokenize_endpoint_and_concurrency_serialization(client, tmp_path):
+    import json
+    from pathlib import Path
+
+    # 1. Unknown config -> 404
+    res = client.post("/train/pretokenize", json={"config": "non_existent_config_123"}, headers=H)
+    assert res.status_code == 404
+
+    # 2. Non-BPE config -> skipped (200)
+    res = client.post("/train/pretokenize", json={"config": "test"}, headers=H)
+    assert res.status_code == 200
+    assert res.json()["status"] == "skipped"
+
+    # 3. Missing tokenizer asset -> 422
+    cfg_dir = Path(api.CONFIG_DIR)
+    tok_file = tmp_path / "custom_tok.json"
+    train_txt = tmp_path / "custom_train.txt"
+    train_txt.write_text("sample corpus text for pretokenization test", encoding="utf-8")
+
+    bpe_cfg = {
+        "device": "cpu",
+        "data": {
+            "train_file": str(train_txt),
+            "eval_file": None,
+            "sources": [{"path": str(train_txt), "weight": 1.0}],
+        },
+        "tokenizer": {
+            "name": "bpe-tokenizers-json-v1",
+            "model_file": str(tok_file),
+        },
+    }
+    (cfg_dir / "custom_bpe.json").write_text(json.dumps(bpe_cfg), encoding="utf-8")
+
+    res = client.post("/train/pretokenize", json={"config": "custom_bpe"}, headers=H)
+    assert res.status_code == 422
+    assert "Tokenizer model_file" in res.json()["detail"]
+
+    # 4. Missing source text file -> 422
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    t = Tokenizer(models.BPE(unk_token=None))
+    t.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+    t.save(str(tok_file))
+
+    train_txt.unlink()
+    res = client.post("/train/pretokenize", json={"config": "custom_bpe"}, headers=H)
+    assert res.status_code == 422
+    assert "source text file" in res.json()["detail"][0]
+
+    # 5. Success -> 200 ready, generates .bpe.bin and .bpe.manifest.json, cleans up .sync.lock
+    train_txt.write_text("sample corpus text for pretokenization test", encoding="utf-8")
+    res = client.post("/train/pretokenize", json={"config": "custom_bpe"}, headers=H)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ready"
+    assert data["count"] == 1
+    assert not api.SYNC_LOCK_PATH.exists()
+
+    bin_path = train_txt.with_name(f"{train_txt.name}.bpe.bin")
+    manifest_path = train_txt.with_name(f"{train_txt.name}.bpe.manifest.json")
+    assert bin_path.is_file()
+    assert manifest_path.is_file()
+
+    # 6. Mutual exclusion / active job conflict -> 409
+    job_res = client.post("/train", json=body(max_steps=100_000, checkpoint_interval=1000), headers=H)
+    assert job_res.status_code == 202
+    job_id = job_res.json()["id"]
+    try:
+        res_conflict = client.post("/train/pretokenize", json={"config": "custom_bpe"}, headers=H)
+        assert res_conflict.status_code == 409
+        assert "already active" in res_conflict.json()["detail"]["message"]
+    finally:
+        client.post(f"/train/{job_id}/cancel", headers=H)
+        wait(client, job_id)
+
+
+def test_health_reports_data_locked_state(client):
+    health = client.get("/health").json()
+    assert health["data_locked"] is False
+
+    with api._data_lock:
+        locked_health = client.get("/health").json()
+        assert locked_health["data_locked"] is True
+
+    health_after = client.get("/health").json()
+    assert health_after["data_locked"] is False
+
+
 

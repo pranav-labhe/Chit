@@ -339,7 +339,8 @@ def health():
             "error": _state["error"],
             "training_job": jobs.active_id() if jobs else None,
             "inference": _state["inference"].stats if _state["inference"] else None,
-            "memory_search": _memory_search_status()}
+            "memory_search": _memory_search_status(),
+            "data_locked": _data_lock.locked()}
 
 
 def _memory_search_status() -> dict | None:
@@ -670,6 +671,19 @@ class TokenizerTrainRequest(BaseModel):
     )
 
 
+class PretokenizeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    config: str = Field(
+        default="chit_scratch_mix_v4_6l_256_subword_large",
+        pattern=r"^[A-Za-z0-9_-]{1,64}$",
+        description="name of a JSON file in CHIT_CONFIG_DIR, without .json",
+    )
+    force: bool = Field(
+        default=False,
+        description="force regeneration even if binary artifact and manifest hash match",
+    )
+
+
 def _overrides(m: BaseModel) -> dict:
     return {k: v for k, v in m.model_dump().items() if v is not None}
 
@@ -866,61 +880,61 @@ def list_train_configs():
 
 @app.post("/train/tokenizer", dependencies=[Depends(require_training_access)])
 def train_tokenizer_asset(r: TokenizerTrainRequest):
-    _ensure_idle()
-    cfg = build_config(TrainRequest(config=r.config))
-    if cfg.data.sources:
-        corpus_files = []
-        seen = set()
-        for s in cfg.data.sources:
-            p = Path(s.path)
-            if p not in seen:
-                seen.add(p)
-                corpus_files.append(p)
-    else:
-        corpus_files = [Path(cfg.data.train_file)]
+    with _data_lock:
+        _ensure_idle()
+        cfg = build_config(TrainRequest(config=r.config))
+        if cfg.data.sources:
+            corpus_files = []
+            seen = set()
+            for s in cfg.data.sources:
+                p = Path(s.path)
+                if p not in seen:
+                    seen.add(p)
+                    corpus_files.append(p)
+        else:
+            corpus_files = [Path(cfg.data.train_file)]
 
-    missing = [p for p in corpus_files if not p.is_file()]
-    if missing:
-        raise HTTPException(
-            status_code=422,
-            detail=[f"data source {p} not found on server" for p in missing],
-        )
-
-    if r.vocab_size is not None:
-        target_vocab = r.vocab_size
-    elif cfg.model.vocab_size > 256:
-        target_vocab = cfg.model.vocab_size
-    else:
-        target_vocab = 2000
-
-    sidecar_path = Path(CHECKPOINT).parent / "tokenizer.json"
-    if cfg.tokenizer.model_file:
-        config_model_path = Path(cfg.tokenizer.model_file)
-    else:
-        config_model_path = Path("data/tokenizers/chit-bpe-v1.json")
-
-    canonical_tracked = Path("data/tokenizers/chit-bpe-v1.json").resolve()
-    if config_model_path.resolve() == canonical_tracked:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot overwrite canonical production tokenizer 'data/tokenizers/chit-bpe-v1.json'. Custom tokenizer training requires configuring a non-canonical model_file path in the learning plan.",
-        )
-
-    if not r.overwrite:
-        existing = []
-        if config_model_path.exists():
-            existing.append(str(config_model_path))
-        if sidecar_path.exists() and sidecar_path.resolve() != config_model_path.resolve():
-            existing.append(str(sidecar_path))
-        if existing:
+        missing = [p for p in corpus_files if not p.is_file()]
+        if missing:
             raise HTTPException(
-                status_code=409,
-                detail=f"tokenizer asset already exists: {', '.join(existing)}; pass overwrite=true to replace",
+                status_code=422,
+                detail=[f"data source {p} not found on server" for p in missing],
             )
 
-    from .tools.train_tokenizer import train_bpe_tokenizer
+        if r.vocab_size is not None:
+            target_vocab = r.vocab_size
+        elif cfg.model.vocab_size > 256:
+            target_vocab = cfg.model.vocab_size
+        else:
+            target_vocab = 2000
 
-    with _data_lock:
+        sidecar_path = Path(CHECKPOINT).parent / "tokenizer.json"
+        if cfg.tokenizer.model_file:
+            config_model_path = Path(cfg.tokenizer.model_file)
+        else:
+            config_model_path = Path("data/tokenizers/chit-bpe-v1.json")
+
+        canonical_tracked = Path("data/tokenizers/chit-bpe-v1.json").resolve()
+        if config_model_path.resolve() == canonical_tracked:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot overwrite canonical production tokenizer 'data/tokenizers/chit-bpe-v1.json'. Custom tokenizer training requires configuring a non-canonical model_file path in the learning plan.",
+            )
+
+        if not r.overwrite:
+            existing = []
+            if config_model_path.exists():
+                existing.append(str(config_model_path))
+            if sidecar_path.exists() and sidecar_path.resolve() != config_model_path.resolve():
+                existing.append(str(sidecar_path))
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"tokenizer asset already exists: {', '.join(existing)}; pass overwrite=true to replace",
+                )
+
+        from .tools.train_tokenizer import train_bpe_tokenizer
+
         result = train_bpe_tokenizer(corpus_files, config_model_path, vocab_size=target_vocab)
         if sidecar_path.resolve() != config_model_path.resolve():
             sidecar_path.parent.mkdir(parents=True, exist_ok=True)
@@ -928,30 +942,113 @@ def train_tokenizer_asset(r: TokenizerTrainRequest):
             shutil.copyfile(config_model_path, sidecar_tmp)
             os.replace(sidecar_tmp, sidecar_path)
 
+        return {
+            "status": "created",
+            "config": r.config,
+            "tokenizer": result["tokenizer"],
+            "vocab_size": result["vocab_size"],
+            "path": str(config_model_path),
+            "latest_sidecar_path": str(sidecar_path),
+            "checkpoint_asset_sha256": result["checkpoint_asset_sha256"],
+            "files_used": result["files_used"],
+        }
+
+
+@app.post("/train/pretokenize", dependencies=[Depends(require_training_access)])
+def pretokenize_corpus_assets(r: PretokenizeRequest):
+    with _data_lock:
+        _ensure_idle()
+
+        cfg_path = Path(CONFIG_DIR) / f"{r.config}.json"
+        if not cfg_path.is_file():
+            raise HTTPException(status_code=404, detail=f"config '{r.config}' not found in {CONFIG_DIR}")
+
+        cfg = build_config(TrainRequest(config=r.config))
+        if cfg.tokenizer.name != "bpe-tokenizers-json-v1":
+            return {
+                "status": "skipped",
+                "config": r.config,
+                "message": f"Config '{r.config}' uses tokenizer '{cfg.tokenizer.name}', which does not require pre-tokenization.",
+                "count": 0,
+                "artifacts": [],
+            }
+
+        tok_path = Path(cfg.tokenizer.model_file) if cfg.tokenizer.model_file else Path("data/tokenizers/chit-bpe-v1.json")
+        if not tok_path.is_file():
+            raise HTTPException(
+                status_code=422,
+                detail=f"Tokenizer model_file '{tok_path}' not found on server. Train or sync the tokenizer asset first.",
+            )
+
+        sources = [Path(s.path) for s in cfg.data.sources] if cfg.data.sources else [Path(cfg.data.train_file)]
+        if cfg.data.eval_file:
+            sources.append(Path(cfg.data.eval_file))
+        missing = [p for p in sources if not p.is_file()]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=[f"source text file '{p}' not found on server" for p in missing],
+            )
+
+        from .pretokenize import pretokenize_config
+
+        lock_owner = f"api-pretokenize-{uuid.uuid4().hex[:8]}"
+
+        # Acquire .sync.lock atomically
+        try:
+            fd = os.open(SYNC_LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, "w", encoding="utf-8") as lf:
+                lf.write(f"{lock_owner}\n")
+        except FileExistsError:
+            raise HTTPException(
+                status_code=423,
+                detail={"message": "Server filesystem already locked.", "lock_path": str(SYNC_LOCK_PATH)},
+            )
+        except OSError as e:
+            log.exception("could not acquire sync lock for pre-tokenization")
+            raise HTTPException(status_code=500, detail=f"could not acquire sync lock: {e}")
+
+        try:
+            results = pretokenize_config(cfg_path, force=r.force)
+        finally:
+            if SYNC_LOCK_PATH.exists():
+                try:
+                    with open(SYNC_LOCK_PATH, "r", encoding="utf-8", errors="replace") as lf:
+                        current = lf.readline().strip()
+                    if current == lock_owner:
+                        SYNC_LOCK_PATH.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
     return {
-        "status": "created",
+        "status": "ready",
         "config": r.config,
-        "tokenizer": result["tokenizer"],
-        "vocab_size": result["vocab_size"],
-        "path": str(config_model_path),
-        "latest_sidecar_path": str(sidecar_path),
-        "checkpoint_asset_sha256": result["checkpoint_asset_sha256"],
-        "files_used": result["files_used"],
+        "count": len(results),
+        "artifacts": [
+            {
+                "artifact_file": m.get("artifact_file"),
+                "source_file": m.get("source_file"),
+                "token_count": m.get("token_count"),
+                "artifact_sha256": m.get("artifact_sha256"),
+            }
+            for m in results
+        ],
     }
 
 
 @app.post("/train", status_code=202, dependencies=[Depends(require_training_access)])
 def start_training(r: TrainRequest, response: Response):
-    _ensure_idle()
-    cfg, init = resolve_init(r, build_config(r))
-    validate_config(cfg)
-    job_id = uuid.uuid4().hex
-    job_dir = Path(JOBS_DIR) / job_id
-    try:
-        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init, "config_name": r.config})
-    except BaseException:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        raise
+    with _data_lock:
+        _ensure_idle()
+        cfg, init = resolve_init(r, build_config(r))
+        validate_config(cfg)
+        job_id = uuid.uuid4().hex
+        job_dir = Path(JOBS_DIR) / job_id
+        try:
+            job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata={"init": r.init, "config_name": r.config})
+        except BaseException:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise
     response.headers["Location"] = f"/train/{job['id']}"
     return job
 
@@ -1091,50 +1188,51 @@ class KnowledgeTrainRequest(TrainRequest):
 @app.post("/knowledge/train", status_code=202, dependencies=[Depends(require_training_access)])
 def train_on_knowledge(r: KnowledgeTrainRequest, response: Response):
     """Train on the stored knowledge now. Entries become 'trained' when the run is promoted."""
-    _ensure_idle()
-    cfg, init = resolve_init(r, build_config(r))
-    store = get_knowledge()
-    entries = store.select(status="pending" if r.select == "pending" else None, tags=r.tags)
-    if not entries:
-        raise HTTPException(status_code=422, detail=["no knowledge matches this request; add some with POST /knowledge"])
+    with _data_lock:
+        _ensure_idle()
+        cfg, init = resolve_init(r, build_config(r))
+        store = get_knowledge()
+        entries = store.select(status="pending" if r.select == "pending" else None, tags=r.tags)
+        if not entries:
+            raise HTTPException(status_code=422, detail=["no knowledge matches this request; add some with POST /knowledge"])
 
-    job_id = uuid.uuid4().hex
-    job_dir = Path(JOBS_DIR) / job_id
-    try:
-        base_text = ""
-        if r.include_base:
-            base = Path(cfg.data.train_file)
-            if not base.is_file():
-                raise HTTPException(status_code=422, detail=["data.train_file not found on server"])
-            base_text = base.read_text(encoding="utf-8")
+        job_id = uuid.uuid4().hex
+        job_dir = Path(JOBS_DIR) / job_id
         try:
-            ds = build_dataset(entries, job_dir / "dataset", base_text=base_text, repeat=r.repeat,
-                               max_bytes=MAX_DATASET_BYTES)
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=[str(e)])
-        # Preserve source-aware curricula while adding the knowledge dataset as
-        # its own stream. Without this, train() would prefer the configured
-        # sources and silently ignore the generated knowledge file.
-        sources = ([*cfg.data.sources, DataSourceConfig(path=str(ds.train_file), weight=1.0)]
-                   if cfg.data.sources else [])
-        cfg = dataclasses.replace(cfg, data=dataclasses.replace(
-            cfg.data, train_file=str(ds.train_file), sources=sources))
-        validate_config(cfg)
+            base_text = ""
+            if r.include_base:
+                base = Path(cfg.data.train_file)
+                if not base.is_file():
+                    raise HTTPException(status_code=422, detail=["data.train_file not found on server"])
+                base_text = base.read_text(encoding="utf-8")
+            try:
+                ds = build_dataset(entries, job_dir / "dataset", base_text=base_text, repeat=r.repeat,
+                                   max_bytes=MAX_DATASET_BYTES)
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=[str(e)])
+            # Preserve source-aware curricula while adding the knowledge dataset as
+            # its own stream. Without this, train() would prefer the configured
+            # sources and silently ignore the generated knowledge file.
+            sources = ([*cfg.data.sources, DataSourceConfig(path=str(ds.train_file), weight=1.0)]
+                       if cfg.data.sources else [])
+            cfg = dataclasses.replace(cfg, data=dataclasses.replace(
+                cfg.data, train_file=str(ds.train_file), sources=sources))
+            validate_config(cfg)
 
-        ids = ds.entry_ids
+            ids = ds.entry_ids
 
-        def mark_trained(snapshot: dict) -> None:
-            if snapshot["promoted"]:
-                store.mark_trained(ids, snapshot["id"])
+            def mark_trained(snapshot: dict) -> None:
+                if snapshot["promoted"]:
+                    store.mark_trained(ids, snapshot["id"])
 
-        meta = {"init": r.init, "knowledge": {
-            "entries": len(ids), "select": r.select, "tags": r.tags, "repeat": r.repeat,
-            "include_base": r.include_base, "dataset_bytes": ds.size_bytes, "dataset_sha256": ds.sha256,
-            "manifest": str(ds.manifest_file)}}
-        job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata=meta, after_success=mark_trained)
-    except BaseException:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        raise
+            meta = {"init": r.init, "knowledge": {
+                "entries": len(ids), "select": r.select, "tags": r.tags, "repeat": r.repeat,
+                "include_base": r.include_base, "dataset_bytes": ds.size_bytes, "dataset_sha256": ds.sha256,
+                "manifest": str(ds.manifest_file)}}
+            job = _submit(cfg, r, job_id, _snapshot_init(init, job_dir), metadata=meta, after_success=mark_trained)
+        except BaseException:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise
     response.headers["Location"] = f"/train/{job['id']}"
     return job
 

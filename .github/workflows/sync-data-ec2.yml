@@ -31,6 +31,10 @@ on:
         description: "Show what would change and copy nothing"
         type: boolean
         default: false
+      force_unlock:
+        description: "Clear stale server filesystem lock (.sync.lock) if present before syncing (only if server is idle)"
+        type: boolean
+        default: false
   # Note: Configs and data are synced strictly via manual workflow_dispatch to avoid rollout race conditions.
 
 permissions:
@@ -52,7 +56,7 @@ jobs:
       CHIT_API_KEY: ${{ secrets.CHIT_API_KEY }}
       # Files under data/ that are synced (shell patterns, matched at any depth).
       # Never synced: databases, memory.json, *.bak, checkpoints.
-      DATA_PATTERNS: "*.txt *.jsonl memory_seed.json chit-bpe-v1.json *.bpe.bin *.bpe.manifest.json"
+      DATA_PATTERNS: "*.txt *.jsonl memory_seed.json chit-bpe-v1.json"
 
     steps:
       - name: Checkout repository
@@ -64,13 +68,14 @@ jobs:
           IN_SCOPE: ${{ inputs.scope }}
           IN_PRUNE: ${{ inputs.prune_configs }}
           IN_DRY: ${{ inputs.dry_run }}
+          IN_FORCE_UNLOCK: ${{ inputs.force_unlock }}
         run: |
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "push" ]; then
-            scope=configs-only; prune=false; dry=false
+            scope=configs-only; prune=false; dry=false; force_unlock=false
           else
-            scope="$IN_SCOPE"; prune="$IN_PRUNE"; dry="$IN_DRY"
+            scope="$IN_SCOPE"; prune="$IN_PRUNE"; dry="$IN_DRY"; force_unlock="${IN_FORCE_UNLOCK:-false}"
           fi
 
           case "$scope" in
@@ -93,23 +98,16 @@ jobs:
             echo "SYNC_DATA=$d"
             echo "PRUNE_CONFIGS=$prune"
             echo "DRY_RUN=$dry"
+            echo "FORCE_UNLOCK=$force_unlock"
             echo "SYNC_TS=$(date -u +%Y%m%dT%H%M%SZ)"
           } >> "$GITHUB_ENV"
 
-          echo "Event: $EVENT_NAME | scope: $scope | prune: $prune | dry run: $dry"
+          echo "Event: $EVENT_NAME | scope: $scope | prune: $prune | dry run: $dry | force unlock: $force_unlock"
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Generate pre-tokenized BPE artifacts in CI
-        if: env.SYNC_DATA == 'true'
-        run: |
-          set -euo pipefail
-          pip install "tokenizers==0.23.2" "numpy>=1.26,<3"
-          python -c "import numpy, tokenizers; print(f'CI pre-tokenization dependencies verified: numpy {numpy.__version__}, tokenizers {tokenizers.__version__}')"
-          python -m pranav.chit.pretokenize configs/
 
       - name: Validate configs and data
         run: |
@@ -166,29 +164,6 @@ jobs:
               for p in sorted(Path("data").rglob("*")):
                   if p.is_file() and synced(p) and not p.name.endswith((".bak", "~", ".swp")):
                       total += p.stat().st_size
-                      if p.name.endswith(".bpe.bin"):
-                          if p.stat().st_size % 4 != 0:
-                              error("binary token file size is not a multiple of 4 bytes (int32)", str(p))
-                          continue
-                      elif p.name.endswith(".bpe.manifest.json"):
-                          import json, hashlib
-                          try:
-                              m = json.loads(p.read_text(encoding="utf-8"))
-                              bin_p = p.with_name(m["artifact_file"])
-                              if not bin_p.is_file():
-                                  error(f"manifest artifact_file {bin_p} missing", str(p))
-                              elif bin_p.stat().st_size != m.get("token_count", 0) * 4:
-                                  error("manifest token_count does not match binary artifact size", str(p))
-                              else:
-                                  h = hashlib.sha256()
-                                  with open(bin_p, "rb") as bf:
-                                      while chunk := bf.read(64 * 1024):
-                                          h.update(chunk)
-                                  if h.hexdigest() != m.get("artifact_sha256"):
-                                      error("binary artifact sha256 does not match manifest artifact_sha256", str(p))
-                          except Exception as exc:
-                              error(f"invalid manifest JSON: {exc}", str(p))
-                          continue
                       try:
                           p.read_text(encoding="utf-8")
                       except UnicodeDecodeError:
@@ -247,7 +222,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          out="$(ssh -F "$SSH_CFG" chit-ec2 "CHIT_HOME='$CHIT_HOME' DRY_RUN='$DRY_RUN' SYNC_DATA='$SYNC_DATA' SYNC_CONFIGS='$SYNC_CONFIGS' SYNC_LOCK_ID='$SYNC_LOCK_ID' bash -s" <<'REMOTE'
+          out="$(ssh -F "$SSH_CFG" chit-ec2 "CHIT_HOME='$CHIT_HOME' DRY_RUN='$DRY_RUN' SYNC_DATA='$SYNC_DATA' SYNC_CONFIGS='$SYNC_CONFIGS' SYNC_LOCK_ID='$SYNC_LOCK_ID' FORCE_UNLOCK='$FORCE_UNLOCK' bash -s" <<'REMOTE'
           set -euo pipefail
           command -v rsync >/dev/null || { echo "ERROR: rsync is not installed on the server" >&2; exit 1; }
 
@@ -298,6 +273,36 @@ jobs:
 
           if [ "$SYNC_DATA" = "true" ]; then
             if [ "$DRY_RUN" != "true" ]; then
+              if [ -f "$lock_file" ]; then
+                existing="$(head -n 1 "$lock_file" 2>/dev/null || true)"
+                if [ "${FORCE_UNLOCK:-false}" = "true" ]; then
+                  echo "FORCE_UNLOCK requested. Evaluating lock safety for '$existing'..."
+                  if [ "$container_running" = "true" ]; then
+                    if ! health="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health 2>/dev/null)"; then
+                      echo "ERROR: Cannot verify server health (/health unreachable). Refusing to force unlock while container is running." >&2
+                      exit 1
+                    fi
+                    if printf '%s' "$health" | grep -Eq '"training_job" *: *"[^"]+"'; then
+                      echo "ERROR: Cannot force unlock: a training job is actively running in the container. Aborting." >&2
+                      exit 1
+                    fi
+                    if echo "$existing" | grep -Eq '^api-pretokenize-'; then
+                      if printf '%s' "$health" | grep -Eq '"data_locked" *: *true'; then
+                        echo "ERROR: Cannot force unlock: an 'api-pretokenize' job is actively running in the container. Aborting." >&2
+                        exit 1
+                      fi
+                    fi
+                  fi
+                  rm -f "$lock_file"
+                  echo "Stale lock '$existing' cleared successfully under FORCE_UNLOCK."
+                else
+                  echo "GATE_LOCK=conflict_fs:$existing"
+                  echo "ERROR: Server filesystem already locked by '$existing'. Aborting." >&2
+                  echo "Hint: If this lock was left by an aborted or failed run, re-run with workflow input 'force_unlock: true'." >&2
+                  exit 1
+                fi
+              fi
+
               # Step 1: Acquire atomic lock BEFORE checking health or stopping the container
               if ( set -C; printf '%s\n' "$SYNC_LOCK_ID" > "$lock_file" ) 2>/dev/null; then
                 echo "GATE_LOCK=acquired_fs"
@@ -477,6 +482,7 @@ jobs:
             echo "| Server folder | \`${CHIT_HOME:-?}\` |"
             echo "| Configs synced | ${SYNC_CONFIGS:-?} (prune: ${PRUNE_CONFIGS:-?}) |"
             echo "| Data synced | ${SYNC_DATA:-?} |"
+            echo "| Force unlock | ${FORCE_UNLOCK:-false} |"
             echo "| Dry run | ${DRY_RUN:-?} |"
             for part in configs data; do
               log="/tmp/rsync-$part.log"

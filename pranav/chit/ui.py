@@ -82,6 +82,7 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Memory", "name": "Delete memory", "method": "DELETE", "path": "/memory/{memory_id}", "pattern": r"^/memory/[A-Za-z0-9_-]+$", "query": {}, "body": None, "confirm": True},
     {"category": "Training & jobs", "name": "List training presets", "method": "GET", "path": "/train/configs", "pattern": r"^/train/configs$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Train BPE tokenizer", "method": "POST", "path": "/train/tokenizer", "pattern": r"^/train/tokenizer$", "query": {}, "body": {"config": "chit_scratch_mix_v4_6l_256_subword_large", "vocab_size": 2000, "overwrite": True}, "confirm": True},
+    {"category": "Training & jobs", "name": "Pre-tokenize BPE datasets", "method": "POST", "path": "/train/pretokenize", "pattern": r"^/train/pretokenize$", "query": {}, "body": {"config": "chit_scratch_mix_v4_6l_256_subword_large", "force": False}, "confirm": True},
     {"category": "Training & jobs", "name": "Start training", "method": "POST", "path": "/train", "pattern": r"^/train$", "query": {}, "body": {"config": "chit_assistant_cpu", "init": "scratch", "promote": False, "force_promote": False}, "confirm": True},
     {"category": "Training & jobs", "name": "List training jobs", "method": "GET", "path": "/train", "pattern": r"^/train$", "query": {}, "body": None},
     {"category": "Training & jobs", "name": "Read training job", "method": "GET", "path": "/train/{job_id}", "pattern": r"^/train/[0-9a-f]{32}$", "query": {}, "body": None},
