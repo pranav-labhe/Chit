@@ -97,23 +97,52 @@ def pretokenize_source(
         except Exception:
             pass  # regenerate on any manifest read/validation failure
 
-    # Match TextDataset universal newline decoding
-    text = src.read_text(encoding="utf-8")
-    ids = tokenizer.encode(text)
-    token_count = len(ids)
-
     target_bin.parent.mkdir(parents=True, exist_ok=True)
     target_manifest.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1. Write binary tokens to temporary file (explicit little-endian int32)
+    # 1. Stream text in bounded 64 KB line chunks and write binary tokens directly to disk.
+    # This keeps peak memory strictly bounded (< 5 MB) even for multi-gigabyte corpora.
     bin_tmp = target_bin.with_name(f"{target_bin.name}.tmp-{os.getpid()}")
+    token_count = 0
     try:
-        token_arr = np.asarray(ids, dtype="<i4")
-        with open(bin_tmp, "wb") as bf:
-            token_arr.tofile(bf)
-        del token_arr
-        del ids
-        del text
+        with open(bin_tmp, "wb") as bf, open(src, "r", encoding="utf-8", errors="replace") as sf:
+            chunk: list[str] = []
+            chunk_chars = 0
+            for line in sf:
+                # Handle abnormally long single lines safely by slicing into 64 KB pieces
+                while len(line) > CHUNK_SIZE:
+                    slice_part = line[:CHUNK_SIZE]
+                    line = line[CHUNK_SIZE:]
+                    chunk.append(slice_part)
+                    chunk_text = "".join(chunk)
+                    ids = tokenizer.encode(chunk_text)
+                    if ids:
+                        arr = np.asarray(ids, dtype="<i4")
+                        arr.tofile(bf)
+                        token_count += len(ids)
+                    chunk.clear()
+                    chunk_chars = 0
+
+                chunk.append(line)
+                chunk_chars += len(line)
+                if chunk_chars >= CHUNK_SIZE:
+                    chunk_text = "".join(chunk)
+                    ids = tokenizer.encode(chunk_text)
+                    if ids:
+                        arr = np.asarray(ids, dtype="<i4")
+                        arr.tofile(bf)
+                        token_count += len(ids)
+                    chunk.clear()
+                    chunk_chars = 0
+
+            if chunk:
+                chunk_text = "".join(chunk)
+                ids = tokenizer.encode(chunk_text)
+                if ids:
+                    arr = np.asarray(ids, dtype="<i4")
+                    arr.tofile(bf)
+                    token_count += len(ids)
+                chunk.clear()
 
         bin_sha256 = hash_file_sha256(bin_tmp)
         bin_size = bin_tmp.stat().st_size

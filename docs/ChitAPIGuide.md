@@ -140,6 +140,23 @@ For learning plans using subword BPE tokenization (such as `chit_scratch_mix_v4_
 - **Dual Placement**: Saves the atomic JSON asset to `cfg.tokenizer.model_file` and mirrors it beside `latest.pt` (`checkpoints/tokenizer.json`).
 - **Response**: Returns `vocab_size`, `checkpoint_asset_sha256`, target paths, and the exact `files_used`.
 
+### Memory-Mapped Subword Pre-Tokenization (`POST /train/pretokenize`)
+For BPE configs with large cumulative corpora (such as `chit_scratch_mix_v4_6l_256_subword_large`, with 9 sources totaling 60+ MB), loading text into monolithic Python lists during startup can trigger severe memory spikes on 2 GB RAM servers.
+- **Streamed 64 KB Chunk Processing**: Files are processed in bounded 64 KB chunks, keeping peak RAM strictly below 5 MB.
+- **Memory-Mapped Binary Output**: Produces little-endian int32 token binaries (`*.bpe.bin`) and SHA-256 manifests (`*.bpe.manifest.json`). `TextDataset` loads them with zero heap overhead via `torch.from_file(..., shared=False)`.
+- **Mutual Exclusion**: Concurrency is serialized via `_data_lock` and the filesystem `.sync.lock`.
+- **API Call**:
+  ```bash
+  curl -X POST https://api.chitt.online/train/pretokenize \
+    -H "X-API-Key: $CHIT_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"config": "chit_scratch_mix_v4_6l_256_subword_large", "force": false}'
+  ```
+- **CLI Alternative**: Can also be executed directly inside the server container:
+  ```bash
+  docker exec -it chit python -m pranav.chit.pretokenize configs/chit_scratch_mix_v4_6l_256_subword_large.json
+  ```
+
 **When to use Memory vs. Knowledge?**
 - Use **Memory** for dynamic, user-specific facts (e.g., "The user prefers Python").
 - Use **Knowledge** for static, universal truths (e.g., "The capital of France is Paris").

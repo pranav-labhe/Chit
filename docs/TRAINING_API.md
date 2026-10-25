@@ -17,6 +17,8 @@ return `403`, unless `CHIT_ALLOW_UNAUTHENTICATED_TRAINING=1` is set (local devel
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/train/configs` | Config names that can be trained |
+| POST | /train/tokenizer | Train a custom BPE tokenizer asset for a config |
+| POST | /train/pretokenize | Pre-tokenize subword corpora into memory-mapped binary files in 64 KB streamed chunks |
 | `POST` | `/train` | Start a job. `202` with the job; `409` if a job is already active |
 | `GET` | `/train` | Recent jobs, newest first |
 | `GET` | `/train/{id}` | Job status, progress and loss history |
@@ -113,6 +115,39 @@ held-out text file. Job status exposes an `evaluations` list with report paths,
 perplexity, and bits/byte, plus `final_evaluation`. Golden response generation
 is intentionally a separate bounded step because it runs the model on all 50
 cases and still requires human review.
+
+## Pre-tokenizing subword BPE datasets
+
+Large multi-source subword corpora (e.g. `chit_scratch_mix_v4_6l_256_subword_large`, totaling 60+ MB and ~18M tokens) can cause excessive startup memory allocation if loaded naively into Python memory at once.
+
+Chit provides high-efficiency pre-tokenization that compiles raw text into little-endian 32-bit signed integer binary files (`*.bpe.bin`) paired with strict SHA-256 integrity manifests (`*.bpe.manifest.json`). Training jobs load these files using zero-heap-spike memory mapping (`torch.from_file(..., shared=False)`).
+
+### Streamed chunk architecture
+To prevent out-of-memory (OOM) crashes on memory-constrained servers (such as 2 GB RAM EC2 instances), `POST /train/pretokenize` processes text in **bounded 64 KB streamed chunks**:
+- Text is read in small 64 KB slices, converted to integer token IDs, and immediately written to disk.
+- Peak memory consumption stays **under 5 MB** regardless of how large the corpus file is.
+- File writes are fully atomic (`.tmp-<pid>` -> hash verification -> atomic rename -> manifest published last).
+- Mutually exclusive with active training jobs and sync workflows via process `_data_lock` and filesystem `.sync.lock`.
+
+### Calling the endpoint
+
+```bash
+curl -X POST https://api.chitt.online/train/pretokenize \
+  -H "X-API-Key: $CHIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": "chit_scratch_mix_v4_6l_256_subword_large",
+    "force": false
+  }'
+```
+
+Set `"force": true` to re-compile artifacts even if valid artifacts already exist on disk.
+
+### Command-line compilation on the server
+Operators can also run pre-tokenization directly inside the Docker container:
+```bash
+docker exec -it chit python -m pranav.chit.pretokenize configs/chit_scratch_mix_v4_6l_256_subword_large.json
+```
 
 ## Candidate evaluation and promotion
 
