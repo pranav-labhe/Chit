@@ -14,7 +14,15 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
+
+try:
+    import tokenizers
+except ImportError:
+    tokenizers = None  # type: ignore[assignment]
 
 from .config import ChitConfig, load_config
 from .tokenizer import create_tokenizer
@@ -23,6 +31,21 @@ log = logging.getLogger(__name__)
 
 GENERATOR_VERSION = "1.0"
 CHUNK_SIZE = 64 * 1024
+
+
+def check_dependencies() -> None:
+    """Ensure required pre-tokenization libraries are installed with descriptive diagnostics."""
+    missing = []
+    if np is None:
+        missing.append("numpy>=1.26,<3")
+    if tokenizers is None:
+        missing.append("tokenizers==0.23.2")
+    if missing:
+        deps = " ".join(f'"{m}"' for m in missing)
+        raise RuntimeError(
+            f"pranav.chit.pretokenize requires {', '.join(missing)}. "
+            f"Install them via: pip install {deps}"
+        )
 
 
 def hash_file_sha256(path: str | os.PathLike) -> str:
@@ -46,6 +69,7 @@ def pretokenize_source(
     Publishing is atomic: the binary is written to a temporary file,
     verified, renamed, and the manifest is published last.
     """
+    check_dependencies()
     src = Path(source_file)
     if not src.is_file():
         raise FileNotFoundError(f"source file not found: {src}")
@@ -181,6 +205,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="[%(asctime)s] [%(levelname)s] %(message)s",
     )
+
+    try:
+        check_dependencies()
+    except RuntimeError as err:
+        log.error("%s", err)
+        return 1
 
     configs_to_process: list[Path] = []
     for target_str in args.targets:

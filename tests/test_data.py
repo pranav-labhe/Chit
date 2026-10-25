@@ -212,3 +212,25 @@ def test_subword_manifest_contract_strictness(tmp_path):
     with pytest.raises(ValueError, match="invalid artifact_sha256"):
         TextDataset(f, tok, block_size=4)
 
+
+def test_pretokenize_dependency_checks(monkeypatch):
+    from pranav.chit import pretokenize
+
+    # Successful when installed
+    pretokenize.check_dependencies()
+
+    # Missing numpy diagnostic
+    monkeypatch.setattr(pretokenize, "np", None)
+    with pytest.raises(RuntimeError, match="pranav.chit.pretokenize requires.*numpy>=1.26,<3"):
+        pretokenize.check_dependencies()
+
+    # CLI main() returns 1 with clear diagnostic when dependency missing
+    assert pretokenize.main(["configs/"]) == 1
+
+    # Missing tokenizers diagnostic
+    monkeypatch.setattr(pretokenize, "np", object())
+    monkeypatch.setattr(pretokenize, "tokenizers", None)
+    with pytest.raises(RuntimeError, match="pranav.chit.pretokenize requires.*tokenizers==0.23.2"):
+        pretokenize.check_dependencies()
+
+

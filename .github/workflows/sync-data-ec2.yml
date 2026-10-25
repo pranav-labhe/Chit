@@ -107,7 +107,8 @@ jobs:
         if: env.SYNC_DATA == 'true'
         run: |
           set -euo pipefail
-          pip install tokenizers==0.23.2
+          pip install "tokenizers==0.23.2" "numpy>=1.26,<3"
+          python -c "import numpy, tokenizers; print(f'CI pre-tokenization dependencies verified: numpy {numpy.__version__}, tokenizers {tokenizers.__version__}')"
           python -m pranav.chit.pretokenize configs/
 
       - name: Validate configs and data
