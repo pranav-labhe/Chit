@@ -512,7 +512,7 @@ jobs:
             else
               echo "Maintenance lock not present on disk: $lock_file"
             fi
-            REMOTE
+          REMOTE
           fi
 
       - name: Remove SSH credentials
