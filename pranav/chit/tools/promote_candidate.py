@@ -15,6 +15,8 @@ from pathlib import Path
 
 from ..promotion_state import file_sha256, install_checkpoint, recover_promotion
 from ..runtime import ChitRuntime
+from ..tokenizer import BpeTokenizer
+from ..training import load_checkpoint
 
 
 def sha256(path: Path) -> str:
@@ -33,10 +35,14 @@ def paired_lower_bound(candidate: list[dict], champion: list[dict], *, samples: 
     return sorted(means)[int(0.05 * (samples - 1))]
 
 
-def _compatible(candidate_ckpt: Path, champion_ckpt: Path) -> None:
+def _compatible(candidate_ckpt: Path, champion_ckpt: Path) -> ChitRuntime:
     challenger, champion = ChitRuntime.from_checkpoint(candidate_ckpt), ChitRuntime.from_checkpoint(champion_ckpt)
     if challenger.tokenizer.name != champion.tokenizer.name:
-        raise ValueError("tokenizer family differs; promotion requires a separately approved migration")
+        if isinstance(challenger.tokenizer, BpeTokenizer):
+            ck = load_checkpoint(candidate_ckpt)
+            if not ck.get("tokenizer_asset") or challenger.tokenizer.asset_sha256 != ck.get("tokenizer_sha256"):
+                raise ValueError("tokenizer family differs and candidate does not embed a verified tokenizer_asset")
+    return challenger
 
 
 def promote(candidate: Path, candidate_eval: Path, champion_eval: Path,
@@ -78,7 +84,7 @@ def promote(candidate: Path, candidate_eval: Path, champion_eval: Path,
     h_metric = incumbent["language_model_metrics"]["bits_per_byte"]
     if not (math.isfinite(c_metric) and math.isfinite(h_metric)) or c_metric > h_metric * 1.05:
         raise ValueError("candidate held-out bits/byte regresses by more than the allowed 5%")
-    _compatible(candidate, target)
+    challenger = _compatible(candidate, target)
 
     target.parent.mkdir(parents=True, exist_ok=True)
     archive = target.parent / "champions"
@@ -103,6 +109,8 @@ def promote(candidate: Path, candidate_eval: Path, champion_eval: Path,
     install_checkpoint(target, new_archive, source_sha256=candidate_hash,
                        previous_sha256=champion_hash, previous_archive=old_archive,
                        manifest=manifest)
+    if isinstance(challenger.tokenizer, BpeTokenizer) and getattr(challenger.tokenizer, "asset", None):
+        (target.parent / "tokenizer.json").write_text(challenger.tokenizer.asset, encoding="utf-8")
     return manifest
 
 

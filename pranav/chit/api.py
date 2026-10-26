@@ -819,6 +819,8 @@ def _force_promote_candidate(snapshot: dict) -> None:
     import shutil
     from datetime import datetime, timezone
     from .promotion_state import file_sha256, install_checkpoint
+    from .tokenizer import BpeTokenizer
+    from .training import load_checkpoint
 
     candidate = Path(snapshot["checkpoint"])
     target = Path(CHECKPOINT)
@@ -826,7 +828,10 @@ def _force_promote_candidate(snapshot: dict) -> None:
     candidate_runtime = ChitRuntime.from_checkpoint(candidate, memory=_state["memory"])
     current_runtime = _state.get("runtime")
     if current_runtime and candidate_runtime.tokenizer.name != current_runtime.tokenizer.name:
-        raise ValueError("force promotion does not bypass tokenizer compatibility")
+        if isinstance(candidate_runtime.tokenizer, BpeTokenizer):
+            ck = load_checkpoint(candidate)
+            if not ck.get("tokenizer_asset") or candidate_runtime.tokenizer.asset_sha256 != ck.get("tokenizer_sha256"):
+                raise ValueError("force promotion across tokenizer families requires an embedded verified tokenizer_asset")
     target.parent.mkdir(parents=True, exist_ok=True)
     archive = target.parent / "champions"
     archive.mkdir(exist_ok=True)
@@ -848,6 +853,8 @@ def _force_promote_candidate(snapshot: dict) -> None:
                     "to": candidate_hash, "reason": "explicit force_promote API option"}]}
     install_checkpoint(target, new_archive, source_sha256=candidate_hash,
                        previous_sha256=old_hash, previous_archive=old_archive, manifest=manifest)
+    if isinstance(candidate_runtime.tokenizer, BpeTokenizer) and getattr(candidate_runtime.tokenizer, "asset", None):
+        (target.parent / "tokenizer.json").write_text(candidate_runtime.tokenizer.asset, encoding="utf-8")
     _state.update(runtime=candidate_runtime, bridge=Bridge(candidate_runtime), error=None)
 
 
@@ -1520,6 +1527,7 @@ async def promote_candidate_route(job_id: str):
     try:
         # promote validates all safety gates (lift, score, hashes)
         promote(ckpt_path, eval_path, champion_eval_path, target_path)
+        shutil.copy2(eval_path, Path(CHECKPOINT).parent / "champion_evaluation.json")
     except ValueError as e:
         raise HTTPException(status_code=403, detail=f"Golden Gate promotion failed: {e}")
     except Exception as e:

@@ -234,3 +234,56 @@ def test_pretokenize_dependency_checks(monkeypatch):
         pretokenize.check_dependencies()
 
 
+def test_bpe_record_starts_and_multirecord_answer_loss_masking():
+    pytest.importorskip("tokenizers")
+    from pathlib import Path
+    from pranav.chit.data import _apply_answer_loss_mask
+    from pranav.chit.tokenizer import create_tokenizer
+
+    tok = create_tokenizer("bpe-tokenizers-json-v1", model_file=Path("data/tokenizers/chit-bpe-v1.json"))
+    text = (
+        "Task: chat\nUser: Who are you?\nChit: I am Chit, the neural core of Atmini.\n\n"
+        "Task: reasoning\nInput: 2 + 2\nReasoning: Add two and two.\nAnswer: 4\n\n"
+        "Task: prose\nSunlight warmed the quiet garden path across the hills.\n\n"
+        "Task: chat\nUser: What is 3 + 3?\nChit: The sum is 6.\n"
+    )
+    ds = TextDataset.from_text(text, tok, block_size=48)
+    assert len(ds.record_starts) == 4
+    assert int(ds.record_starts[0].item()) == 0
+
+    # Verify each record_start points directly to the "Task:" prefix token
+    task_prefix = tok.encode("Task:")
+    for start_idx in ds.record_starts.tolist():
+        assert ds.data[start_idx : start_idx + len(task_prefix)].tolist() == task_prefix
+
+    # Deterministic full-window check covering multiple records in a single window
+    full_len = len(ds.data) - 1
+    chunk = ds.data[: full_len + 1].unsqueeze(0)
+    y = chunk[:, 1:].to(dtype=torch.long).clone()
+    _apply_answer_loss_mask(chunk, y, is_byte=False, bpe_markers=ds.bpe_markers)
+
+    y_list = y[0].tolist()
+    raw_targets = chunk[0, 1:].tolist()
+
+    # 1. Initial prompt before first answer ("Task: chat\nUser: Who are you?\nChit:") is masked (-100)
+    first_chit_prefix = tok.encode("Task: chat\nUser: Who are you?\nChit:")
+    for idx in range(len(first_chit_prefix) - 1):
+        assert y_list[idx] == -100
+
+    # 2. First token of first answer (" I") is unmasked
+    first_ans_target_idx = len(first_chit_prefix) - 1
+    assert y_list[first_ans_target_idx] == raw_targets[first_ans_target_idx]
+
+    # 3. Second record's prompt body (" reasoning\nInput: 2 + 2\nReasoning:") is also masked (-100)
+    # while the preceding "\nTask:" stop sequence remains unmasked
+    unmasked_tokens = [tok_id for tok_id in y_list if tok_id != -100]
+    unmasked_decoded = tok.decode(unmasked_tokens)
+    assert "I am Chit, the neural core of Atmini." in unmasked_decoded
+    assert "Add two and two.\nAnswer: 4" in unmasked_decoded
+    assert "Sunlight warmed the quiet garden path" in unmasked_decoded
+    assert "The sum is 6." in unmasked_decoded
+    assert "Who are you?" not in unmasked_decoded
+    assert "What is 3 + 3?" not in unmasked_decoded
+
+
+

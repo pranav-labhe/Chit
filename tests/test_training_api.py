@@ -325,4 +325,37 @@ def test_health_reports_data_locked_state(client):
     assert health_after["data_locked"] is False
 
 
+def test_promote_compatible_allows_verified_bpe_candidate_over_byte_champion(tmp_path):
+    pytest.importorskip("tokenizers")
+    import torch
+    from pathlib import Path
+    from pranav.chit.model import ChitModel
+    from pranav.chit.tokenizer import create_tokenizer
+    from pranav.chit.tools.promote_candidate import _compatible
+
+    byte_cfg = {"vocab_size": 256, "block_size": 16, "n_layer": 1, "n_head": 2, "n_embd": 16, "dropout": 0.0}
+    byte_model = ChitModel(**byte_cfg)
+    champion_ckpt = tmp_path / "champion_byte.pt"
+    torch.save({"format": 3, "tokenizer": "byte-utf8", "model": byte_model.state_dict(), "model_config": byte_cfg}, champion_ckpt)
+
+    bpe_tok = create_tokenizer("bpe-tokenizers-json-v1", model_file=Path("data/tokenizers/chit-bpe-v1.json"))
+    bpe_cfg = {"vocab_size": bpe_tok.vocab_size, "block_size": 16, "n_layer": 1, "n_head": 2, "n_embd": 16, "dropout": 0.0}
+    bpe_model = ChitModel(**bpe_cfg)
+    candidate_ckpt = tmp_path / "candidate_bpe.pt"
+    torch.save({
+        "format": 3,
+        "tokenizer": "bpe-tokenizers-json-v1",
+        "tokenizer_asset": bpe_tok.asset,
+        "tokenizer_sha256": bpe_tok.asset_sha256,
+        "model": bpe_model.state_dict(),
+        "model_config": bpe_cfg,
+    }, candidate_ckpt)
+
+    # Verified self-contained BPE candidate is compatible for promotion over byte-utf8 champion
+    challenger = _compatible(candidate_ckpt, champion_ckpt)
+    assert challenger.tokenizer.name == "bpe-tokenizers-json-v1"
+    assert challenger.tokenizer.asset_sha256 == bpe_tok.asset_sha256
+
+
+
 

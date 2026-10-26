@@ -60,9 +60,235 @@ def _sample_starts(
     return torch.randint(0, max_start, (count, 1), generator=generator)
 
 
-def _apply_answer_loss_mask(chunk: torch.Tensor, y: torch.Tensor, is_byte: bool) -> None:
-    """Mask prompt tokens with -100 so cross-entropy loss focuses on answer/reasoning bytes."""
+def _find_subseq(row: list[int], pattern: list[int], start: int = 0, end: int | None = None) -> int:
+    if not pattern:
+        return -1
+    plen = len(pattern)
+    limit = (len(row) if end is None else min(end, len(row))) - plen
+    if start > limit:
+        return -1
+    first = pattern[0]
+    if plen == 1:
+        try:
+            return row.index(first, start, limit + 1)
+        except ValueError:
+            return -1
+    pos = start
+    while pos <= limit:
+        try:
+            idx = row.index(first, pos, limit + 1)
+        except ValueError:
+            return -1
+        if row[idx : idx + plen] == pattern:
+            return idx
+        pos = idx + 1
+    return -1
+
+
+def _build_bpe_markers(tokenizer) -> dict[str, list[int]] | None:
+    try:
+        task_prefix = tokenizer.encode("Task:")
+        nl_task = tokenizer.encode("\nTask:")
+        nl_chit = tokenizer.encode("\nChit:")
+        nl_reas = tokenizer.encode("\nReasoning:")
+        nl_user = tokenizer.encode("\nUser:")
+        prose = tokenizer.encode("Task: prose\n")
+        nl_prose = tokenizer.encode("\nTask: prose\n")
+        nl_only = tokenizer.encode("\n")
+    except Exception:
+        return None
+    if not (task_prefix and nl_task and nl_chit and nl_reas and prose and nl_prose and nl_only):
+        return None
+    return {
+        "task_prefix": list(task_prefix),
+        "nl_task": list(nl_task),
+        "nl_chit": list(nl_chit),
+        "nl_reas": list(nl_reas),
+        "nl_user": list(nl_user),
+        "prose": list(prose),
+        "nl_prose": list(nl_prose),
+        "nl_only": list(nl_only),
+    }
+
+
+def _find_bpe_record_starts(token_data: torch.Tensor, markers: dict[str, list[int]] | None) -> torch.Tensor:
+    if not markers:
+        return torch.empty(0, dtype=torch.long)
+    task_prefix = markers["task_prefix"]
+    nl_task = markers["nl_task"]
+    nl_only = markers["nl_only"]
+    plen = len(nl_task)
+    n_tokens = len(token_data)
+    if n_tokens < plen:
+        return torch.empty(0, dtype=torch.long)
+
+    nl_offset = len(nl_only) if nl_task[: len(nl_only)] == nl_only else 0
+    parts: list[torch.Tensor] = []
+    if n_tokens >= len(task_prefix) and token_data[: len(task_prefix)].tolist() == task_prefix:
+        parts.append(torch.zeros(1, dtype=torch.long))
+
+    chunk_step = 1_000_000
+    for start in range(0, n_tokens - plen + 1, chunk_step):
+        end = min(n_tokens, start + chunk_step + plen - 1)
+        sub = token_data[start:end]
+        sub_len = len(sub) - plen + 1
+        if sub_len <= 0:
+            break
+        mask = sub[:sub_len] == nl_task[0]
+        for k in range(1, plen):
+            mask &= sub[k : sub_len + k] == nl_task[k]
+        hits = torch.nonzero(mask, as_tuple=False).flatten()
+        if hits.numel() > 0:
+            parts.append(hits + (start + nl_offset))
+
+    if not parts:
+        return torch.empty(0, dtype=torch.long)
+    return torch.cat(parts, dim=0)
+
+
+def _collect_followup_user_spans(
+    row_tokens: list[int],
+    search_start: int,
+    seg_end: int,
+    nl_user: list[int],
+    nl_chit: list[int],
+    nl_reas: list[int],
+    width: int,
+    spans: list[tuple[int, int]],
+) -> None:
+    if not nl_user:
+        return
+    cursor = search_start
+    while cursor < seg_end:
+        u_idx = _find_subseq(row_tokens, nl_user, cursor, seg_end)
+        if u_idx == -1:
+            break
+        # Leave "\nUser:" unmasked as a valid turn-end stop sequence, mask prompt body after it
+        m_start = u_idx + len(nl_user) - 1
+        after_u = u_idx + len(nl_user)
+        c_idx = _find_subseq(row_tokens, nl_chit, after_u, seg_end)
+        r_idx = _find_subseq(row_tokens, nl_reas, after_u, seg_end)
+        if c_idx != -1 and (r_idx == -1 or c_idx < r_idx):
+            m_end = c_idx + len(nl_chit) - 1
+            spans.append((m_start, m_end))
+            cursor = c_idx + len(nl_chit)
+        elif r_idx != -1:
+            m_end = r_idx + len(nl_reas) - 1
+            spans.append((m_start, m_end))
+            cursor = r_idx + len(nl_reas)
+        else:
+            spans.append((m_start, min(width, seg_end - 1)))
+            break
+
+
+def _apply_bpe_answer_loss_mask(
+    chunk: torch.Tensor,
+    y: torch.Tensor,
+    markers: dict[str, list[int]] | None,
+) -> None:
+    if not markers:
+        return
+    width = y.size(1)
+    min_remaining = 16 if width >= 128 else 1
+    nl_task = markers["nl_task"]
+    nl_chit = markers["nl_chit"]
+    nl_reas = markers["nl_reas"]
+    nl_user = markers["nl_user"]
+    prose = markers["prose"]
+    nl_prose = markers["nl_prose"]
+
+    chunk_cpu = chunk.tolist()
+    for r, row_tokens in enumerate(chunk_cpu):
+        rec_positions: list[int] = []
+        pos = 0
+        while True:
+            idx = _find_subseq(row_tokens, nl_task, pos)
+            if idx == -1:
+                break
+            rec_positions.append(idx)
+            pos = idx + len(nl_task)
+
+        spans: list[tuple[int, int]] = []
+        first_end = rec_positions[0] if rec_positions else len(row_tokens)
+
+        # 1. Initial segment before the first "\nTask:" boundary
+        if first_end >= len(prose) and row_tokens[: len(prose)] == prose:
+            spans.append((0, len(prose) - 1))
+        else:
+            chit_idx = _find_subseq(row_tokens, nl_chit, 0, first_end)
+            reas_idx = _find_subseq(row_tokens, nl_reas, 0, first_end)
+            if chit_idx != -1 and (reas_idx == -1 or chit_idx < reas_idx):
+                spans.append((0, chit_idx + len(nl_chit) - 1))
+                _collect_followup_user_spans(
+                    row_tokens, chit_idx + len(nl_chit), first_end,
+                    nl_user, nl_chit, nl_reas, width, spans,
+                )
+            elif reas_idx != -1:
+                spans.append((0, reas_idx + len(nl_reas) - 1))
+                _collect_followup_user_spans(
+                    row_tokens, reas_idx + len(nl_reas), first_end,
+                    nl_user, nl_chit, nl_reas, width, spans,
+                )
+
+        # 2. Subsequent records starting at each "\nTask:" boundary in the window
+        for k, rec_idx in enumerate(rec_positions):
+            seg_end = rec_positions[k + 1] if k + 1 < len(rec_positions) else len(row_tokens)
+            # Keep "\nTask:" unmasked as the end-of-turn stop sequence for the prior answer;
+            # mask the new record's prompt body immediately after "\nTask:".
+            mask_start = rec_idx + len(nl_task) - 1
+            if seg_end - rec_idx >= len(nl_prose) and row_tokens[rec_idx : rec_idx + len(nl_prose)] == nl_prose:
+                spans.append((mask_start, rec_idx + len(nl_prose) - 1))
+            else:
+                search_from = rec_idx + len(nl_task)
+                chit_idx = _find_subseq(row_tokens, nl_chit, search_from, seg_end)
+                reas_idx = _find_subseq(row_tokens, nl_reas, search_from, seg_end)
+                if chit_idx != -1 and (reas_idx == -1 or chit_idx < reas_idx):
+                    spans.append((mask_start, chit_idx + len(nl_chit) - 1))
+                    _collect_followup_user_spans(
+                        row_tokens, chit_idx + len(nl_chit), seg_end,
+                        nl_user, nl_chit, nl_reas, width, spans,
+                    )
+                elif reas_idx != -1:
+                    spans.append((mask_start, reas_idx + len(nl_reas) - 1))
+                    _collect_followup_user_spans(
+                        row_tokens, reas_idx + len(nl_reas), seg_end,
+                        nl_user, nl_chit, nl_reas, width, spans,
+                    )
+                else:
+                    spans.append((mask_start, min(width, seg_end - 1)))
+
+        if not spans:
+            continue
+
+        row_mask = torch.zeros(width, dtype=torch.bool)
+        for s, e in spans:
+            s_clamped = max(0, min(s, width))
+            e_clamped = max(0, min(e, width))
+            if e_clamped > s_clamped:
+                row_mask[s_clamped:e_clamped] = True
+
+        masked_count = int(row_mask.sum().item())
+        if masked_count == 0:
+            continue
+        if width - masked_count >= min_remaining:
+            y[r, row_mask] = -100
+        elif width > min_remaining:
+            # Cap masking so at least min_remaining target tokens remain active
+            allowed = width - min_remaining
+            true_indices = torch.nonzero(row_mask, as_tuple=False).flatten()[:allowed]
+            if true_indices.numel() > 0:
+                y[r, true_indices] = -100
+
+
+def _apply_answer_loss_mask(
+    chunk: torch.Tensor,
+    y: torch.Tensor,
+    is_byte: bool,
+    bpe_markers: dict[str, list[int]] | None = None,
+) -> None:
+    """Mask prompt tokens with -100 so cross-entropy loss focuses on answer/reasoning tokens."""
     if not is_byte:
+        _apply_bpe_answer_loss_mask(chunk, y, bpe_markers)
         return
     width = y.size(1)
     min_remaining = 16 if width >= 128 else 1
@@ -89,6 +315,7 @@ class TextDataset(Dataset):
         if (source is None) == (text is None):
             raise ValueError("pass exactly one of a file path or text=")
         self.is_byte = getattr(tokenizer, "name", "") == "byte-utf8"
+        self.bpe_markers = None if self.is_byte else _build_bpe_markers(tokenizer)
         if self.is_byte and text is None:
             # ByteTokenizer's ids are exactly the normalized UTF-8 bytes. Keep
             # them packed as uint8 instead of materializing a Python int per
@@ -183,7 +410,7 @@ class TextDataset(Dataset):
 
                 logger.info("Memory-mapping verified pre-tokenized BPE artifact: %s (%d tokens)", bin_path.name, token_count)
                 token_data = torch.from_file(str(bin_path), shared=False, size=token_count, dtype=torch.int32)
-                self.record_starts = torch.empty(0, dtype=torch.long)
+                self.record_starts = _find_bpe_record_starts(token_data, self.bpe_markers)
             else:
                 allow = allow_fallback or os.environ.get("CHIT_ALLOW_IN_MEMORY_TOKENIZATION") == "1"
                 if not allow:
@@ -199,7 +426,7 @@ class TextDataset(Dataset):
                     logger.error("Failed to tokenize dataset from %s: %s", src_path, exc, exc_info=True)
                     raise RuntimeError(f"Failed to tokenize dataset from {src_path}: {exc}") from exc
                 token_data = torch.tensor(ids, dtype=torch.int32)
-                self.record_starts = torch.empty(0, dtype=torch.long)
+                self.record_starts = _find_bpe_record_starts(token_data, self.bpe_markers)
                 del ids
                 del text
         else:
@@ -209,7 +436,11 @@ class TextDataset(Dataset):
                 logger.error("Failed to tokenize dataset from provided text: %s", exc, exc_info=True)
                 raise RuntimeError(f"Failed to tokenize dataset from provided text: {exc}") from exc
             token_data = torch.tensor(ids, dtype=torch.int32)
-            self.record_starts = _find_record_starts(text.encode("utf-8")) if self.is_byte else torch.empty(0, dtype=torch.long)
+            self.record_starts = (
+                _find_record_starts(text.encode("utf-8"))
+                if self.is_byte
+                else _find_bpe_record_starts(token_data, self.bpe_markers)
+            )
             del ids
         if len(token_data) <= block_size:
             raise ValueError(f"dataset has {len(token_data)} tokens; it must be larger than block_size ({block_size})")
@@ -241,7 +472,7 @@ def random_batch(ds: TextDataset, batch_size: int, device, generator: torch.Gene
     # the complete corpus stays packed in one byte per token in host memory.
     x = chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True)
     y = chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True)
-    _apply_answer_loss_mask(chunk, y, getattr(ds, "is_byte", False))
+    _apply_answer_loss_mask(chunk, y, getattr(ds, "is_byte", False), getattr(ds, "bpe_markers", None))
     return x, y
 
 
@@ -282,7 +513,9 @@ def random_mixed_batch(datasets: list[TextDataset], weights: list[float], batch_
         chunk = dataset.data[indices]
         row_x = chunk[:, :-1].to(device=device, dtype=torch.long, non_blocking=True)
         row_y = chunk[:, 1:].to(device=device, dtype=torch.long, non_blocking=True)
-        _apply_answer_loss_mask(chunk, row_y, getattr(dataset, "is_byte", False))
+        _apply_answer_loss_mask(
+            chunk, row_y, getattr(dataset, "is_byte", False), getattr(dataset, "bpe_markers", None)
+        )
         x[rows.to(device)] = row_x
         y[rows.to(device)] = row_y
     return x, y
