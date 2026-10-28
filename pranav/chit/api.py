@@ -1432,6 +1432,33 @@ def _run_bridge_benchmark(job_id: str):
             data = json.loads(bench_path.read_text(encoding="utf-8"))
             data["status"] = "completed"
             bench_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+            # If this benchmarked job is already the active Live AI (e.g. via force_promote),
+            # automatically update data/calibration.json and refresh the live Bridge's curve.
+            target_path = Path(CHECKPOINT)
+            is_active_champion = False
+            job_manifest_path = Path(JOBS_DIR) / job_id / "job.json"
+            if job_manifest_path.is_file():
+                try:
+                    is_active_champion = bool(json.loads(job_manifest_path.read_text(encoding="utf-8")).get("promoted"))
+                except Exception:
+                    pass
+            if not is_active_champion and target_path.is_file():
+                try:
+                    from .promotion_state import file_sha256
+                    is_active_champion = file_sha256(ckpt_path) == file_sha256(target_path)
+                except Exception:
+                    pass
+            if is_active_champion:
+                try:
+                    from pranav.chit.tools.calibrate_confidence import train_calibration_from_eval
+                    cal_file = Path("data/calibration.json")
+                    train_calibration_from_eval(bench_path, cal_file)
+                    if _state.get("bridge") is not None:
+                        _state["bridge"]._load_calibration()
+                    log.info(f"Updated data/calibration.json from active champion benchmark {job_id}")
+                except Exception as cal_exc:
+                    log.warning(f"Could not auto-calibrate active champion {job_id}: {cal_exc}")
     except Exception as e:
         log.exception(f"Bridge benchmark failed for {job_id}")
         err_msg = e.stderr.decode("utf-8", errors="ignore") if getattr(e, "stderr", None) else str(e)

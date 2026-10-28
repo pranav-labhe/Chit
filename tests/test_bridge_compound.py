@@ -284,3 +284,87 @@ def test_think_fallback_preserves_knowledge_task_and_clean_primary_skips_resampl
     assert rt.history[1]["prompt"].startswith("Task: knowledge\n")
 
 
+def test_subword_tokenizer_defaults_and_self_identity_routing():
+    class SubwordTokenizerStub:
+        kind = "bpe"
+        vocab_size = 2000
+
+        def encode(self, text):
+            return [1, 2, 3]
+
+    rt = MockRuntime(responses=["Chit is a helpful local assistant."])
+    rt.tokenizer = SubwordTokenizerStub()
+    bridge = Bridge(rt)
+
+    # Self-identity query ("Who are you?") routes to Task: knowledge and uses subword decoding defaults (0.2, 10)
+    decision = bridge.process(Context(user_input="Who are you?"))
+    assert decision.metadata["plan"]["effective_task"] == "knowledge"
+    assert decision.metadata["plan"]["decoding"]["temperature"] == 0.2
+    assert decision.metadata["plan"]["decoding"]["top_k"] == 10
+    assert rt.history[0]["prompt"].startswith("Task: knowledge\n")
+    assert rt.history[0]["temp"] == 0.2
+    assert rt.history[0]["top_k"] == 10
+
+    # Explicit caller overrides are still respected on subword models
+    decision_override = bridge.process(Context(user_input="Hello there"), temperature=0.5, top_k=25)
+    assert decision_override.metadata["plan"]["decoding"]["temperature"] == 0.5
+    assert decision_override.metadata["plan"]["decoding"]["top_k"] == 25
+
+
+def test_run_bridge_benchmark_auto_calibrates_promoted_champion(tmp_path, monkeypatch):
+    import json
+    from pranav.chit import api
+
+    jobs_dir = tmp_path / "jobs"
+    jobs_dir.mkdir()
+    job_id = "subword_promoted_job"
+    job_folder = jobs_dir / job_id
+    job_folder.mkdir()
+
+    (job_folder / "job.json").write_text(json.dumps({"state": "succeeded", "promoted": True}), encoding="utf-8")
+    (job_folder / "latest.pt").write_text("promoted-checkpoint-bytes", encoding="utf-8")
+
+    bench_path = job_folder / "bridge_benchmark.json"
+
+    def fake_run(cmd, check=True, capture_output=True):
+        bench_path.write_text(
+            json.dumps(
+                {
+                    "details": [
+                        {"confidence": 0.1, "exact_match": 0.0},
+                        {"confidence": 0.9, "exact_match": 1.0},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    calibrated_calls = []
+
+    def fake_train_calibration(eval_p, out_p):
+        calibrated_calls.append((Path(eval_p), Path(out_p)))
+
+    reloaded = []
+
+    class DummyBridge:
+        def _load_calibration(self):
+            reloaded.append(True)
+
+    monkeypatch.setattr(api, "JOBS_DIR", str(jobs_dir))
+    monkeypatch.setattr(api.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "pranav.chit.tools.calibrate_confidence.train_calibration_from_eval",
+        fake_train_calibration,
+    )
+    monkeypatch.setitem(api._state, "bridge", DummyBridge())
+
+    api._run_bridge_benchmark(job_id)
+
+    saved = json.loads(bench_path.read_text(encoding="utf-8"))
+    assert saved["status"] == "completed"
+    assert len(calibrated_calls) == 1
+    assert calibrated_calls[0][0] == bench_path
+    assert reloaded == [True]
+
+
+

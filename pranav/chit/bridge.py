@@ -185,7 +185,9 @@ def _is_architecture_query(text: str) -> bool:
     """Detect prompts asking about Chit or Atmini architecture, memory, sessions, or checkpoints."""
     clean = text.strip().lower()
     arch_markers = (
-        "what is chit", "who is chit", "within atmini", "same thing as chit",
+        "what is chit", "who is chit", "who are you", "what are you",
+        "what is your name", "what's your name", "whats your name",
+        "within atmini", "same thing as chit",
         "external memory", "model weights", "neural weights", "conversation session",
         "knowledge queue", "ordinary memory", "checkpoint", "tokenizer",
         "byte-utf8", "block_size", "golden gate", "atmini",
@@ -204,6 +206,8 @@ class BridgeConfig:
     reserve_generation_budget: bool = True
     default_temperature: float = 0.7
     open_chat_top_k: int = 20
+    subword_temperature: float = 0.2
+    subword_top_k: int = 10
     max_memories: int = 5
     max_new_tokens: int = 256
     uncertainty_threshold: float = 0.40
@@ -278,7 +282,9 @@ class Router:
         is_byte_tokenizer: bool = True,
         has_memories_or_facts: bool = False,
     ) -> Plan:
-        t = config.default_temperature if temperature is None else temperature
+        default_temp = config.default_temperature if is_byte_tokenizer else config.subword_temperature
+        t = default_temp if temperature is None else temperature
+        default_top_k = config.open_chat_top_k if is_byte_tokenizer else config.subword_top_k
         n_tokens = config.max_new_tokens if max_new_tokens is None else max_new_tokens
         is_thinking = (c.think if think is None else think) or c.task == "reasoning"
         eff_task = self.select_effective_task(
@@ -287,7 +293,7 @@ class Router:
 
         # 1. Plain text continuation
         if c.task == "continue":
-            eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else (config.open_chat_top_k if is_byte_tokenizer else 50))
+            eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else default_top_k)
             return Plan(
                 intent="continue",
                 strategy="direct",
@@ -330,7 +336,7 @@ class Router:
 
         # 4. Native reasoning / thinking scaffold
         if is_thinking:
-            eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else (config.open_chat_top_k if is_byte_tokenizer else 50))
+            eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else default_top_k)
             if has_memories_or_facts:
                 t = 0.0
                 eff_top_k = 1
@@ -364,7 +370,7 @@ class Router:
 
         # 6. Casual conversation turn
         if _is_casual_or_conversational(c.user_input, c.facts):
-            eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else (config.open_chat_top_k if is_byte_tokenizer else 50))
+            eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else default_top_k)
             return Plan(
                 intent="casual",
                 strategy="direct",
@@ -379,7 +385,7 @@ class Router:
             )
 
         # 7. Standard chat turn
-        eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else (config.open_chat_top_k if is_byte_tokenizer else 50))
+        eff_top_k = top_k if top_k is not None else (1 if (is_byte_tokenizer and t == 0.0) else default_top_k)
         return Plan(
             intent="chat",
             strategy="direct",
@@ -665,9 +671,10 @@ class Bridge:
         stop: list[str] | None = None,
         think: bool | None = None,
     ) -> ChitDecision:
-        t = self.temperature if temperature is None else temperature
         n_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
         is_byte_tokenizer = getattr(self.runtime.tokenizer, "vocab_size", 256) <= 256
+        default_temp = self.temperature if is_byte_tokenizer else self.config.subword_temperature
+        t = default_temp if temperature is None else temperature
         is_thinking = (c.think if think is None else think) or c.task == "reasoning"
 
         # Check memories & facts presence

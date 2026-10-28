@@ -7,13 +7,13 @@
     "n_layer": 6,
     "n_head": 4,
     "n_embd": 256,
-    "dropout": 0.1,
+    "dropout": 0.0,
     "position_encoding": "rope",
     "rope_theta": 10000.0
   },
   "training": {
     "batch_size": 8,
-    "learning_rate": 0.0004,
+    "learning_rate": 0.0008,
     "weight_decay": 0.1,
     "max_steps": 6000,
     "eval_interval": 250,
@@ -30,7 +30,7 @@
     "sources": [
       {
         "path": "data/train_1mb_large.txt",
-        "weight": 0.177
+        "weight": 0.16
       },
       {
         "path": "data/english_foundation/structural_large.txt",
@@ -46,7 +46,7 @@
       },
       {
         "path": "data/english_foundation/project_facts_large.txt",
-        "weight": 0.003
+        "weight": 0.02
       },
       {
         "path": "data/conversation_reasoning/conversation_large.txt",
