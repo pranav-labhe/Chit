@@ -65,6 +65,7 @@ from .sessions import SessionNotFound, SessionStore
 from .summarization import SessionSummaryWorker
 from .tokenizer import ByteTokenizer, create_tokenizer
 from .training import ARCHITECTURE_KEYS
+from .xray import build_brain_xray, clear_xray_cache, probe_brain
 
 log = logging.getLogger(__name__)
 
@@ -111,6 +112,7 @@ def _load_served_model() -> None:
                 if actual != expected:
                     raise ValueError("served checkpoint hash does not match champion manifest")
         rt = ChitRuntime.from_checkpoint(CHECKPOINT, memory=_state["memory"])
+        clear_xray_cache()
         _state.update(runtime=rt, bridge=Bridge(rt), error=None)
     except Exception as e:  # bad/incompatible checkpoint: stay up, report via /health
         log.exception("could not load %s", CHECKPOINT)
@@ -383,6 +385,53 @@ def model_info():
             "inference": {"queue_capacity": INFERENCE_QUEUE_SIZE,
                           "queue_timeout_seconds": INFERENCE_QUEUE_TIMEOUT,
                           "batching": False}}
+
+
+class ProbeBrainRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prompt: str = Field(min_length=1, max_length=2000)
+    task: TaskType = Field(default="chat")
+    think: bool = Field(default=False)
+    compare_chat: bool = Field(default=True)
+
+
+@app.get("/model/xray", dependencies=[Depends(require_key)])
+async def inspect_brain_xray():
+    rt = get_runtime()
+    try:
+        return await _state["inference"].run(lambda: build_brain_xray(rt, CHECKPOINT))
+    except InferenceOverloaded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "inference_overloaded", "message": str(exc)},
+            headers={"Retry-After": "1"},
+        ) from exc
+
+
+@app.post("/model/xray/probe", dependencies=[Depends(require_key)])
+async def probe_brain_xray(r: ProbeBrainRequest):
+    rt = get_runtime()
+    bridge = _state["bridge"]
+    try:
+        return await _state["inference"].run(
+            lambda: probe_brain(
+                rt,
+                bridge,
+                r.prompt,
+                task=r.task,
+                think=r.think,
+                compare_chat=r.compare_chat,
+                checkpoint_path=CHECKPOINT,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=[str(exc)]) from exc
+    except InferenceOverloaded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "inference_overloaded", "message": str(exc)},
+            headers={"Retry-After": "1"},
+        ) from exc
 
 
 @app.post("/generate", dependencies=[Depends(require_key)])
@@ -855,6 +904,7 @@ def _force_promote_candidate(snapshot: dict) -> None:
                        previous_sha256=old_hash, previous_archive=old_archive, manifest=manifest)
     if isinstance(candidate_runtime.tokenizer, BpeTokenizer) and getattr(candidate_runtime.tokenizer, "asset", None):
         (target.parent / "tokenizer.json").write_text(candidate_runtime.tokenizer.asset, encoding="utf-8")
+    clear_xray_cache()
     _state.update(runtime=candidate_runtime, bridge=Bridge(candidate_runtime), error=None)
 
 

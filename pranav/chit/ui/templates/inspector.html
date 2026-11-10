@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Chit · Actual Brain X-Ray</title>
+    <style>
+        :root {
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            color: #e2f1ff;
+            background: #02040a;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #02040a;
+            user-select: none;
+        }
+        #brainCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+        #brainCanvas.dragging { cursor: grabbing; }
+        #brainCanvas.hovering { cursor: pointer; }
+
+        /* Translucent obsidian + neon blue floating HUD */
+        .hud-panel {
+            position: fixed;
+            background: rgba(4, 10, 22, 0.80);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 14px;
+            box-shadow: 0 0 28px rgba(14, 165, 233, 0.14);
+        }
+
+        #statusHud {
+            top: 16px;
+            left: 16px;
+            max-width: 340px;
+            padding: 12px 15px;
+            z-index: 10;
+        }
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #38bdf8;
+            box-shadow: 0 0 12px #38bdf8;
+            flex-shrink: 0;
+        }
+        .pulse-dot.weak { background: #fbbf24; box-shadow: 0 0 12px #fbbf24; }
+        .pulse-dot.broken { background: #fb7185; box-shadow: 0 0 12px #fb7185; }
+        #brainTitle {
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            color: #e0f2fe;
+        }
+        #brainVerdict {
+            margin-top: 6px;
+            font-size: 12.5px;
+            line-height: 1.45;
+            color: #93c5fd;
+        }
+        .comp-track {
+            margin-top: 8px;
+            height: 5px;
+            width: 100%;
+            border-radius: 999px;
+            background: rgba(56, 189, 248, 0.15);
+            overflow: hidden;
+        }
+        .comp-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+            transition: width 0.6s ease, background 0.4s ease;
+        }
+        .comp-meta {
+            margin-top: 6px;
+            font-size: 11px;
+            color: rgba(186, 230, 253, 0.72);
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .legend-row {
+            margin-top: 8px;
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: rgba(226, 241, 255, 0.8);
+        }
+        .legend-chip { display: flex; align-items: center; gap: 5px; }
+        .legend-swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+        #controlsHud {
+            top: 16px;
+            right: 16px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 10;
+        }
+        .hud-btn {
+            background: rgba(14, 165, 233, 0.14);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: #bae6fd;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.18s ease, border-color 0.18s ease;
+        }
+        .hud-btn:hover {
+            background: rgba(56, 189, 248, 0.28);
+            border-color: #38bdf8;
+            color: #ffffff;
+        }
+        #zoomLabel {
+            font-size: 11.5px;
+            color: #7dd3fc;
+            min-width: 44px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Quick Lobe Jump Strip */
+        #lobeStrip {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+            padding: 6px 8px;
+            z-index: 9;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: calc(100vw - 680px);
+        }
+        .lobe-pill {
+            background: rgba(8, 20, 44, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.26);
+            color: #bae6fd;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+        .lobe-pill:hover, .lobe-pill.active {
+            border-color: #38bdf8;
+            background: rgba(14, 165, 233, 0.26);
+            color: #ffffff;
+        }
+
+        /* Detailed Synapse / Misbehavior Lens (appears when zoomed into a neural path or after probing a question) */
+        #pathCard {
+            right: 16px;
+            top: 72px;
+            width: 370px;
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 176px);
+            overflow-y: auto;
+            padding: 15px 16px;
+            z-index: 12;
+            user-select: text;
+            display: none;
+        }
+        #pathCard.visible { display: block; }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #e0f2fe;
+        }
+        .card-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+        .badge-healthy { background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.5); }
+        .badge-weak { background: rgba(251, 191, 36, 0.16); color: #fcd34d; border: 1px solid rgba(251, 191, 36, 0.45); }
+        .badge-broken { background: rgba(251, 113, 133, 0.18); color: #fda4af; border: 1px solid rgba(251, 113, 133, 0.5); }
+        .card-close {
+            background: transparent;
+            border: none;
+            color: #7dd3fc;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .section-lbl {
+            margin-top: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: rgba(125, 211, 252, 0.72);
+        }
+        .box-text {
+            margin-top: 4px;
+            padding: 9px 11px;
+            border-radius: 9px;
+            background: rgba(2, 8, 20, 0.78);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            font-size: 12.5px;
+            line-height: 1.5;
+            color: #f0f9ff;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .box-text.alert {
+            border-color: rgba(251, 113, 133, 0.45);
+            background: rgba(45, 10, 22, 0.45);
+        }
+
+        /* Bottom Live Prompt Bar */
+        #probeBar {
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(760px, calc(100vw - 32px));
+            padding: 10px 12px;
+            z-index: 12;
+        }
+        .probe-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        #probeInput {
+            flex: 1;
+            background: rgba(2, 6, 16, 0.9);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: #f0f9ff;
+            border-radius: 9px;
+            padding: 8px 12px;
+            font-size: 13px;
+            outline: none;
+        }
+        #probeInput:focus { border-color: #38bdf8; box-shadow: 0 0 12px rgba(56, 189, 248, 0.25); }
+        #probeSubmit {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #020817;
+            border: none;
+            border-radius: 9px;
+            padding: 8px 14px;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        #probeSubmit:disabled { opacity: 0.5; cursor: wait; }
+        .probe-footer {
+            margin-top: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 11px;
+            color: rgba(186, 230, 253, 0.8);
+        }
+        .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .quick-chip {
+            background: rgba(14, 165, 233, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: #93c5fd;
+            border-radius: 999px;
+            padding: 2px 9px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .quick-chip:hover { background: rgba(56, 189, 248, 0.24); color: #fff; }
+
+        /* Login / Loading Overlay */
+        #unlockOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 4, 10, 0.86);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 30;
+        }
+        #unlockOverlay.visible { display: flex; }
+        .unlock-card {
+            width: min(400px, 92vw);
+            padding: 24px;
+            background: rgba(6, 14, 30, 0.96);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            border-radius: 16px;
+            box-shadow: 0 0 40px rgba(14, 165, 233, 0.25);
+        }
+        .unlock-card h2 { margin: 0 0 8px; font-size: 18px; color: #e0f2fe; }
+        .unlock-card p { margin: 0 0 14px; font-size: 13px; color: #93c5fd; line-height: 1.5; }
+        .unlock-card input {
+            width: 100%;
+            padding: 9px 11px;
+            border-radius: 8px;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            background: #02040a;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        #unlockError { color: #fda4af; font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+        @media (max-width: 1020px) {
+            #lobeStrip { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="brainCanvas"></canvas>
+
+    <div id="statusHud" class="hud-panel">
+        <div class="status-row">
+            <span class="pulse-dot" id="verdictDot"></span>
+            <span id="brainTitle">Scanning Chit's Brain…</span>
+        </div>
+        <div class="comp-track"><div class="comp-fill" id="compFill"></div></div>
+        <div id="brainVerdict">Looking directly inside the live checkpoint without Web Search or Memory.</div>
+        <div class="comp-meta">
+            <span id="compCounts">Paths: --</span>
+            <span id="ckptStamp">Saved: --</span>
+        </div>
+        <div class="legend-row">
+            <span class="legend-chip"><span class="legend-swatch" style="background:#38bdf8;box-shadow:0 0 8px #38bdf8;"></span>Healthy Path</span>
+            <span class="legend-chip"><span class="legend-swatch" style="background:#fbbf24;box-shadow:0 0 8px #fbbf24;"></span>Weak</span>
+            <span class="legend-chip"><span class="legend-swatch" style="background:#fb7185;box-shadow:0 0 8px #fb7185;"></span>Broken / Misbehaving</span>
+        </div>
+    </div>
+
+    <div id="lobeStrip" class="hud-panel" aria-label="Zoom to brain region"></div>
+
+    <div id="controlsHud" class="hud-panel">
+        <button class="hud-btn" id="zoomOutBtn" title="Zoom out">−</button>
+        <span id="zoomLabel">100%</span>
+        <button class="hud-btn" id="zoomInBtn" title="Zoom in">＋</button>
+        <button class="hud-btn" id="resetViewBtn" title="Fit whole brain">Fit Brain</button>
+        <button class="hud-btn" id="rescanBtn" title="Re-scan live checkpoint">↻ Rescan</button>
+        <a class="hud-btn" href="{{ base_path }}/">← Console</a>
+    </div>
+
+    <aside id="pathCard" class="hud-panel" aria-live="polite">
+        <div class="card-header">
+            <div>
+                <div class="card-title" id="cardTitle">Neural Path</div>
+                <div style="font-size:11px; color:#7dd3fc; margin-top:2px;" id="cardSubtitle"></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span class="card-badge" id="cardBadge">Status</span>
+                <button class="card-close" id="closeCardBtn" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="section-lbl">What This Path Handles</div>
+        <div class="box-text" id="cardPrompt"></div>
+        <div class="section-lbl">Direct From Checkpoint Brain (No Web / No Memory)</div>
+        <div class="box-text" id="cardRawAnswer"></div>
+        <div class="section-lbl">Honest Brain Assessment</div>
+        <div class="box-text" id="cardReason"></div>
+        <div id="cardChatCompareWrap" style="display:none;">
+            <div class="section-lbl">What Chat Returned (With Helpers)</div>
+            <div class="box-text" id="cardChatAnswer"></div>
+        </div>
+    </aside>
+
+    <div id="probeBar" class="hud-panel">
+        <form class="probe-form" id="probeForm">
+            <input id="probeInput" type="text" placeholder="Ask Chit's brain directly—or paste a question where Chat misbehaved…" autocomplete="off" />
+            <button id="probeSubmit" type="submit">Send Thought</button>
+        </form>
+        <div class="probe-footer">
+            <div class="chip-row">
+                <span style="opacity:0.75;">Quick check:</span>
+                <button type="button" class="quick-chip" data-q="How does Chit fit into the Atmini system?">Atmini fit</button>
+                <button type="button" class="quick-chip" data-q="What is deadlock in concurrent systems?">Deadlock</button>
+                <button type="button" class="quick-chip" data-q="Explain Celsius versus Kelvin temperature scales.">Celsius vs Kelvin</button>
+                <button type="button" class="quick-chip" data-q="Hi Chit, what is the difference between disinterested and uninterested?">Word check</button>
+            </div>
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                <input type="checkbox" id="compareChatChk" checked>
+                Compare against Chat
+            </label>
+        </div>
+    </div>
+
+    <div id="unlockOverlay">
+        <form class="unlock-card" id="unlockForm">
+            <h2>Unlock Chit Brain X-Ray</h2>
+            <p>Enter your Chit API key to look directly inside the live checkpoint on the server.</p>
+            <input type="password" id="unlockKey" placeholder="Chit API key" autocomplete="current-password" required>
+            <button id="unlockSubmit" type="submit" style="width:100%;background:linear-gradient(135deg,#0284c7,#38bdf8);color:#020817;border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;">Open Brain X-Ray</button>
+            <div id="unlockError"></div>
+        </form>
+    </div>
+
+    <script>
+        const BASE = {{ base_path | tojson }};
+    </script>
+    <script src="{{ base_path }}/static/js/inspector.js"></script>
+</body>
+</html>

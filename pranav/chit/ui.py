@@ -61,6 +61,8 @@ ROUTES: list[dict[str, Any]] = [
     {"category": "Health & model", "name": "Server health", "method": "GET", "path": "/health", "pattern": r"^/health$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Service readiness", "method": "GET", "path": "/ready", "pattern": r"^/ready$", "query": {}, "body": None},
     {"category": "Health & model", "name": "Live model details", "method": "GET", "path": "/model", "pattern": r"^/model$", "query": {}, "body": None},
+    {"category": "Health & model", "name": "Inspect live brain X-Ray", "method": "GET", "path": "/model/xray", "pattern": r"^/model/xray$", "query": {}, "body": None},
+    {"category": "Health & model", "name": "Probe thought inside brain", "method": "POST", "path": "/model/xray/probe", "pattern": r"^/model/xray/probe$", "query": {}, "body": {"prompt": "How does Chit fit into the Atmini system?", "task": "chat", "think": False, "compare_chat": True}},
     {"category": "Health & model", "name": "System metrics", "method": "GET", "path": "/sys_metrics", "pattern": r"^/sys_metrics$", "query": {}, "body": None},
     {"category": "Generate & chat", "name": "Generate a response", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Explain how memory helps Chit.", "task": "chat", "tokens": 100, "temperature": 0, "search": False, "think": False}},
     {"category": "Generate & chat", "name": "Continue raw text", "method": "POST", "path": "/generate", "pattern": r"^/generate$", "query": {}, "body": {"prompt": "Chit is the", "mode": "continue", "tokens": 60, "temperature": 0}},
@@ -178,6 +180,15 @@ def _page(templates: Jinja2Templates, request: Request) -> HTMLResponse:
 @app.get("/")
 async def index(request: Request):
     return _page(templates, request)
+
+
+@app.get("/inspector")
+async def inspector_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="inspector.html",
+        context={"base_path": BASE_PATH},
+    )
 
 
 @app.get("/_ui/api-guide", response_class=PlainTextResponse)
